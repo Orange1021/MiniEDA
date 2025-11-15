@@ -1,0 +1,55 @@
+# C++ 编译产物
+*.o
+*.obj
+*.a
+*.so
+*.dylib
+*.dll
+*.exe
+*.out
+
+# 构建目录
+build/
+bin/
+lib/*.o
+*.d
+
+# IDE 和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile.bak
+
+# 调试文件
+*.dSYM/
+*.su
+*.idb
+*.pdb
+core
+vgcore.*
+
+# 临时文件
+*.log
+*.tmp
+*.bak
+*.backup
+.cache/
+
+# 操作系统
+Thumbs.db
+Desktop.ini
+
+# 编译器生成
+*.gch
+*.pch
+
+# 临时文档和对话记录
+txt/

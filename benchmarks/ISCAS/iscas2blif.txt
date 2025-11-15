@@ -1,0 +1,240 @@
+#!/usr/bin/perl
+
+# Traverse all input files. For each one, map iscas file into blif file.
+#
+# jpms
+#
+# 12/04/04: fix flip-flop output lines
+# 12/06/04: put FF outputs in output list for SIS
+
+$keepFlops = 0;
+
+require "getopts.pl";
+&Getopts('hcdk');		      # -h -d, set opt_h, opt_d, etc
+
+if ($opt_h) {
+    print "ISCAS'89 to BLIF file converter by jpms\@inesc.pt\n";
+    print "Usage: iscas2blif [-h] [-c] [-k] input-files output-dir\n";
+    print "\t -h \t This help message\n";
+    print "\t -d \t Run debug mode\n";
+    exit;
+}
+if ($opt_k) {
+    $keepFlops = 1;
+}
+
+$out_dir = $ARGV[$#ARGV];
+
+for ($i = 0; $i < $#ARGV; $i++) {
+
+    # scan input file and output flip-flop list in .fflist file 
+    $temp = $ARGV[$i];
+    open(TEMP, $temp) || die "Could not open input file $temp\n";
+    $firstfound = 0;
+    $tempff = $temp;
+    $tempff =~ s/bench$/fflist/;
+    open(TEMPFF, ">$tempff") || die "Could not open flop list file $ff_file\n";
+    while(<TEMP>) {
+      if( /(\S+)\s+=\s+DFF/ ) {
+        if( $firstfound == 1) {
+          print TEMPFF " ";
+        } else {
+          $firstfound = 1;
+        }
+        print TEMPFF "$1";
+      }
+    }
+    print TEMPFF "\n";
+    close TEMP;
+    close TEMPFF;
+
+    $in_file = $ARGV[$i];
+    open(INF, $in_file) || die "Could not open input file $in_file\n";
+    if ($opt_d) { print STDERR "INPUT FILE: $in_file\n"; }
+
+    $out_file = &get_out_fname ($out_dir, $in_file, "blif");
+    if ($opt_d) { print STDERR "OUTPUT FILE: $out_file\n"; }
+
+    open(OUTF, ">$out_file") || die "Could not open output file $out_file\n";
+
+    $inp_idx = 0;
+    $out_idx = 0;
+
+    $header_out = 0;
+
+    undef (@inputs);
+    undef (@outputs);
+
+    while(<INF>) {
+	##print "Read $_\n";
+        if (/INPUT\s*\(\s*([\w\.]+)\s*\)/) {
+            $inputs[$inp_idx++] = $1;
+        }
+        elsif (/input\s*\(\s*([\w\.]+)\s*\)/) {
+            $inputs[$inp_idx++] = $1;
+        }
+        elsif (/OUTPUT\s*\(\s*([\w\.]+)\s*\)/) {
+            $outputs[$out_idx++] = $1;
+        }
+        elsif (/output\s*\(\s*([\w\.]+)\s*\)/) {
+            $outputs[$out_idx++] = $1;
+        }
+
+	if (/([\w\.]+)\s*=\s*(\w+)\s*\((.+)\)/) {
+
+            if ($header_out == 0) {
+                print OUTF ".inputs @inputs \n";
+                print OUTF ".outputs @outputs ";
+                if($keepFlops) {
+                  $ff_file = $in_file;
+                  $ff_file =~ s/bench$/fflist/;
+                  open(FFLIST, $ff_file) || die "Could not open flop list file $ff_file\n";
+                  $ff_list = <FFLIST>;
+                  print OUTF "$ff_list\n";
+                }
+                else {
+                  print OUTF "\n";
+                }
+                $header_out = 1;
+            }
+            $node = $1;
+            $g_type = $2;
+	    $in_node_str = $3;
+
+	    if ($opt_d) {
+                print "IN STR = $in_node_str\n";
+                print "GATE = $g_type\n";
+            }
+	    @in_nodes = split(/,/, $in_node_str);
+
+	    if ($opt_d) { print "\t\t(@in_nodes) W/ $#in_nodes\n"; }
+
+            if ($g_type eq "AND" || $g_type eq "and") {
+                print OUTF ".names @in_nodes $node\n";
+                print_single_cube ($#in_nodes, 1);
+            }
+            elsif ($g_type eq "NAND" || $g_type eq "nand") {
+                print OUTF ".names @in_nodes $node\n";
+                print_set_cubes ($#in_nodes, 0);
+            }
+            elsif ($g_type eq "OR" || $g_type eq "or") {
+                print OUTF ".names @in_nodes $node\n";
+                print_set_cubes ($#in_nodes, 1);
+            }
+            elsif ($g_type eq "NOR" || $g_type eq "nor") {
+                print OUTF ".names @in_nodes $node\n";
+                print_single_cube ($#in_nodes, 0);
+            }
+            elsif ($g_type eq "NOT" || $g_type eq "not") {
+                print OUTF ".names @in_nodes $node\n";
+                print OUTF "0 1\n";
+            }
+            elsif ($g_type eq "BUFF" || $g_type eq "buff") {
+                print OUTF ".names @in_nodes $node\n";
+                print OUTF "1 1\n";
+            }
+            elsif ($g_type eq "BUF" || $g_type eq "buf") {
+                print OUTF ".names @in_nodes $node\n";
+                print OUTF "1 1\n";
+            }
+            elsif ($g_type eq "XOR" || $g_type eq "xor") {
+                print OUTF ".names @in_nodes $node\n";
+                print_all_minterms ($#in_nodes, "xor");
+            }
+            elsif ($g_type eq "XNOR" || $g_type eq "xnor") {
+                print OUTF ".names @in_nodes $node\n";
+                print_all_minterms ($#in_nodes, "xnor");
+            }
+            elsif ($g_type eq "DFF" || $g_type eq "dff") {
+                print OUTF ".latch @in_nodes $node\n";
+            }
+            else {  # error
+                print OUTF ".unknown @in_nodes $node\n";
+            }
+        }
+    }
+    print OUTF ".end\n";
+}
+
+1;
+
+
+sub get_out_fname {
+    local ($out_dir, $in_file, $ext) = @_;
+    @file_strs = split (/\//, $in_file);
+    $file_name = $file_strs[$#file_strs];
+
+    @file_toks = split (/\./, $file_name);
+    $file_toks[$#file_toks] = "$ext";
+
+    $out_name = join ('.', @file_toks);
+    $file_strs[$#file_strs] = $out_name;
+    $out_file = "$out_dir/$out_name";
+}
+
+sub print_set_cubes {
+    local ($inps, $c_value) = @_;
+
+    for ($j=0; $j <= $inps; $j++) {
+        for ($k=0; $k <= $inps; $k++) {
+            if ($k == $j) {
+                print OUTF "$c_value";
+            } else {
+                print OUTF "-";
+            }
+        }
+        print OUTF " 1\n";
+    }
+}
+
+sub print_single_cube {
+    local ($inps, $nc_value) = @_;
+
+    for ($j = 0; $j <= $inps; $j++) {
+        print OUTF "$nc_value";
+    } print OUTF " 1\n";
+}
+
+sub print_all_minterms {
+    local ($inps, $gtype) = @_;
+
+    local ($j);
+    for ($j=0; $j <= $inps; $j++) {
+        $entry[$j] = 0;
+    }
+    if ($gtype eq "xor") {
+	$value = 0;
+    }
+    else {
+	$value = 1;
+    }
+
+    $done = 0;
+    while (!$done) {
+
+	if ($value) {                      # Print minterm only when value is 1
+	    $e_str = "";
+	    for ($j=0; $j <= $inps; $j++) {              # Build minterm string
+		$e_str .= $entry[$j];
+	    }
+	    print OUTF "$e_str $value\n";
+	}
+	###{print "@entry $value\n"; }
+
+        $done = 1;
+        for ($j=0; $j <= $inps; $j++) {
+            if ($entry[$j] == 1) { $entry[$j] = 0; }
+            else                 { $entry[$j] = 1; $done = 0; last; }
+        }
+
+	$count1s = 0;
+        for ($j=0; $j <= $inps; $j++) {
+	    if ($entry[$j] == 1) { $count1s++; }
+	}
+	if ($count1s % 2 == 1) {
+	    if ($gtype eq "xor") { $value = 1; }
+	} elsif ($gtype == "xnor") { $value = 0; }
+    }
+    ###{print "\n\n"; }
+}
+
