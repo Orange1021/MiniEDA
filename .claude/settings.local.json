@@ -23,7 +23,11 @@
       "Bash(test:*)",
       "Bash(make build/lib/verilog_parser.o)",
       "Bash(make build/lib/cell.o build/lib/net.o build/lib/netlist_db.o 2 >& 1:*)",
-      "Bash(make:*)"
+      "Bash(make:*)",
+      "Bash(touch timing_graph.h delay_model.h timing_checks.h timing_constraints.h timing_path.h timing_report.h timing_graph.cpp delay_model.cpp timing_checks.cpp timing_constraints.cpp timing_report.cpp:*)",
+      "Bash(for:*)",
+      "Bash(do:*)",
+      "Bash(done:*)"
     ],
     "deny": [],
     "ask": []
