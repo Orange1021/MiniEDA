@@ -253,9 +253,12 @@ private:
      * @brief Create or get Net
      * @param db Database
      * @param net_name Net name
-     * @return Net pointer
+     * @param line Line number for error reporting
+     * @param column Column number for error reporting
+     * @return Net pointer, nullptr if validation failed in strict mode
      */
-    Net* getOrCreateNet(NetlistDB& db, const std::string& net_name);
+    Net* getOrCreateNet(NetlistDB& db, const std::string& net_name,
+                       size_t line, size_t column);
 
     /**
      * @brief Report error

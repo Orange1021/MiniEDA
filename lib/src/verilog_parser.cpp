@@ -26,8 +26,9 @@ VerilogParser::VerilogParser()
         "assign", "always", "begin", "end", "if", "else", "case", "endcase"
     };
 
-    // Initialize gate type mapping table
+    // Initialize gate type mapping table (support both uppercase and lowercase)
     gate_type_map_ = {
+        // Standard cell library names (uppercase)
         {"IV", CellType::NOT},
         {"BUF", CellType::BUF},
         {"AN2", CellType::AND},
@@ -48,7 +49,18 @@ VerilogParser::VerilogParser()
         {"XNOR", CellType::XNOR},
         {"FD1", CellType::DFF},
         {"FD2", CellType::DFF},
-        {"DFF", CellType::DFF}
+        {"DFF", CellType::DFF},
+        // Lowercase variants (for compatibility with some ISCAS files)
+        {"nand", CellType::NAND},
+        {"nor", CellType::NOR},
+        {"not", CellType::NOT},
+        {"inv", CellType::NOT},
+        {"and", CellType::AND},
+        {"or", CellType::OR},
+        {"xor", CellType::XOR},
+        {"xnor", CellType::XNOR},
+        {"buf", CellType::BUF},
+        {"dff", CellType::DFF}
     };
 }
 
@@ -279,13 +291,11 @@ std::vector<VerilogParser::Token> VerilogParser::tokenize(const std::string& con
 
         // Numbers
         if (std::isdigit(ch)) {
-            size_t start = i;
-            while (i < content.size() && std::isdigit(content[i])) {
-                i++;
-            }
-            std::string number = content.substr(start, i - start);
-            tokens.emplace_back(TokenType::IDENTIFIER, number, line, column);
-            column += (i - start);
+            // Identifier cannot start with digit, report error
+            reportError(ParseErrorType::SYNTAX_ERROR, line, column,
+                       "Identifier cannot start with digit");
+            i++;
+            column++;
             continue;
         }
 
@@ -443,8 +453,19 @@ bool VerilogParser::parseModuleHeader(size_t& pos,
     // Parse port list
     while (pos < tokens.size() && tokens[pos].value != ")") {
         if (tokens[pos].type == TokenType::IDENTIFIER) {
-            port_list.push_back(cleanIdentifier(tokens[pos].value));
-            port_set_.insert(cleanIdentifier(tokens[pos].value));
+            std::string port_name = cleanIdentifier(tokens[pos].value);
+
+            // Check for duplicate port declaration
+            if (port_set_.count(port_name)) {
+                reportError(ParseErrorType::DUPLICATE_DECLARATION,
+                          tokens[pos].line, tokens[pos].column,
+                          "Duplicate port in module header: " + port_name);
+                pos++;
+                continue; // Skip duplicate
+            }
+
+            port_list.push_back(port_name);
+            port_set_.insert(port_name);
             pos++;
 
             // Skip comma
@@ -510,6 +531,14 @@ bool VerilogParser::parsePortDeclaration(size_t& pos,
 
     // Create port cells
     for (const auto& port_name : port_names) {
+        // Check if port is in module header port list
+        if (port_set_.find(port_name) == port_set_.end()) {
+            reportError(ParseErrorType::SYNTAX_ERROR,
+                       tokens[pos-1].line, tokens[pos-1].column,
+                       "Port '" + port_name + "' not in module port list");
+            continue; // Skip invalid port
+        }
+
         CellType type = is_input ? CellType::INPUT : CellType::OUTPUT;
         Cell* cell = db.createCell(port_name, type);
 
@@ -538,7 +567,18 @@ bool VerilogParser::parseWireDeclaration(size_t& pos, const std::vector<Token>& 
     // Read wire name list
     while (pos < tokens.size() && tokens[pos].value != ";") {
         if (tokens[pos].type == TokenType::IDENTIFIER) {
-            wire_set_.insert(cleanIdentifier(tokens[pos].value));
+            std::string wire_name = cleanIdentifier(tokens[pos].value);
+
+            // Check for duplicate wire declaration
+            if (wire_set_.count(wire_name)) {
+                reportError(ParseErrorType::DUPLICATE_DECLARATION,
+                          tokens[pos].line, tokens[pos].column,
+                          "Duplicate wire declaration: " + wire_name);
+                pos++;
+                continue; // Skip duplicate
+            }
+
+            wire_set_.insert(wire_name);
             pos++;
 
             // Skip comma
@@ -631,6 +671,14 @@ bool VerilogParser::parseInstance(size_t& pos,
         return false;
     }
 
+    // Get pin names
+    std::vector<std::string> pin_names = getGatePins(gate_type);
+    if (pin_names.empty()) {
+        reportError(ParseErrorType::UNKNOWN_GATE_TYPE, gate_line, gate_col,
+                   "No pin definition for gate type: " + gate_type);
+        return false;
+    }
+
     // Create cell
     Cell* cell = db.createCell(instance_name, cell_type);
     if (cell == nullptr) {
@@ -638,9 +686,6 @@ bool VerilogParser::parseInstance(size_t& pos,
                    "Duplicate instance: " + instance_name);
         return false;
     }
-
-    // Get pin names
-    std::vector<std::string> pin_names = getGatePins(gate_type);
 
     // Validate connection count
     if (connections.size() != pin_names.size()) {
@@ -671,7 +716,11 @@ bool VerilogParser::parseInstance(size_t& pos,
         Pin* pin = cell->addPin(pin_names[i], dir);
 
         // Create or get Net
-        Net* net = getOrCreateNet(db, connections[i]);
+        Net* net = getOrCreateNet(db, connections[i], gate_line, gate_col);
+        if (net == nullptr) {
+            // Skip connection if validation failed in strict mode
+            continue;
+        }
 
         // Connect
         if (pin != nullptr && net != nullptr) {
@@ -715,32 +764,61 @@ CellType VerilogParser::mapGateType(const std::string& gate_type) const {
 }
 
 std::vector<std::string> VerilogParser::getGatePins(const std::string& gate_type) const {
+    // Handle lowercase variants for compatibility
+    std::string gate_type_upper = gate_type;
+
+    // Convert to uppercase for comparison (simple uppercase conversion)
+    for (char& c : gate_type_upper) {
+        if (c >= 'a' && c <= 'z') {
+            c = c - 'a' + 'A';
+        }
+    }
+
     // Basic gates: first is output, rest are inputs
-    if (gate_type == "IV" || gate_type == "BUF") {
+    if (gate_type_upper == "IV" || gate_type_upper == "BUF" ||
+        gate_type_upper == "NOT" || gate_type_upper == "INV") {
         return {"Y", "A"};
     }
-    else if (gate_type == "AN2" || gate_type == "OR2" || gate_type == "ND2" ||
-             gate_type == "NR2" || gate_type == "XO2" || gate_type == "XOR" ||
-             gate_type == "XN2" || gate_type == "XNOR") {
+    else if (gate_type_upper == "AN2" || gate_type_upper == "OR2" ||
+             gate_type_upper == "ND2" || gate_type_upper == "NR2" ||
+             gate_type_upper == "XO2" || gate_type_upper == "XOR" ||
+             gate_type_upper == "XN2" || gate_type_upper == "XNOR" ||
+             gate_type_upper == "AND" || gate_type_upper == "OR" ||
+             gate_type_upper == "NAND" || gate_type_upper == "NOR") {
+        // Handle 2-input gates (most common)
         return {"Y", "A", "B"};
     }
-    else if (gate_type == "AN3" || gate_type == "OR3" || gate_type == "ND3" ||
-             gate_type == "NR3") {
+    else if (gate_type_upper == "AN3" || gate_type_upper == "OR3" ||
+             gate_type_upper == "ND3" || gate_type_upper == "NR3") {
         return {"Y", "A", "B", "C"};
     }
-    else if (gate_type == "AN4" || gate_type == "OR4" || gate_type == "ND4" ||
-             gate_type == "NR4") {
+    else if (gate_type_upper == "AN4" || gate_type_upper == "OR4" ||
+             gate_type_upper == "ND4" || gate_type_upper == "NR4") {
         return {"Y", "A", "B", "C", "D"};
     }
-    else if (gate_type == "FD1" || gate_type == "FD2" || gate_type == "DFF") {
+    else if (gate_type_upper == "FD1" || gate_type_upper == "FD2" ||
+             gate_type_upper == "DFF" || gate_type_upper == "DFF") {
         return {"CK", "D", "Q"};
     }
 
-    // Default: assume first is output, rest are inputs
-    return {"Y", "A"};
+    // Unknown gate type or no pin definition available
+    // Return empty - caller should check and report error
+    return {};
 }
 
-Net* VerilogParser::getOrCreateNet(NetlistDB& db, const std::string& net_name) {
+Net* VerilogParser::getOrCreateNet(NetlistDB& db, const std::string& net_name,
+                                   size_t line, size_t column) {
+    // Strict mode: check if signal is defined (port or wire)
+    if (strict_mode_) {
+        if (port_set_.find(net_name) == port_set_.end() &&
+            wire_set_.find(net_name) == wire_set_.end()) {
+            // Found undefined signal, report error
+            reportError(ParseErrorType::UNDEFINED_SIGNAL, line, column,
+                       "Undefined signal: " + net_name);
+            return nullptr;
+        }
+    }
+
     Net* net = db.getNet(net_name);
     if (net == nullptr) {
         net = db.createNet(net_name);
