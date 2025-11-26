@@ -37,7 +37,8 @@
       "Bash(./build/bin/test_sta_full:*)",
       "Bash(./test/test_sta_debug.cpp )",
       "Bash(./build/bin/test_sta_debug:*)",
-      "Bash(/dev/null:*)"
+      "Bash(/dev/null:*)",
+      "Bash(./build/bin/mini_sta:*)"
     ],
     "deny": [],
     "ask": []

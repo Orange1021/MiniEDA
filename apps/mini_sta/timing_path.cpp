@@ -58,9 +58,12 @@ std::string TimingArc::getTypeString() const {
  */
 TimingNode::TimingNode(Pin* pin)
     : pin_(pin),
-      arrival_time_(-UNINITIALIZED),   // Initialize to negative infinity (for max calculation)
-      required_time_(UNINITIALIZED),    // Initialize to positive infinity (for min calculation)
-      slack_(0.0),
+      at_max_(-UNINITIALIZED),       // Initialize to negative infinity (for max calculation)
+      at_min_(UNINITIALIZED),         // Initialize to positive infinity (for min calculation)
+      rat_max_(UNINITIALIZED),        // Initialize to positive infinity (for min calculation)
+      rat_min_(-UNINITIALIZED),       // Initialize to negative infinity (for max calculation)
+      slack_setup_(0.0),
+      slack_hold_(0.0),
       slew_(0.0) {
 }
 
@@ -72,13 +75,18 @@ TimingNode::~TimingNode() = default;
 /**
  * @brief Reset timing data to uninitialized state
  * @details Clears arrival_time, required_time, slack, and slew for new analysis
- * @note arrival_time initialized to -INF (for max propagation)
- *       required_time initialized to +INF (for min propagation)
+ * @note at_max initialized to -INF (for max propagation)
+ *       at_min initialized to +INF (for min propagation)
+ *       rat_max initialized to +INF (for min propagation - RAT)
+ *       rat_min initialized to -INF (for max propagation - Hold RAT)
  */
 void TimingNode::reset() {
-    arrival_time_ = -UNINITIALIZED;   // Negative infinity: start very low for max calculation
-    required_time_ = UNINITIALIZED;    // Positive infinity: start very high for min calculation
-    slack_ = 0.0;
+    at_max_ = -UNINITIALIZED;          // Negative infinity: start very low for max calculation
+    at_min_ = UNINITIALIZED;            // Positive infinity: start very high for min calculation
+    rat_max_ = UNINITIALIZED;           // Positive infinity: start very high for min calculation (Setup RAT)
+    rat_min_ = -UNINITIALIZED;          // Negative infinity: start very low for max calculation (Hold RAT)
+    slack_setup_ = 0.0;
+    slack_hold_ = 0.0;
     slew_ = 0.0;
 }
 

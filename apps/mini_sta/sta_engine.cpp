@@ -8,6 +8,8 @@
 #include "timing_graph.h"
 #include "timing_path.h"
 #include "delay_model.h"
+#include "timing_constraints.h"
+#include "timing_checks.h"
 #include "../../lib/include/cell.h"
 #include "../../lib/include/net.h"
 #include <iostream>
@@ -26,7 +28,14 @@ namespace mini {
 STAEngine::STAEngine(TimingGraph* graph, std::shared_ptr<DelayModel> delay_model)
     : graph_(graph),
       delay_model_(std::move(delay_model)),
-      clock_period_(10.0) {
+      constraints_(nullptr) {
+}
+
+/**
+ * @brief Set timing constraints for analysis
+ */
+void STAEngine::setConstraints(TimingConstraints* constraints) {
+    constraints_ = constraints;
 }
 
 // ============================================================================
@@ -77,14 +86,6 @@ void STAEngine::run() {
     std::cout << "\n==========================================" << std::endl;
     std::cout << "STA Analysis Complete!" << std::endl;
     std::cout << "==========================================" << std::endl;
-}
-
-/**
- * @brief Set target clock period
- */
-void STAEngine::setClockPeriod(double period_ns) {
-    clock_period_ = period_ns;
-    std::cout << "  Set clock period to " << period_ns << " ns" << std::endl;
 }
 
 // ============================================================================
@@ -167,11 +168,32 @@ void STAEngine::updateArrivalTimes() {
     std::vector<TimingNode*> start_points = graph_->getStartPoints();
     std::cout << "  Start points: " << start_points.size() << std::endl;
 
-    // Set start points AT to 0.0
+    // Set start points AT (use input delays from constraints if available)
     for (TimingNode* start : start_points) {
-        start->setArrivalTime(0.0);
+        double at_value = 0.0;
+
+        // Check if constraints are available and node is a primary input
+        if (constraints_ && start->getPin()) {
+            Cell* owner = start->getPin()->getOwner();
+            if (owner && owner->getType() == CellType::INPUT) {
+                // For input ports, use input delay constraint
+                std::string port_name = owner->getName();
+                double input_delay = constraints_->getInputDelay(port_name);
+                at_value = input_delay;
+
+                if (input_delay > 0.0) {
+                    std::cout << "    Set AT of " << start->getName()
+                             << " = " << at_value << " ns (input delay)" << std::endl;
+                }
+            }
+        }
+
+        start->setArrivalTime(at_value);
         start->setSlew(0.0);  // Ideal waveform
-        std::cout << "    Set AT of " << start->getName() << " = 0.0" << std::endl;
+
+        if (at_value == 0.0) {
+            std::cout << "    Set AT of " << start->getName() << " = 0.0" << std::endl;
+        }
     }
 
     // Propagate AT forward in topological order
@@ -190,8 +212,13 @@ void STAEngine::updateArrivalTimes() {
             continue;
         }
 
+        // ==================== Setup Analysis (Max Path) ====================
         // Initialize to negative infinity (looking for maximum)
         double max_arrival = -std::numeric_limits<double>::infinity();
+
+        // ==================== Hold Analysis (Min Path) ====================
+        // Initialize to positive infinity (looking for minimum)
+        double min_arrival = std::numeric_limits<double>::infinity();
 
         // Check all incoming arcs
         for (TimingArc* arc : incoming_arcs) {
@@ -201,31 +228,53 @@ void STAEngine::updateArrivalTimes() {
                 continue;
             }
 
-            double prev_at = prev_node->getArrivalTime();
+            // ==================== Max Path (Setup) ====================
+            double prev_at_max = prev_node->getArrivalTimeMax();
 
-            // Skip if predecessor AT is uninitialized (negative infinity)
-            if (prev_at <= -TimingNode::UNINITIALIZED / 2) {
-                continue;
+            // Skip if predecessor AT_max is uninitialized (negative infinity)
+            if (prev_at_max > -TimingNode::UNINITIALIZED / 2) {
+                double path_delay_max = prev_at_max + arc->getDelay();
+                max_arrival = std::max(max_arrival, path_delay_max);
             }
 
-            double path_delay = prev_at + arc->getDelay();
-            max_arrival = std::max(max_arrival, path_delay);
+            // ==================== Min Path (Hold) ====================
+            double prev_at_min = prev_node->getArrivalTimeMin();
+
+            // Skip if predecessor AT_min is uninitialized (positive infinity)
+            if (prev_at_min < TimingNode::UNINITIALIZED / 2) {
+                double path_delay_min = prev_at_min + arc->getDelay();
+                min_arrival = std::min(min_arrival, path_delay_min);
+            }
         }
 
-        // Set AT if we found a valid path
+        // Set AT if we found valid paths
+        bool updated = false;
+
+        // ==================== Setup (Max) ====================
         if (max_arrival > -std::numeric_limits<double>::infinity() / 2) {
-            current_node->setArrivalTime(max_arrival);
+            current_node->setArrivalTimeMax(max_arrival);
+            updated = true;
+        }
+
+        // ==================== Hold (Min) ====================
+        if (min_arrival < std::numeric_limits<double>::infinity() / 2) {
+            current_node->setArrivalTimeMin(min_arrival);
+            updated = true;
+        }
+
+        if (updated) {
             updated_count++;
 
             // Debug print first few nodes
             if (updated_count <= 5) {
                 std::cout << "    Propagated AT of " << current_node->getName()
-                         << " = " << max_arrival << " ns" << std::endl;
+                         << " [Setup=" << max_arrival << "ns, Hold=" << min_arrival << "ns]" << std::endl;
             }
         }
     }
 
-    std::cout << "  Updated AT for " << updated_count << " nodes." << std::endl;
+    std::cout << "  Updated AT (Setup) for " << updated_count << " nodes." << std::endl;
+    std::cout << "  Updated AT (Hold) for " << updated_count << " nodes." << std::endl;
 }
 
 // ============================================================================
@@ -250,10 +299,37 @@ void STAEngine::updateRequiredTimes() {
     std::vector<TimingNode*> end_points = graph_->getEndPoints();
     std::cout << "  End points: " << end_points.size() << std::endl;
 
-    // Set end points RAT to clock period
+    // Get clock period from constraints or use default
+    double clock_period = 10.0;  // Default
+    if (constraints_) {
+        clock_period = constraints_->getMainClockPeriod();
+    }
+
+    // Set end points RAT (use output delays from constraints if available)
     for (TimingNode* end : end_points) {
-        end->setRequiredTime(clock_period_);
-        std::cout << "    Set RAT of " << end->getName() << " = " << clock_period_ << " ns" << std::endl;
+        double rat_value = clock_period;
+
+        // Check if constraints are available and node is a primary output
+        if (constraints_ && end->getPin()) {
+            Cell* owner = end->getPin()->getOwner();
+            if (owner && owner->getType() == CellType::OUTPUT) {
+                // For output ports, subtract output delay from clock period
+                std::string port_name = owner->getName();
+                double output_delay = constraints_->getOutputDelay(port_name);
+                rat_value = clock_period - output_delay;
+
+                if (output_delay > 0.0) {
+                    std::cout << "    Set RAT of " << end->getName()
+                             << " = " << rat_value << " ns (clock period - output delay)" << std::endl;
+                }
+            }
+        }
+
+        end->setRequiredTime(rat_value);
+
+        if (rat_value == clock_period) {
+            std::cout << "    Set RAT of " << end->getName() << " = " << rat_value << " ns" << std::endl;
+        }
     }
 
     // Propagate RAT backward (reverse topological order)
@@ -352,47 +428,93 @@ void STAEngine::updateSlacks() {
 /**
  * @brief Report timing summary
  * @details Prints WNS (Worst Negative Slack) and TNS (Total Negative Slack)
+ *          for both Setup (Max path) and Hold (Min path) analysis
  */
 void STAEngine::reportSummary() const {
     std::cout << "\n========== Timing Summary ==========" << std::endl;
-    std::cout << "Clock Period: " << clock_period_ << " ns" << std::endl;
 
-    double wns = 0.0;  // Worst Negative Slack
-    double tns = 0.0;  // Total Negative Slack
-    size_t violation_count = 0;
+    // Get clock period from constraints or use default
+    double clock_period = 10.0;  // Default
+    if (constraints_) {
+        clock_period = constraints_->getMainClockPeriod();
+    }
+    std::cout << "Clock Period: " << clock_period << " ns" << std::endl;
+    std::cout << std::endl;
+
+    // ==================== Setup Analysis (Max Path) ====================
+    double wns_setup = 0.0;        // Worst Negative Slack (Setup)
+    double tns_setup = 0.0;        // Total Negative Slack (Setup)
+    size_t setup_violations = 0;
+
+    // ==================== Hold Analysis (Min Path) ====================
+    double wns_hold = 0.0;         // Worst Negative Slack (Hold)
+    double tns_hold = 0.0;         // Total Negative Slack (Hold)
+    size_t hold_violations = 0;
 
     for (const auto& node : graph_->getNodes()) {
-        double slack = node->getSlack();
+        // Setup (Max path)
+        double slack_setup = node->getSlackSetup();
 
         // Skip uninitialized nodes
-        if (slack == 0.0) {
-            // Check if uninitialized (both AT and RAT at extreme values)
-            if (node->getArrivalTime() <= -TimingNode::UNINITIALIZED / 2 ||
-                node->getRequiredTime() >= TimingNode::UNINITIALIZED / 2) {
-                continue;
+        if (slack_setup != 0.0 ||
+            (node->getArrivalTimeMax() > -TimingNode::UNINITIALIZED / 2 &&
+             node->getRequiredTimeMax() < TimingNode::UNINITIALIZED / 2)) {
+
+            // Find worst Setup slack
+            if (slack_setup < wns_setup) {
+                wns_setup = slack_setup;
+            }
+
+            // Accumulate Setup negative slacks
+            if (slack_setup < 0.0) {
+                tns_setup += slack_setup;
+                setup_violations++;
             }
         }
 
-        // Find worst (most negative) slack
-        if (slack < wns) {
-            wns = slack;
-        }
+        // Hold (Min path)
+        double slack_hold = node->getSlackHold();
 
-        // Accumulate negative slacks
-        if (slack < 0.0) {
-            tns += slack;
-            violation_count++;
+        // Skip uninitialized nodes
+        if (slack_hold != 0.0 ||
+            (node->getArrivalTimeMin() < TimingNode::UNINITIALIZED / 2 &&
+             node->getRequiredTimeMin() > -TimingNode::UNINITIALIZED / 2)) {
+
+            // Find worst Hold slack (note: Hold violation is negative when too fast)
+            if (slack_hold < wns_hold) {
+                wns_hold = slack_hold;
+            }
+
+            // Accumulate Hold negative slacks
+            if (slack_hold < 0.0) {
+                tns_hold += slack_hold;
+                hold_violations++;
+            }
         }
     }
 
-    std::cout << "WNS (Worst Negative Slack): " << wns << " ns";
-    if (wns < 0.0) {
+    // Report Setup Analysis results
+    std::cout << "Setup Analysis (Max Path - Signal Too Slow):" << std::endl;
+    std::cout << "  WNS (Worst Negative Slack): " << wns_setup << " ns";
+    if (wns_setup < 0.0) {
         std::cout << " [VIOLATION]";
     }
     std::cout << std::endl;
 
-    std::cout << "TNS (Total Negative Slack): " << tns << " ns" << std::endl;
-    std::cout << "Violation Count: " << violation_count << " nodes" << std::endl;
+    std::cout << "  TNS (Total Negative Slack): " << tns_setup << " ns" << std::endl;
+    std::cout << "  Violation Count: " << setup_violations << " nodes" << std::endl;
+    std::cout << std::endl;
+
+    // Report Hold Analysis results
+    std::cout << "Hold Analysis (Min Path - Signal Too Fast):" << std::endl;
+    std::cout << "  WNS (Worst Negative Slack): " << wns_hold << " ns";
+    if (wns_hold < 0.0) {
+        std::cout << " [VIOLATION - RACE CONDITION]";
+    }
+    std::cout << std::endl;
+
+    std::cout << "  TNS (Total Negative Slack): " << tns_hold << " ns" << std::endl;
+    std::cout << "  Violation Count: " << hold_violations << " nodes" << std::endl;
     std::cout << "=====================================" << std::endl;
 }
 

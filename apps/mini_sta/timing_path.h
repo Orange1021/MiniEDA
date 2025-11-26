@@ -77,6 +77,7 @@ private:
  * @class TimingNode
  * @brief Represents a node in the timing graph (STA evaluation point)
  * @details TimingNode corresponds to a Pin in physical netlist, stores transient timing data
+ * @note Supports Min/Max dual-rail analysis for Setup (Max) and Hold (Min) checks
  */
 class TimingNode {
 public:
@@ -95,22 +96,47 @@ public:
 
     // ============ Basic Accessors ============
     Pin* getPin() const { return pin_; }
-    double getArrivalTime() const { return arrival_time_; }
-    double getRequiredTime() const { return required_time_; }
-    double getSlack() const { return slack_; }
     double getSlew() const { return slew_; }
+
+    // ============ Min/Max Timing Accessors (Setup/Hold) ============
+    // Arrival Time (AT): when signal arrives
+    double getArrivalTimeMax() const { return at_max_; }
+    double getArrivalTimeMin() const { return at_min_; }
+
+    // Required Time (RAT): when signal must arrive
+    double getRequiredTimeMax() const { return rat_max_; }
+    double getRequiredTimeMin() const { return rat_min_; }
+
+    // Slack timing checks
+    double getSlackSetup() const { return slack_setup_; }
+    double getSlackHold() const { return slack_hold_; }
+
+    // ============ Legacy getters (backward compatibility) ============
+    // These map to Max values (Setup analysis)
+    double getArrivalTime() const { return at_max_; }
+    double getRequiredTime() const { return rat_max_; }
+    double getSlack() const { return slack_setup_; }
 
     // ============ Connection Accessors ============
     const std::vector<TimingArc*>& getIncomingArcs() const { return incoming_arcs_; }
     const std::vector<TimingArc*>& getOutgoingArcs() const { return outgoing_arcs_; }
 
     // ============ Modifiers ============
-    void setArrivalTime(double at) { arrival_time_ = at; }
-    void setRequiredTime(double rat) { required_time_ = rat; }
-    void setSlack(double slack) { slack_ = slack; }
+    void setArrivalTimeMax(double at) { at_max_ = at; }
+    void setArrivalTimeMin(double at) { at_min_ = at; }
+    void setRequiredTimeMax(double rat) { rat_max_ = rat; }
+    void setRequiredTimeMin(double rat) { rat_min_ = rat; }
+    void setSlackSetup(double slack) { slack_setup_ = slack; }
+    void setSlackHold(double slack) { slack_hold_ = slack; }
     void setSlew(double slew) { slew_ = slew; }
     void addIncomingArc(TimingArc* arc) { incoming_arcs_.push_back(arc); }
     void addOutgoingArc(TimingArc* arc) { outgoing_arcs_.push_back(arc); }
+
+    // ============ Legacy setters (backward compatibility) ============
+    // These map to Max values (Setup analysis)
+    void setArrivalTime(double at) { at_max_ = at; }
+    void setRequiredTime(double rat) { rat_max_ = rat; }
+    void setSlack(double slack) { slack_setup_ = slack; }
 
     // ============ Core Methods ============
     /**
@@ -143,9 +169,14 @@ public:
 
 private:
     Pin* pin_;                              ///< Anchor pointer to physical pin in NetlistDB
-    double arrival_time_;                   ///< Arrival Time (AT): when signal arrives
-    double required_time_;                  ///< Required Time (RAT): when signal must arrive
-    double slack_;                          ///< Timing slack: RAT - AT
+
+    // ============ Min/Max Timing Data (Setup/Hold) ============
+    double at_max_;                         ///< Arrival Time (Max): for Setup analysis
+    double at_min_;                         ///< Arrival Time (Min): for Hold analysis
+    double rat_max_;                        ///< Required Time (Max): for Setup analysis
+    double rat_min_;                        ///< Required Time (Min): for Hold analysis
+    double slack_setup_;                    ///< Setup slack: rat_max - at_max
+    double slack_hold_;                     ///< Hold slack: at_min - rat_min (hold check)
     double slew_;                           ///< Signal transition slew rate
 
     std::vector<TimingArc*> incoming_arcs_; ///< Incoming edges (predecessors)

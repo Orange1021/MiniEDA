@@ -18,6 +18,7 @@ class TimingGraph;
 class DelayModel;
 class TimingNode;
 class NetlistDB;
+class TimingConstraints;
 
 /**
  * @class STAEngine
@@ -47,11 +48,10 @@ public:
     void run();
 
     /**
-     * @brief Set target clock period for analysis
-     * @param period_ns Clock period in nanoseconds (ns)
-     * @note This is a simplified version, will be moved to timing_constraints.h later
+     * @brief Set timing constraints for analysis
+     * @param constraints Pointer to timing constraints (must be valid)
      */
-    void setClockPeriod(double period_ns);
+    void setConstraints(TimingConstraints* constraints);
 
     // ============ Reporting Methods ============
 
@@ -69,9 +69,9 @@ public:
     void dumpGraph() const;
 
 private:
-    TimingGraph* graph_;                    ///< Pointer to timing graph (non-owning)
+    TimingGraph* graph_;                      ///< Pointer to timing graph (non-owning)
     std::shared_ptr<DelayModel> delay_model_; ///< Shared ownership of delay model
-    double clock_period_ = 10.0;            ///< Clock period (default 10ns)
+    TimingConstraints* constraints_ = nullptr; ///< Pointer to timing constraints (non-owning)
 
     // ============ Internal Algorithm Steps ============
 

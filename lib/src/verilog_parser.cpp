@@ -544,13 +544,32 @@ bool VerilogParser::parsePortDeclaration(size_t& pos,
 
         if (cell != nullptr) {
             // Add pin to port
+            Pin* pin = nullptr;
             if (is_input) {
-                cell->addPin("Y", PinDirection::OUTPUT); // INPUT port has output pin
+                pin = cell->addPin("Y", PinDirection::OUTPUT); // INPUT port has output pin
             } else {
-                cell->addPin("A", PinDirection::INPUT);  // OUTPUT port has input pin
+                pin = cell->addPin("A", PinDirection::INPUT);  // OUTPUT port has input pin
             }
 
-            if (verbose_) {
+            // [Architect Fix] Critical missing step: Auto-connect to same-name net
+            if (pin) {
+                // 1. Get or create net with same name (handles implicit wire declarations)
+                Net* net = db.getNet(port_name);
+                if (!net) {
+                    net = db.createNet(port_name);
+                }
+
+                // 2. Establish connection
+                if (net) {
+                    db.connect(pin, net);
+
+                    if (verbose_) {
+                        std::cout << "  Port: " << port_name
+                                 << " (" << (is_input ? "input" : "output") << ")"
+                                 << " - Connected to net: " << net->getName() << std::endl;
+                    }
+                }
+            } else if (verbose_) {
                 std::cout << "  Port: " << port_name
                          << " (" << (is_input ? "input" : "output") << ")" << std::endl;
             }
