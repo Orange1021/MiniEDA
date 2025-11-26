@@ -38,7 +38,11 @@
       "Bash(./test/test_sta_debug.cpp )",
       "Bash(./build/bin/test_sta_debug:*)",
       "Bash(/dev/null:*)",
-      "Bash(./build/bin/mini_sta:*)"
+      "Bash(./build/bin/mini_sta:*)",
+      "Bash(./build/bin/test_liberty:*)",
+      "Bash(build/lib/liberty.o build/lib/liberty_parser.o test/test_liberty_parser.cpp )",
+      "Bash(./build/bin/test_liberty_parser:*)",
+      "Bash(/tmp/test_minimal:*)"
     ],
     "deny": [],
     "ask": []
