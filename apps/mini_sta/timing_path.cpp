@@ -103,12 +103,16 @@ bool TimingNode::isClockSource() const {
 }
 
 /**
- * @brief Get node name derived from pin name
- * @return Node name string
+ * @brief Get node name (full hierarchical name: CellName/PinName)
+ * @return Node name string (e.g., "U1/A", "U2/Q")
+ * @details This provides globally unique identification for debugging
  */
 std::string TimingNode::getName() const {
     if (pin_) {
-        return pin_->getName();
+        if (Cell* owner = pin_->getOwner()) {
+            return owner->getName() + "/" + pin_->getName();
+        }
+        return pin_->getName();  // For orphan pins (shouldn't happen normally)
     }
     return "UNKNOWN_NODE";
 }

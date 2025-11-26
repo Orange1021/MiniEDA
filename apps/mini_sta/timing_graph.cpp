@@ -51,6 +51,15 @@ bool TimingGraph::buildFromNetlist() {
         return false;
     }
 
+    // Pre-allocate memory to avoid pointer invalidation
+    // This is critical: when vector reallocates, all stored raw pointers become dangling!
+    size_t total_pins = 0;
+    for (const auto& cell : netlist_->getCells()) {
+        total_pins += cell->getPins().size();
+    }
+    nodes_.reserve(total_pins);
+    std::cout << "  Pre-allocated space for " << total_pins << " nodes." << std::endl;
+
     // Step 1: Create nodes for all pins
     std::cout << "Step 1: Creating timing nodes for all pins..." << std::endl;
     for (const auto& cell : netlist_->getCells()) {
@@ -103,26 +112,37 @@ void TimingGraph::clear() {
  * @brief Create timing node for a physical pin
  * @param pin Physical pin pointer
  * @return Pointer to created TimingNode
+ * @fix Use Pin* as the only source of truth for uniqueness, not short pin name
+ * This prevents naming collisions (e.g., U1/A vs U2/A both returning "A")
  */
 TimingNode* TimingGraph::createNode(Pin* pin) {
-    if (!pin) {
-        return nullptr;
+    if (!pin) return nullptr;
+
+    // 1. Use Pin pointer as the primary uniqueness check (THE ONLY SOURCE OF TRUTH)
+    // This ensures each physical pin gets its own TimingNode, even if names are identical
+    if (pin_to_node_map_.find(pin) != pin_to_node_map_.end()) {
+        return pin_to_node_map_[pin];
     }
 
-    // Check if node already exists
-    const std::string& pin_name = pin->getName();
-    if (node_map_.find(pin_name) != node_map_.end()) {
-        return node_map_[pin_name];
-    }
-
-    // Create new node
+    // 2. Create new node
     auto node = std::make_unique<TimingNode>(pin);
     TimingNode* node_ptr = node.get();
 
-    // Store in containers
+    // 3. Store in vector (unique_ptr is safely moved, node_ptr remains valid on heap)
     nodes_.push_back(std::move(node));
-    node_map_[pin_name] = node_ptr;
+
+    // 4. Establish Pin* -> Node* mapping (critical for fast lookup during arc building)
     pin_to_node_map_[pin] = node_ptr;
+
+    // 5. Build globally unique name: CellName/PinName (e.g., "U1/A", "U2/A")
+    // This is only for debugging and name-based lookup
+    std::string full_name = "UNKNOWN";
+    if (Cell* owner = pin->getOwner()) {
+        full_name = owner->getName() + "/" + pin->getName();
+    } else {
+        full_name = pin->getName();  // For orphan pins (shouldn't happen)
+    }
+    node_map_[full_name] = node_ptr;
 
     return node_ptr;
 }
@@ -136,6 +156,7 @@ TimingNode* TimingGraph::createNode(Pin* pin) {
  */
 TimingArc* TimingGraph::createArc(TimingArcType type, TimingNode* from_node, TimingNode* to_node) {
     if (!from_node || !to_node) {
+        std::cerr << "Warning: createArc with null node!" << std::endl;
         return nullptr;
     }
 

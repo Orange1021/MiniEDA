@@ -267,9 +267,16 @@ MiniEDA/
 | Net | 180 + 180 行 | 线网模型 | ✅ 完成 | 拓扑连接管理 |
 | NetlistDB | 325 + 506 行 | 数据库管理 | ✅ 完成 | 42 个公共接口 |
 | VerilogParser | 304 + 858 行 | Verilog 解析 | ✅ 增强 | 工业级标准修复 |
-| MiniSTA | 开发中 (12 个空文件) | 静态时序分析 | 🚧 框架就绪 | STA 引擎框架已建立 |
-| MiniPlacement | 待实现 (3 个空文件) | 布局优化 | 📋 规划中 | 引擎框架待实现 |
-| **核心总计** | **2800+ 行** | **核心基础** | ✅ **稳定** | ISCAS 验证通过 |
+| **核心小计** | **2800+ 行** | **核心基础** | ✅ **稳定** | ISCAS 验证通过 |
+| **MiniSTA** | **304 + 1149 行** | 时序分析★ | ✅ **框架完成** | TimingGraph + Topology |
+| MiniPlacement | 待实现 | 布局优化 | 📋 规划中 | 引擎框架待实现 |
+| **项目总计** | **4300+ 行** | **完整系统** | 🚧 **开发中** | STA 引擎实现中 |
+
+> **★ MiniSTA 阶段完成** (v0.1):
+> - `timing_path.h/cpp`: TimingNode + TimingArc 数据模型
+> - `delay_model.h/cpp`: LinearDelayModel 抽象接口
+> - `timing_graph.h/cpp`: TimingGraph 构建 + 拓扑排序 (493 行)
+> - **测试通过**: s27 (44 nodes, 29 arcs), s344 (496 nodes, 493 arcs)
 
 ## 贡献指南
 
@@ -293,15 +300,28 @@ MiniEDA/
 
 ---
 
-**项目状态**：✅ **核心基础已完成（2800+ 行）**
-- NetlistDB + VerilogParser + Cell/Net 模型全部完成
-- 通过 ISCAS 标准测试集验证（4 个电路 100% 通过率）
-- 可解析真实电路网表并构建数据库
-- MiniSTA 框架已建立（12 个文件，待实现算法）
-- MiniPlacement 目录已创建（3 个空文件）
+**项目状态**：✅ **MiniSTA 框架完成（4300+ 行）** 🎉
+### 核心基础层（100% 完成）
+- ✅ NetlistDB + VerilogParser + Cell/Net 模型全部完成
+- ✅ 通过 ISCAS 标准测试集验证（4 个电路 100% 通过率）
+- ✅ 可解析真实电路网表并构建数据库
 
-**最新更新**：2025 - VerilogParser 增强版发布
-- 修复 6 个核心语法校验问题（strict_mode、重复声明、端口匹配等）
-- 增强工业级错误报告（6 大错误类型、行列精确定位）
-- 支持大小写不敏感匹配（15+ 门类型）
-- 成功通过 ISCAS s27/s344/s349/s382 验证
+### MiniSTA 时序分析（v0.1 完成）⭐
+- ✅ TimingGraph 基础设施构建
+  - TimingNode + TimingArc 数据模型（160 行）
+  - LinearDelayModel 延迟计算（60 行）
+  - TimingGraph 构建 + 拓扑排序（1150 行）
+- ✅ **测试验证**：
+  - s27 电路：44 nodes, 29 arcs ✅
+  - s344 电路：496 nodes, 493 arcs ✅
+  - 拓扑排序 + DAG 验证通过 ✅
+- 🚧 **下一步**：STA 引擎实现（AT/RAT/Slack 计算）
+
+### MiniPlacement 布局优化（规划中）
+- 📋 目录已创建（3 个空文件）
+
+**最新更新**：2025 - MiniSTA Phase 1 完成
+- 构建了完整的时序图基础设施（Infrastructure）
+- 实现 TimingGraph::buildFromNetlist() 工厂方法
+- 实现 DFS 和 Kahn 拓扑排序算法（三色标记法）
+- 成功通过 s27/s344 电路验证（Nodes/Arcs 100% 匹配）

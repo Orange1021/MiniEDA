@@ -1,7 +1,7 @@
 /**
  * @file timing_graph.h
- * @brief Timing Graph Container - NetlistDB 的时序世界镜像
- * @details 管理所有 TimingNode 和 TimingArc 的容器，构建时序图的核心类
+ * @brief Timing Graph Container - Mirror of NetlistDB in Timing World
+ * @details Container managing all TimingNode and TimingArc, core class for building timing graph
  */
 
 #ifndef MINI_TIMING_GRAPH_H
@@ -23,15 +23,16 @@ class Net;
 
 /**
  * @class TimingGraph
- * @brief 时序图容器，构建并持有整个时序图
- * @details 相当于 NetlistDB 在时序世界的镜像，存储 Node 和 Arc 的完整层次结构
+ * @brief Timing graph container that builds and holds the entire timing graph
+ * @details Equivalent to NetlistDB's mirror in timing world, storing complete hierarchy of nodes and arcs
  */
 class TimingGraph {
 public:
     /**
      * @brief Constructor
-     * @param netlist 指向底层物理网表数据库的指针（用于读取数据，但不修改）
-     * @warning TimingGraph 知道 NetlistDB 的存在，但 NetlistDB 绝不包含 TimingGraph 的头文件，保证底层数据库的纯洁性
+     * @param netlist Pointer to underlying physical netlist database (read-only)
+     * @warning TimingGraph knows about NetlistDB, but NetlistDB must NOT include TimingGraph headers,
+     * ensuring purity of the underlying database
      */
     explicit TimingGraph(NetlistDB* netlist);
 
@@ -47,264 +48,266 @@ public:
     TimingGraph& operator=(TimingGraph&&) = default;
 
     // ============================================================================
-    // 核心方法：从 NetlistDB 构建时序图（最关键的设计）
+    // Core Method: Build timing graph from NetlistDB (Critical Design)
     // ============================================================================
 
     /**
-     * @brief 从物理网表构建时序图（工厂方法）
-     * @details 最关键的构建逻辑，将物理连接转换为时序逻辑连接
-     * 构建流程：
-     *  1. 遍历 NetlistDB 中的所有 Cell
-     *  2. 为每个 Cell 的每个 Pin 创建对应的 TimingNode
-     *  3. 为每个 Net 创建 TimingArc (NET_ARC)：Driver Pin -> Load Pin
-     *  4. 为每个 Cell 创建 TimingArc (CELL_ARC)：Input Pin -> Output Pin
-     * @return true 构建成功，false 构建失败
+     * @brief Build timing graph from physical netlist (Factory Method)
+     * @details Critical building logic that transforms physical connectivity to timing logical connectivity
+     * Building Pipeline:
+     *  1. Traverse all Cells in NetlistDB
+     *  2. Create TimingNode for each Pin of each Cell
+     *  3. Create TimingArc (NET_ARC) for each Net: Driver Pin -> Load Pin
+     *  4. Create TimingArc (CELL_ARC) for each Cell: Input Pin -> Output Pin
+     * @return true if build successful, false otherwise
      */
     bool buildFromNetlist();
 
     /**
-     * @brief 清空所有节点和弧，重置图状态
-     * @details 为后续重新构建图做准备
+     * @brief Clear all nodes and arcs, reset graph state
+     * @details Prepare for rebuilding graph later
      */
     void clear();
 
     // ============================================================================
-    // 节点管理（非拥有权访问）
+    // Node Management (Non-owning Access)
     // ============================================================================
 
     /**
-     * @brief 根据物理 pin 名称查找 TimingNode
-     * @param pin_name 物理引脚名称
-     * @return TimingNode 指针，未找到返回 nullptr
+     * @brief Find TimingNode by physical pin name
+     * @param pin_name Physical pin name
+     * @return TimingNode pointer, nullptr if not found
      */
     TimingNode* getNode(const std::string& pin_name) const;
 
     /**
-     * @brief 根据物理 pin 指针查找 TimingNode
-     * @param pin 物理引脚指针
-     * @return TimingNode 指针，未找到返回 nullptr
+     * @brief Find TimingNode by physical pin pointer
+     * @param pin Physical pin pointer
+     * @return TimingNode pointer, nullptr if not found
      */
     TimingNode* getNode(const Pin* pin) const;
 
     /**
-     * @brief 检查指定 pin 是否有时序节点
-     * @param pin_name 引脚名称
-     * @return true 存在，false 不存在
+     * @brief Check if timing node exists for given pin
+     * @param pin_name Pin name
+     * @return true if exists, false otherwise
      */
     bool hasNode(const std::string& pin_name) const;
 
     /**
-     * @brief 获取所有时序节点（所有权仍在 TimingGraph）
-     * @return 节点容器的 const 引用
+     * @brief Get all timing nodes (ownership remains in TimingGraph)
+     * @return Const reference to node container
      */
     const std::vector<std::unique_ptr<TimingNode>>& getNodes() const { return nodes_; }
 
     /**
-     * @brief 获取节点数量
+     * @brief Get number of nodes
      */
     size_t getNumNodes() const { return nodes_.size(); }
 
     // ============================================================================
-    // 弧管理（非拥有权访问）
+    // Arc Management (Non-owning Access)
     // ============================================================================
 
     /**
-     * @brief 获取所有时序弧（所有权仍在 TimingGraph）
-     * @return 弧容器的 const 引用
+     * @brief Get all timing arcs (ownership remains in TimingGraph)
+     * @return Const reference to arc container
      */
     const std::vector<std::unique_ptr<TimingArc>>& getArcs() const { return arcs_; }
 
     /**
-     * @brief 获取弧数量
+     * @brief Get number of arcs
      */
     size_t getNumArcs() const { return arcs_.size(); }
 
     /**
-     * @brief 获取从指定节点出发的所有弧
-     * @param node 源节点
-     * @return 出边弧的指针向量
+     * @brief Get all arcs originating from specified node
+     * @param node Source node
+     * @return Vector of outgoing arc pointers
      */
     std::vector<TimingArc*> getOutgoingArcs(const TimingNode* node) const;
 
     /**
-     * @brief 获取指向指定节点的所有弧
-     * @param node 目标节点
-     * @return 入边弧的指针向量
+     * @brief Get all arcs arriving at specified node
+     * @param node Target node
+     * @return Vector of incoming arc pointers
      */
     std::vector<TimingArc*> getIncomingArcs(const TimingNode* node) const;
 
     // ============================================================================
-    // 核心算法：拓扑排序（STA 必须按拓扑顺序传播）
+    // Core Algorithm: Topological Sort (STA Must Propagate in Topological Order)
     // ============================================================================
 
     /**
-     * @brief 拓扑排序算法（DFS 实现）
-     * @details STA 必须按拓扑顺序进行传播，确保数据一致性
-     * 算法选择：DFS（深度优先搜索）实现，或 Kahn's 算法（BFS）均可
-     * @return 按拓扑顺序排列的 TimingNode 指针向量
-     * @note 如果图中存在环，返回空向量（时序图必须是 DAG）
+     * @brief Topological sorting algorithm (DFS implementation)
+     * @details STA must propagate in topological order to ensure data consistency
+     * Algorithm choice: DFS (Depth-First Search) or Kahn's algorithm (BFS)
+     * @return Vector of TimingNode pointers in topological order
+     * @note If graph contains cycles, returns empty vector (timing graph must be DAG)
      */
     std::vector<TimingNode*> topologicalSort() const;
 
     /**
-     * @brief 使用 Kahn 算法进行拓扑排序（BFS 实现）
-     * @details 备选实现方案，使用入度归零法
-     * @return 按拓扑顺序排列的 TimingNode 指针向量
+     * @brief Topological sort using Kahn's algorithm (BFS implementation)
+     * @details Alternative implementation using in-degree zeroing
+     * @return Vector of TimingNode pointers in topological order
      */
     std::vector<TimingNode*> topologicalSortKahn() const;
 
     // ============================================================================
-    // 核心算法：识别路径起点和终点
+    // Core Algorithm: Identify Path Start and End Points
     // ============================================================================
 
     /**
-     * @brief 获取所有时序路径的起点节点
-     * @details 起点包括：
-     *  - PI (Primary Input) 主输入端
-     *  - DFF/Q（触发器输出端）
-     * @return 起点节点的指针向量
+     * @brief Get all timing path start point nodes
+     * @details Start points include:
+     *  - PI (Primary Input) primary input ports
+     *  - DFF/Q (flip-flop outputs)
+     * @return Vector of start node pointers
      */
     std::vector<TimingNode*> getStartPoints() const;
 
     /**
-     * @brief 获取所有时序路径的终点节点
-     * @details 终点包括：
-     *  - PO (Primary Output) 主输出端
-     *  - DFF/D（触发器输入端）
-     * @return 终点节点的指针向量
+     * @brief Get all timing path end point nodes
+     * @details End points include:
+     *  - PO (Primary Output) primary output ports
+     *  - DFF/D (flip-flop inputs)
+     * @return Vector of end node pointers
      */
     std::vector<TimingNode*> getEndPoints() const;
 
     // ============================================================================
-    // 图拓扑查询
+    // Graph Topology Queries
     // ============================================================================
 
     /**
-     * @brief 获取所有主输入节点（无入边）
-     * @return 主输入节点指针向量
+     * @brief Get all primary input nodes (no incoming arcs)
+     * @return Vector of primary input node pointers
      */
     std::vector<TimingNode*> getPrimaryInputs() const;
 
     /**
-     * @brief 获取所有主输出节点（无出边）
+     * @brief Get all primary output nodes (no outgoing arcs)
      */
     std::vector<TimingNode*> getPrimaryOutputs() const;
 
     /**
-     * @brief 获取所有时钟源节点
+     * @brief Get all clock source nodes
      */
     std::vector<TimingNode*> getClockSources() const;
 
     /**
-     * @brief 验证图是否为合法的 DAG（有向无环图）
-     * @return true 是无环图，false 存在环
+     * @brief Check if graph is valid DAG (Directed Acyclic Graph)
+     * @return true if acyclic, false if cycles detected
      */
     bool isDAG() const;
 
     // ============================================================================
-    // 时序数据管理和重置
+    // Timing Data Management and Reset
     // ============================================================================
 
     /**
-     * @brief 重置所有节点的时序数据（用于新一轮分析）
-     * @details 调用每个 TimingNode::reset() 方法
+     * @brief Reset timing data on all nodes (for new analysis round)
+     * @details Calls TimingNode::reset() for each node
      */
     void resetTimingData();
 
     /**
-     * @brief 验证图的完整性
+     * @brief Validate graph integrity
      */
     bool validate() const;
 
     // ============================================================================
-    // 统计和调试
+    // Statistics and Debug
     // ============================================================================
 
     /**
      * @struct TimingGraphStats
-     * @brief 时序图统计信息
+     * @brief Timing graph statistics
      */
     struct TimingGraphStats {
-        size_t num_nodes;           ///< 节点总数
-        size_t num_arcs;            ///< 弧总数
-        size_t num_pi;              ///< 主输入数
-        size_t num_po;              ///< 主输出数
-        size_t num_clock_nodes;     ///< 时钟节点数
+        size_t num_nodes;           ///< Total number of nodes
+        size_t num_arcs;            ///< Total number of arcs
+        size_t num_pi;              ///< Number of primary inputs
+        size_t num_po;              ///< Number of primary outputs
+        size_t num_clock_nodes;     ///< Number of clock nodes
     };
 
     /**
-     * @brief 获取图统计信息
+     * @brief Get graph statistics
      */
     TimingGraphStats getStatistics() const;
 
     /**
-     * @brief 打印统计信息到标准输出
+     * @brief Print statistics to stdout
      */
     void printStatistics() const;
 
     /**
-     * @brief 打印图拓扑结构（用于调试）
-     * @param verbose 是否打印详细信息
+     * @brief Print graph topology (for debugging)
+     * @param verbose Print detailed node/arc information if true
      */
     void printGraph(bool verbose = false) const;
 
 private:
     // ============================================================================
-    // 私有数据成员（所有权管理）
+    // Private Data Members (Ownership Management)
     // ============================================================================
 
-    NetlistDB* netlist_;                                 ///< 底层物理网表数据库引用（只读）
-    std::vector<std::unique_ptr<TimingNode>> nodes_;     ///< 拥有所有节点的内存所有权
-    std::vector<std::unique_ptr<TimingArc>> arcs_;       ///< 拥有所有弧的内存所有权
+    NetlistDB* netlist_;                                 ///< Read-only reference to underlying physical netlist database
+    std::vector<std::unique_ptr<TimingNode>> nodes_;     ///< Owns all node memory
+    std::vector<std::unique_ptr<TimingArc>> arcs_;       ///< Owns all arc memory
 
-    // 快速查找映射（非拥有权指针）
-    std::unordered_map<std::string, TimingNode*> node_map_;         ///< Pin 名称 → TimingNode 映射
-    std::unordered_map<const Pin*, TimingNode*> pin_to_node_map_;   ///< Pin 指针 → TimingNode 映射
+    // Fast lookup maps (non-owning pointers)
+    std::unordered_map<std::string, TimingNode*> node_map_;         ///< Pin name → TimingNode mapping
+    std::unordered_map<const Pin*, TimingNode*> pin_to_node_map_;   ///< Pin pointer → TimingNode mapping
 
     // ============================================================================
-    // 私有辅助方法（buildFromNetlist 的子步骤）
+    // Private Helper Methods (Sub-steps of buildFromNetlist)
     // ============================================================================
 
     /**
-     * @brief 为物理引脚创建时序节点
-     * @param pin 物理引脚指针
-     * @return 创建的 TimingNode 指针
-     * @details 被 buildFromNetlist() 调用，遍历所有 Cell 的 Pin
+     * @brief Create timing node for physical pin
+     * @param pin Physical pin pointer
+     * @return Created TimingNode pointer
+     * @details Called by buildFromNetlist(), traverses all Cell Pins
      */
     TimingNode* createNode(Pin* pin);
 
     /**
-     * @brief 在两个节点之间创建时序弧
-     * @param type 弧类型 (CELL_ARC 或 NET_ARC)
-     * @param from_node 源节点
-     * @param to_node 目标节点
-     * @return 创建的 TimingArc 指针
+     * @brief Create timing arc between two nodes
+     * @param type Arc type (CELL_ARC or NET_ARC)
+     * @param from_node Source node
+     * @param to_node Destination node
+     * @return Created TimingArc pointer
      */
     TimingArc* createArc(TimingArcType type, TimingNode* from_node, TimingNode* to_node);
 
     /**
-     * @brief 构建所有 CELL_ARC（遍历所有 Cell 的 Input → Output）
-     * @return true 成功，false 失败
+     * @brief Build all CELL_ARC (traverse all Cell Input → Output)
+     * @return true on success, false on failure
      */
     bool buildCellArcs();
 
     /**
-     * @brief 构建所有 NET_ARC（遍历所有 Net 的 Driver → Load）
-     * @return true 成功，false 失败
+     * @brief Build all NET_ARC (traverse all Net Driver → Load)
+     * @return true on success, false on failure
      */
     bool buildNetArcs();
 
     /**
-     * @brief DFS 辅助函数（用于拓扑排序）
-     * @param node 当前访问节点
-     * @param visited 访问标记数组
-     * @param order 拓扑顺序结果
+     * @brief DFS helper for topological sort
+     * @param node Current node
+     * @param visited Three-color marking array
+     * @param node_to_id Node to ID mapping
+     * @param order Result order vector
      */
     void dfsTopologicalSort(TimingNode* node, std::vector<int>& visited,
+                            const std::unordered_map<TimingNode*, int>& node_to_id,
                             std::vector<TimingNode*>& order) const;
 
     /**
-     * @brief 获取节点入度（Kahn 算法辅助）
+     * @brief Calculate node in-degrees (Kahn's algorithm helper)
      */
     std::unordered_map<TimingNode*, int> calculateInDegrees() const;
 };

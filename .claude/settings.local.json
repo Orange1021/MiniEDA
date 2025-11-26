@@ -28,7 +28,16 @@
       "Bash(for:*)",
       "Bash(do:*)",
       "Bash(done:*)",
-      "Bash(wc -l:*)"
+      "Bash(wc -l:*)",
+      "Bash(/tmp/test_timing_graph_build.o )",
+      "Bash(/tmp/test_delay_model.o:*)",
+      "Bash(./build/bin/test_timing_graph_build:*)",
+      "Bash(./test/test_sta_full.cpp:*)",
+      "Bash(build/lib/delay_model.o build/lib/timing_path.o build/lib/timing_graph.o build/lib/sta_engine.o )",
+      "Bash(./build/bin/test_sta_full:*)",
+      "Bash(./test/test_sta_debug.cpp )",
+      "Bash(./build/bin/test_sta_debug:*)",
+      "Bash(/dev/null:*)"
     ],
     "deny": [],
     "ask": []
