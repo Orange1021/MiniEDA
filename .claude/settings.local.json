@@ -27,7 +27,8 @@
       "Bash(touch timing_graph.h delay_model.h timing_checks.h timing_constraints.h timing_path.h timing_report.h timing_graph.cpp delay_model.cpp timing_checks.cpp timing_constraints.cpp timing_report.cpp:*)",
       "Bash(for:*)",
       "Bash(do:*)",
-      "Bash(done:*)"
+      "Bash(done:*)",
+      "Bash(wc -l:*)"
     ],
     "deny": [],
     "ask": []
