@@ -39,11 +39,11 @@ int main() {
         // Create parser
         LibertyParser parser;
 
-        std::cout << "\nParsing: benchmarks/test_minimal.lib" << std::endl;
+        std::cout << "\nParsing: benchmarks/sample.lib" << std::endl;
         std::cout << "════════════════════════════════" << std::endl;
 
         // Parse the file
-        auto library = parser.parseFile("benchmarks/test_minimal.lib");
+        auto library = parser.parseFile("benchmarks/sample.lib");
 
         if (!library) {
             std::cerr << "\n❌ Failed to parse library file!" << std::endl;

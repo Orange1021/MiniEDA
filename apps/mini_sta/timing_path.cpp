@@ -21,7 +21,8 @@ TimingArc::TimingArc(TimingArcType type, TimingNode* from, TimingNode* to, doubl
     : type_(type),
       from_node_(from),
       to_node_(to),
-      delay_(delay) {
+      delay_(delay),
+      output_slew_(0.0) {
 }
 
 /**

@@ -117,7 +117,7 @@ void STAEngine::updateArcDelays() {
                 }
             }
         } else if (arc->getType() == TimingArcType::CELL_ARC) {
-            // CELL_ARC: Calculate cell delay
+            // CELL_ARC: Calculate cell delay with NLDM
             TimingNode* from_node = arc->getFromNode();
             TimingNode* to_node = arc->getToNode();
 
@@ -126,11 +126,43 @@ void STAEngine::updateArcDelays() {
                 if (to_pin) {
                     Cell* cell = to_pin->getOwner();
                     if (cell) {
-                        // For first version, use simplified parameters
-                        double input_slew = 0.0;  // Simplified: assume ideal slew
-                        double load_cap = 0.0;    // Simplified: ignore load for now
+                        // Get input slew from previous node (this is the key!)
+                        double input_slew = from_node->getSlew();
+                        if (input_slew <= 0.0) {
+                            input_slew = 0.05 * 1e-9;  // Default: 50ps if not set
+                        }
 
+                        // Calculate load capacitance
+                        double load_cap = 0.0;
+                        
+                        // Sum capacitance of all fanout pins connected to this output
+                        for (TimingArc* fanout_arc : to_node->getOutgoingArcs()) {
+                            TimingNode* fanout_node = fanout_arc->getToNode();
+                            if (fanout_node && fanout_node->getPin()) {
+                                Pin* fanout_pin = fanout_node->getPin();
+                                // Add pin capacitance (for now, use a simplified estimate)
+                                // In a real implementation, this would come from Liberty library
+                                load_cap += 0.002 * 1e-12;  // 2fF per pin (typical)
+                            }
+                        }
+                        
+                        // Add wire capacitance (simplified)
+                        load_cap += 0.001 * 1e-12;  // 1fF wire capacitance
+                        
+                        // Ensure minimum load capacitance
+                        if (load_cap < 0.001 * 1e-12) {
+                            load_cap = 0.001 * 1e-12;  // 1fF minimum
+                        }
+
+                        // Calculate delay using NLDM lookup
                         delay = delay_model_->calculateCellDelay(cell, input_slew, load_cap);
+                        
+                        // Calculate output slew (this is crucial for next stage!)
+                        double output_slew = delay_model_->calculateOutputSlew(cell, input_slew, load_cap);
+                        
+                        // Store the output slew in the arc for later use
+                        arc->setOutputSlew(output_slew);
+                        
                         cell_arc_count++;
                     }
                 }
@@ -249,11 +281,34 @@ void STAEngine::updateArrivalTimes() {
 
         // Set AT if we found valid paths
         bool updated = false;
+        double best_slew = 0.0;  // Slew from the best (critical) path
 
         // ==================== Setup (Max) ====================
         if (max_arrival > -std::numeric_limits<double>::infinity() / 2) {
             current_node->setArrivalTimeMax(max_arrival);
             updated = true;
+            
+            // Find the arc that gave us the max arrival (critical path)
+            for (TimingArc* arc : incoming_arcs) {
+                TimingNode* prev_node = arc->getFromNode();
+                if (!prev_node) continue;
+                
+                double prev_at_max = prev_node->getArrivalTimeMax();
+                if (prev_at_max > -TimingNode::UNINITIALIZED / 2) {
+                    double path_delay = prev_at_max + arc->getDelay();
+                    if (std::abs(path_delay - max_arrival) < 1e-15) {  // Found the critical path
+                        best_slew = arc->getOutputSlew();
+                        if (best_slew <= 0.0) {
+                            // Fallback: use previous node's slew
+                            best_slew = prev_node->getSlew();
+                            if (best_slew <= 0.0) {
+                                best_slew = 0.05 * 1e-9;  // Default: 50ps
+                            }
+                        }
+                        break;
+                    }
+                }
+            }
         }
 
         // ==================== Hold (Min) ====================
@@ -262,13 +317,16 @@ void STAEngine::updateArrivalTimes() {
             updated = true;
         }
 
+        // Propagate slew if we found valid paths
         if (updated) {
+            current_node->setSlew(best_slew);
             updated_count++;
 
             // Debug print first few nodes
             if (updated_count <= 5) {
                 std::cout << "    Propagated AT of " << current_node->getName()
-                         << " [Setup=" << max_arrival << "ns, Hold=" << min_arrival << "ns]" << std::endl;
+                         << " [Setup=" << max_arrival << "ns, Hold=" << min_arrival << "ns, Slew=" 
+                         << (best_slew * 1e9) << "ps]" << std::endl;
             }
         }
     }

@@ -1,7 +1,7 @@
 /**
  * @file liberty_parser.cpp
- * @brief Liberty File Parser Implementation
- * @details Simple recursive descent parser for .lib format
+ * @brief Liberty File Parser Implementation - Robust Version
+ * @details Robust recursive descent parser with proper Group/Attribute handling
  */
 
 #include "../include/liberty_parser.h"
@@ -10,8 +10,21 @@
 #include <iostream>
 #include <cctype>
 #include <algorithm>
+#include <cstring>
 
 namespace mini {
+
+/**
+ * @brief Constructor
+ */
+LibertyParser::LibertyParser() {
+    state_ = ParserState();
+}
+
+/**
+ * @brief Destructor
+ */
+LibertyParser::~LibertyParser() = default;
 
 /**
  * @brief Parse a .lib file
@@ -42,6 +55,8 @@ std::unique_ptr<Library> LibertyParser::parseFile(const std::string& filename) {
     state_.filename = filename;
     state_.line_number = 1;
     error_message_.clear();
+
+    std::cout << "Starting to parse Liberty file: " << filename << std::endl;
 
     // Skip to library definition
     skipWhitespace();
@@ -81,203 +96,220 @@ std::unique_ptr<Library> LibertyParser::parseFile(const std::string& filename) {
     // Create library and parse its contents
     auto library = std::make_unique<Library>(lib_name);
 
-    std::cout << "  Starting to parse library body..." << std::endl;
+    std::cout << "  Parsing library: " << lib_name << std::endl;
 
-    // Parse library body
-    while (!eof()) {
-        skipWhitespace();
-        char ch = peek();
+    // Parse library body using new hierarchical approach
+    parseLibraryBody(library.get());
 
-        if (ch == '}') {
-            consume(); // End of library
-            std::cout << "  Parsed library: " << lib_name << std::endl;
-            return library;
-        }
-
-        // Check for cell definitions
-        if (expect("cell")) {
-            std::cout << "  Found cell keyword" << std::endl;
-            parseCell(library.get());
-            continue;
-        }
-
-        // Skip lu_table_template block
-        if (expect("lu_table_template")) {
-            std::cout << "  Skipping lu_table_template" << std::endl;
-            skipWhitespace();
-            if (peek() == '(') {
-                consume(); // template name
-                skipUntil(')');
-            }
-            skipWhitespace();
-            if (peek() == '{') {
-                consume(); // block start
-                skipUntil('}'); // skip entire block
-            }
-            continue;
-        }
-
-        // Debug: show what we're skipping
-        size_t current_line = state_.line_number;
-        std::string keyword = parseIdentifier();
-        if (!keyword.empty()) {
-            std::cout << "  Line " << current_line << ": Skipping '" << keyword << "'" << std::endl;
-            skipUntil(';');
-        } else if (!eof()) {
-            std::cout << "  Line " << current_line << ": Skipping char '" << peek() << "'" << std::endl;
-            consume();
-        }
-    }  // <-- 添加这个关闭大括号
+    if (peek() == '}') {
+        consume(); // End of library
+        std::cout << "  Successfully parsed library: " << lib_name << std::endl;
+        std::cout << "  Cell count: " << library->getCellCount() << std::endl;
+        return library;
+    }
 
     error("Unexpected end of file in library");
     return nullptr;
 }
 
 /**
- * @brief Parse cell definition
- * @param lib Parent library
+ * @brief Parse library body with robust hierarchical logic
+ * @param lib Library to populate
  */
-void LibertyParser::parseCell(Library* lib) {
-    skipWhitespace();
-    if (peek() != '(') {
-        error("Expected '(' after cell");
-        return;
-    }
-    consume();
-
-    std::string cell_name = parseIdentifier();
-    if (cell_name.empty()) {
-        error("Expected cell name");
-        return;
-    }
-
-    skipWhitespace();
-    if (peek() != ')') {
-        error("Expected ')' after cell name");
-        return;
-    }
-    consume();
-
-    skipWhitespace();
-    if (peek() != '{') {
-        error("Expected '{' to start cell body");
-        return;
-    }
-    consume();
-
-    // Create cell
-    LibCell cell;
-    cell.name = cell_name;
-
-    // Parse cell body
+void LibertyParser::parseLibraryBody(Library* lib) {
     while (!eof()) {
         skipWhitespace();
-        char ch = peek();
-
-        if (ch == '}') {
-            consume(); // End of cell
-            lib->addCell(cell_name, cell);
-            std::cout << "    Parsed cell: " << cell_name << std::endl;
-            return;
+        
+        if (peek() == '}') {
+            return; // End of library
         }
 
-        // Parse area
-        if (expect("area")) {
-            skipWhitespace();
-            if (peek() == ':') consume();
-            skipWhitespace();
-            cell.area = parseNumber();
-            skipUntil(';');
-            continue;
-        }
-
-        // Parse pin definitions
-        if (expect("pin")) {
-            parsePin(&cell);
-            continue;
-        }
-
-        // Skip unknown cell-level constructs
-        std::string keyword = parseIdentifier();
+        // Try to read the next keyword
+        std::string keyword = readIdentifier();
         if (keyword.empty()) {
             if (!eof()) consume();
-        } else {
-            skipUntil(';');
+            continue;
+        }
+
+        std::cout << "  Line " << state_.line_number << ": Found keyword '" << keyword << "'" << std::endl;
+
+        if (keyword == "cell") {
+            // Parse cell definition
+            skipWhitespace();
+            if (peek() != '(') {
+                error("Expected '(' after cell");
+                return;
+            }
+            consume();
+
+            std::string cell_name = readIdentifier();
+            if (cell_name.empty()) {
+                error("Expected cell name");
+                return;
+            }
+
+            skipWhitespace();
+            if (peek() != ')') {
+                error("Expected ')' after cell name");
+                return;
+            }
+            consume();
+
+            skipWhitespace();
+            if (peek() != '{') {
+                error("Expected '{' to start cell body");
+                return;
+            }
+            consume();
+
+            // Create and parse cell
+            LibCell cell;
+            cell.name = cell_name;
+            std::cout << "    Parsing cell: " << cell_name << std::endl;
+            
+            parseCellBody(&cell);
+            
+            lib->addCell(cell_name, cell);
+            std::cout << "    Completed cell: " << cell_name << std::endl;
+        }
+        else if (keyword == "lu_table_template") {
+            // Skip lu_table_template for now
+            std::cout << "  Skipping lu_table_template" << std::endl;
+            skipGroup();
+        }
+        else {
+            // Check if this is a group or an attribute
+            skipWhitespace();
+            if (peek() == '(') {
+                // This is a group we don't recognize
+                std::cout << "  Skipping unknown group: " << keyword << std::endl;
+                skipGroup();
+            }
+            else if (peek() == ':') {
+                // This is an attribute
+                std::cout << "  Skipping attribute: " << keyword << std::endl;
+                skipAttribute();
+            }
+            else {
+                // Unknown construct, skip it
+                std::cout << "  Skipping unknown construct: " << keyword << std::endl;
+                skipAttribute();
+            }
         }
     }
-
-    error("Unexpected end of file in cell");
 }
 
 /**
- * @brief Parse pin definition
- * @param cell Parent cell
+ * @brief Parse cell body with robust logic
+ * @param cell Cell to populate
  */
-void LibertyParser::parsePin(LibCell* cell) {
-    skipWhitespace();
-    if (peek() != '(') {
-        error("Expected '(' after pin");
-        return;
-    }
-    consume();
-
-    std::string pin_name = parseIdentifier();
-    if (pin_name.empty()) {
-        error("Expected pin name");
-        return;
-    }
-
-    skipWhitespace();
-    if (peek() != ')') {
-        error("Expected ')' after pin name");
-        return;
-    }
-    consume();
-
-    skipWhitespace();
-    if (peek() != '{') {
-        error("Expected '{' to start pin body");
-        return;
-    }
-    consume();
-
-    // Create pin
-    LibPin pin;
-    pin.name = pin_name;
-
-    // Parse pin body
+void LibertyParser::parseCellBody(LibCell* cell) {
     while (!eof()) {
         skipWhitespace();
-        char ch = peek();
-
-        if (ch == '}') {
-            consume(); // End of pin
-            cell->addPin(pin_name, pin);
+        
+        if (peek() == '}') {
+            consume(); // End of cell
             return;
         }
 
-        // Parse direction
-        if (expect("direction")) {
-            skipWhitespace();
-            if (peek() == ':') consume();
-            skipWhitespace();
-            pin.direction = parseIdentifier();
-            skipUntil(';');
+        std::string keyword = readIdentifier();
+        if (keyword.empty()) {
+            if (!eof()) consume();
             continue;
         }
 
-        // Parse capacitance
-        if (expect("capacitance")) {
+        if (keyword == "area") {
             skipWhitespace();
             if (peek() == ':') consume();
             skipWhitespace();
-            pin.capacitance = parseNumber();
+            cell->area = readNumber();
             skipUntil(';');
+        }
+        else if (keyword == "pin") {
+            // Parse pin definition
+            skipWhitespace();
+            if (peek() != '(') {
+                error("Expected '(' after pin");
+                return;
+            }
+            consume();
+
+            std::string pin_name = readIdentifier();
+            if (pin_name.empty()) {
+                error("Expected pin name");
+                return;
+            }
+
+            skipWhitespace();
+            if (peek() != ')') {
+                error("Expected ')' after pin name");
+                return;
+            }
+            consume();
+
+            skipWhitespace();
+            if (peek() != '{') {
+                error("Expected '{' to start pin body");
+                return;
+            }
+            consume();
+
+            // Create and parse pin
+            LibPin pin;
+            pin.name = pin_name;
+            std::cout << "      Parsing pin: " << pin_name << std::endl;
+            
+            parsePinBody(&pin);
+            
+            cell->addPin(pin_name, pin);
+        }
+        else {
+            // Skip unknown cell-level constructs
+            skipWhitespace();
+            if (peek() == ':') {
+                skipAttribute();
+            } else {
+                skipGroup();
+            }
+        }
+    }
+}
+
+/**
+ * @brief Parse pin body with robust logic
+ * @param pin Pin to populate
+ */
+void LibertyParser::parsePinBody(LibPin* pin) {
+    while (!eof()) {
+        skipWhitespace();
+        
+        if (peek() == '}') {
+            consume(); // End of pin
+            return;
+        }
+
+        std::string keyword = readIdentifier();
+        if (keyword.empty()) {
+            if (!eof()) consume();
             continue;
         }
 
-        // Parse timing definitions
-        if (expect("timing")) {
+        if (keyword == "direction") {
+            skipWhitespace();
+            if (peek() == ':') consume();
+            skipWhitespace();
+            pin->direction = readIdentifier();
+            skipUntil(';');
+        }
+        else if (keyword == "capacitance") {
+            skipWhitespace();
+            if (peek() == ':') consume();
+            skipWhitespace();
+            pin->capacitance = readNumber();
+            skipUntil(';');
+        }
+        else if (keyword == "timing") {
+            // Parse timing definition
             skipWhitespace();
             if (peek() == '(') {
                 consume(); // timing()
@@ -285,120 +317,101 @@ void LibertyParser::parsePin(LibCell* cell) {
                 if (peek() == ')') consume();
             }
 
-            parseTiming(&pin);
-            continue;
-        }
-
-        // Skip function declarations
-        if (expect("function")) {
             skipWhitespace();
-            if (peek() == ':') consume();
-            skipWhitespace();
-            parseQuotedString(); // Skip function string
-            skipUntil(';');
-            continue;
-        }
+            if (peek() != '{') {
+                error("Expected '{' to start timing body");
+                return;
+            }
+            consume();
 
-        // Skip unknown pin-level constructs
-        std::string keyword = parseIdentifier();
-        if (keyword.empty()) {
-            if (!eof()) consume();
-        } else {
-            skipUntil(';');
-        }
-    }
-
-    error("Unexpected end of file in pin");
-}
-
-/**
- * @brief Parse timing definition
- * @param pin Parent pin
- */
-void LibertyParser::parseTiming(LibPin* pin) {
-    skipWhitespace();
-    if (peek() != '{') {
-        error("Expected '{' to start timing body");
-        return;
-    }
-    consume();
-
-    // Create timing arc
-    LibTiming timing;
-
-    // Parse timing body
-    while (!eof()) {
-        skipWhitespace();
-        char ch = peek();
-
-        if (ch == '}') {
-            consume(); // End of timing
+            // Create and parse timing
+            LibTiming timing;
+            std::cout << "        Parsing timing arc" << std::endl;
+            
+            parseTimingBody(&timing);
+            
             if (timing.isValid()) {
                 pin->timing_arcs.push_back(timing);
             }
-            return;
         }
-
-        // Parse related_pin
-        if (expect("related_pin")) {
+        else if (keyword == "function") {
+            // Skip function declarations
             skipWhitespace();
             if (peek() == ':') consume();
             skipWhitespace();
-            timing.related_pin = parseQuotedString();
+            readString(); // Skip function string
             skipUntil(';');
-            continue;
         }
-
-        // Parse timing_sense
-        if (expect("timing_sense")) {
+        else {
+            // Skip unknown pin-level constructs
             skipWhitespace();
-            if (peek() == ':') consume();
-            skipWhitespace();
-            timing.timing_sense = parseIdentifier();
-            skipUntil(';');
-            continue;
-        }
-
-        // Parse cell rise delay
-        if (expect("cell_rise")) {
-            skipWhitespace();
-            if (peek() == '(') {
-                consume(); // template name
-                skipUntil(')');
+            if (peek() == ':') {
+                skipAttribute();
+            } else {
+                skipGroup();
             }
-            parseValues(&timing.cell_delay);
-            continue;
-        }
-
-        // Parse cell fall delay
-        if (expect("cell_fall")) {
-            skipWhitespace();
-            if (peek() == '(') {
-                consume(); // template name
-                skipUntil(')');
-            }
-            // For now, use the same table (can be separate)
-            parseValues(&timing.cell_delay);
-            continue;
-        }
-
-        // Skip unknown timing-level constructs
-        std::string keyword = parseIdentifier();
-        if (keyword.empty()) {
-            if (!eof()) consume();
-        } else {
-            skipUntil(';');
         }
     }
-
-    error("Unexpected end of file in timing");
 }
 
 /**
- * @brief Parse values matrix into LookupTable
+ * @brief Parse timing body with robust logic
+ * @param timing Timing to populate
+ */
+void LibertyParser::parseTimingBody(LibTiming* timing) {
+    while (!eof()) {
+        skipWhitespace();
+        
+        if (peek() == '}') {
+            consume(); // End of timing
+            return;
+        }
+
+        std::string keyword = readIdentifier();
+        if (keyword.empty()) {
+            if (!eof()) consume();
+            continue;
+        }
+
+        if (keyword == "related_pin") {
+            skipWhitespace();
+            if (peek() == ':') consume();
+            skipWhitespace();
+            timing->related_pin = readString();
+            skipUntil(';');
+        }
+        else if (keyword == "timing_sense") {
+            skipWhitespace();
+            if (peek() == ':') consume();
+            skipWhitespace();
+            timing->timing_sense = readIdentifier();
+            skipUntil(';');
+        }
+        else if (keyword == "cell_rise" || keyword == "cell_fall") {
+            skipWhitespace();
+            if (peek() == '(') {
+                consume(); // template name
+                skipUntil(')');
+            }
+            parseValuesTable(&timing->cell_delay);
+        }
+        else {
+            // Skip unknown timing-level constructs
+            skipWhitespace();
+            if (peek() == ':') {
+                skipAttribute();
+            } else {
+                skipGroup();
+            }
+        }
+    }
+}
+
+/**
+ * @brief Parse values table with robust logic
  * @param table Table to populate
  */
-void LibertyParser::parseValues(LookupTable* table) {
+void LibertyParser::parseValuesTable(LookupTable* table) {
     skipWhitespace();
     if (peek() != '{') {
         error("Expected '{' to start values block");
@@ -426,7 +439,7 @@ void LibertyParser::parseValues(LookupTable* table) {
         skipWhitespace();
 
         // Parse quoted string containing row data
-        std::string row_str = parseQuotedString();
+        std::string row_str = readString();
         if (row_str.empty()) {
             error("Expected quoted string with row values");
             return;
@@ -484,7 +497,50 @@ void LibertyParser::parseValues(LookupTable* table) {
         }
     }
 
-    std::cout << "      Parsed values table: " << rows.size() << "x" << (rows.empty() ? 0 : rows[0].size()) << std::endl;
+    std::cout << "          Parsed values table: " << rows.size() << "x" << (rows.empty() ? 0 : rows[0].size()) << std::endl;
+}
+
+/**
+ * @brief Skip a group block with proper nesting handling
+ */
+void LibertyParser::skipGroup() {
+    skipWhitespace();
+    if (peek() == '(') {
+        // Skip group arguments
+        consume();
+        skipUntil(')');
+    }
+    
+    skipWhitespace();
+    if (peek() == '{') {
+        consume();
+        int depth = 1;
+        
+        while (!eof() && depth > 0) {
+            char ch = peek();
+            if (ch == '{') {
+                depth++;
+            }
+            else if (ch == '}') {
+                depth--;
+            }
+            else if (ch == '\n') {
+                state_.line_number++;
+            }
+            consume();
+        }
+    }
+}
+
+/**
+ * @brief Skip an attribute (ends with semicolon)
+ */
+void LibertyParser::skipAttribute() {
+    skipWhitespace();
+    if (peek() == ':') {
+        consume();
+    }
+    skipUntil(';');
 }
 
 /**
@@ -533,38 +589,9 @@ void LibertyParser::skipWhitespace() {
 }
 
 /**
- * @brief Skip until a specific character
- * @param ch Character to skip to
+ * @brief Read identifier without consuming too much
  */
-void LibertyParser::skipUntil(char ch) {
-    while (!eof() && peek() != ch) {
-        if (peek() == '\n') state_.line_number++;
-        consume();
-    }
-    if (!eof() && peek() == ch) consume();
-}
-
-/**
- * @brief Expect and consume a specific token
- * @param expected Expected token string
- * @return true if matched
- */
-bool LibertyParser::expect(const std::string& expected) {
-    skipWhitespace();
-    size_t len = expected.length();
-    if (state_.current + len <= state_.end &&
-        std::string(state_.current, len) == expected) {
-        state_.current += len;
-        return true;
-    }
-    return false;
-}
-
-/**
- * @brief Parse an identifier (name)
- * @return Parsed identifier or empty string
- */
-std::string LibertyParser::parseIdentifier() {
+std::string LibertyParser::readIdentifier() {
     skipWhitespace();
     std::string id;
 
@@ -582,10 +609,9 @@ std::string LibertyParser::parseIdentifier() {
 }
 
 /**
- * @brief Parse a quoted string
- * @return Parsed string (without quotes)
+ * @brief Read quoted string
  */
-std::string LibertyParser::parseQuotedString() {
+std::string LibertyParser::readString() {
     skipWhitespace();
     std::string str;
 
@@ -608,10 +634,9 @@ std::string LibertyParser::parseQuotedString() {
 }
 
 /**
- * @brief Parse a number (double)
- * @return Parsed number
+ * @brief Read number
  */
-double LibertyParser::parseNumber() {
+double LibertyParser::readNumber() {
     skipWhitespace();
     std::string num_str;
     bool has_dot = false;
@@ -633,14 +658,89 @@ double LibertyParser::parseNumber() {
 }
 
 /**
+ * @brief Match expected string
+ */
+bool LibertyParser::match(const char* expected) {
+    skipWhitespace();
+    size_t len = strlen(expected);
+    if (state_.current + len <= state_.end &&
+        strncmp(state_.current, expected, len) == 0) {
+        state_.current += len;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Check character
+ */
+bool LibertyParser::check(char c) {
+    return !eof() && peek() == c;
+}
+
+// --- Backward compatibility methods ---
+
+/**
+ * @brief Skip until a specific character
+ */
+void LibertyParser::skipUntil(char ch) {
+    while (!eof() && peek() != ch) {
+        if (peek() == '\n') state_.line_number++;
+        consume();
+    }
+    if (!eof() && peek() == ch) consume();
+}
+
+/**
+ * @brief Expect and consume a specific token
+ */
+bool LibertyParser::expect(const std::string& expected) {
+    skipWhitespace();
+    size_t len = expected.length();
+    if (state_.current + len <= state_.end &&
+        std::string(state_.current, len) == expected) {
+        state_.current += len;
+        return true;
+    }
+    return false;
+}
+
+/**
+ * @brief Parse an identifier (name)
+ */
+std::string LibertyParser::parseIdentifier() {
+    return readIdentifier();
+}
+
+/**
+ * @brief Parse a quoted string
+ */
+std::string LibertyParser::parseQuotedString() {
+    return readString();
+}
+
+/**
+ * @brief Parse a number (double)
+ */
+double LibertyParser::parseNumber() {
+    return readNumber();
+}
+
+/**
+ * @brief Parse values matrix into LookupTable
+ */
+void LibertyParser::parseValues(LookupTable* table) {
+    parseValuesTable(table);
+}
+
+/**
  * @brief Parse a list of numbers
- * @param numbers Vector to populate
  */
 void LibertyParser::parseNumberList(std::vector<double>* numbers) {
     skipWhitespace();
 
     while (!eof() && std::isdigit(peek())) {
-        double val = parseNumber();
+        double val = readNumber();
         numbers->push_back(val);
 
         skipWhitespace();
@@ -649,6 +749,30 @@ void LibertyParser::parseNumberList(std::vector<double>* numbers) {
             skipWhitespace();
         }
     }
+}
+
+/**
+ * @brief Parse cell definition (backward compatibility)
+ */
+void LibertyParser::parseCell(Library* /* lib */) {
+    // This method is no longer used in the new implementation
+    // parseLibraryBody handles cell parsing directly
+}
+
+/**
+ * @brief Parse pin definition (backward compatibility)
+ */
+void LibertyParser::parsePin(LibCell* /* cell */) {
+    // This method is no longer used in the new implementation
+    // parseCellBody handles pin parsing directly
+}
+
+/**
+ * @brief Parse timing definition (backward compatibility)
+ */
+void LibertyParser::parseTiming(LibPin* /* pin */) {
+    // This method is no longer used in the new implementation
+    // parsePinBody handles timing parsing directly
 }
 
 /**
@@ -675,7 +799,6 @@ bool LibertyParser::eof() const {
 
 /**
  * @brief Report error with context
- * @param message Error message
  */
 void LibertyParser::error(const std::string& message) {
     error_message_ = message + " at line " + std::to_string(state_.line_number);

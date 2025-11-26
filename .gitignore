@@ -11,6 +11,7 @@
 # 构建目录
 build/
 bin/
+.claude/
 lib/*.o
 *.d
 

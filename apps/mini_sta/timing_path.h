@@ -46,9 +46,11 @@ public:
     TimingNode* getFromNode() const { return from_node_; }
     TimingNode* getToNode() const { return to_node_; }
     double getDelay() const { return delay_; }
+    double getOutputSlew() const { return output_slew_; }
 
     // ============ Modifiers ============
     void setDelay(double delay) { delay_ = delay; }
+    void setOutputSlew(double slew) { output_slew_ = slew; }
     void setFromNode(TimingNode* node) { from_node_ = node; }
     void setToNode(TimingNode* node) { to_node_ = node; }
 
@@ -71,6 +73,7 @@ private:
     TimingNode* from_node_;     ///< Source node
     TimingNode* to_node_;       ///< Destination node
     double delay_;              ///< Calculated delay value
+    double output_slew_;        ///< Output slew from this arc (for CELL_ARC)
 };
 
 /**

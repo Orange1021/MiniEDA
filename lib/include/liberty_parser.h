@@ -1,160 +1,92 @@
 /**
  * @file liberty_parser.h
  * @brief Liberty File Format Parser
- * @details Simple recursive descent parser for .lib files
- * Parses library, cell, pin, and timing data into data structures
+ * @details Robust recursive descent parser for .lib files with hierarchical structure
  */
 
 #ifndef MINI_LIBERTY_PARSER_H
 #define MINI_LIBERTY_PARSER_H
 
+#include "liberty.h"
 #include <string>
 #include <memory>
-#include "../include/liberty.h"
+#include <vector>
 
 namespace mini {
 
 /**
  * @class LibertyParser
- * @brief Parser for Liberty (.lib) format files
- * @details Implements simple recursive descent parser for .lib syntax
+ * @brief Robust Parser for Liberty (.lib) format files
+ * @details Implements hierarchical parser with proper Group/Attribute distinction
  */
 class LibertyParser {
 public:
-    /**
-     * @brief Constructor
-     */
-    LibertyParser() = default;
+    LibertyParser();
+    ~LibertyParser();
 
-    /**
-     * @brief Destructor
-     */
-    ~LibertyParser() = default;
-
-    // Disable copy, enable move
-    LibertyParser(const LibertyParser&) = delete;
-    LibertyParser& operator=(const LibertyParser&) = delete;
-    LibertyParser(LibertyParser&&) = default;
-    LibertyParser& operator=(LibertyParser&&) = default;
-
-    /**
-     * @brief Parse a .lib file
-     * @param filename Path to .lib file
-     * @return Pointer to parsed Library or nullptr on error
-     */
+    // Main interface
     std::unique_ptr<Library> parseFile(const std::string& filename);
+    std::string getError() const { return error_message_; }
 
 private:
-    /**
-     * @brief Internal parser state
-     */
+    // Parser state machine
     struct ParserState {
-        const char* current;        ///< Current position in text
-        const char* end;            ///< End of text
-        std::string filename;       ///< Current filename for error reporting
-        int line_number;            ///< Current line number
-
+        const char* current;
+        const char* end;
+        size_t line_number;
+        std::string filename;
+        
         ParserState() : current(nullptr), end(nullptr), line_number(1) {}
-    };
+    } state_;
 
-    ParserState state_;             ///< Parser state
-    std::string error_message_;     ///< Last error message
+    std::string error_message_;
 
-    /**
-     * @brief Parse library definition
-     * @param name Library name
-     * @return Parsed library
-     */
-    std::unique_ptr<Library> parseLibrary(const std::string& name);
-
-    /**
-     * @brief Parse cell definition
-     * @param lib Parent library
-     */
-    void parseCell(Library* lib);
-
-    /**
-     * @brief Parse pin definition
-     * @param cell Parent cell
-     */
-    void parsePin(LibCell* cell);
-
-    /**
-     * @brief Parse timing definition
-     * @param pin Parent pin
-     */
-    void parseTiming(LibPin* pin);
-
-    /**
-     * @brief Parse values matrix into LookupTable
-     * @param table Table to populate
-     */
-    void parseValues(LookupTable* table);
-
-    /**
-     * @brief Skip whitespace and comments
-     */
+    // --- Core parsing methods ---
+    
+    // 1. Generic parser: handle Groups (like cell, pin, library)
+    //    Format: group_name ( arg1, arg2... ) { body }
+    bool parseGroupHeader(std::string& group_type, std::string& group_name);
+    
+    // 2. Specific hierarchical parsing
+    void parseLibraryBody(Library* lib);
+    void parseCellBody(LibCell* cell);
+    void parsePinBody(LibPin* pin);
+    void parseTimingBody(LibTiming* timing);
+    
+    // 3. Value parsing
+    void parseValuesTable(LookupTable* table);
+    
+    // --- Helper methods ---
     void skipWhitespace();
-
-    /**
-     * @brief Skip until a specific character
-     * @param ch Character to skip to
-     */
-    void skipUntil(char ch);
-
-    /**
-     * @brief Expect and consume a specific token
-     * @param expected Expected token string
-     * @return true if matched
-     */
-    bool expect(const std::string& expected);
-
-    /**
-     * @brief Parse an identifier (name)
-     * @return Parsed identifier or empty string
-     */
-    std::string parseIdentifier();
-
-    /**
-     * @brief Parse a quoted string
-     * @return Parsed string (without quotes)
-     */
-    std::string parseQuotedString();
-
-    /**
-     * @brief Parse a number (double)
-     * @return Parsed number
-     */
-    double parseNumber();
-
-    /**
-     * @brief Parse a list of numbers
-     * @param numbers Vector to populate
-     */
-    void parseNumberList(std::vector<double>* numbers);
-
-    /**
-     * @brief Get current character
-     */
+    void skipComment();  // Handle // and /* */ comments
+    void skipGroup();    // Skip unrecognized group { ... }
+    void skipAttribute();// Skip unrecognized attr : ... ;
+    
+    std::string readIdentifier(); // Read alphanumeric and underscore
+    std::string readString();     // Read "..."
+    double readNumber();
+    bool match(const char* expected); // Similar to expect
+    bool check(char c); // Similar to peek == c
+    
+    // Legacy methods for compatibility
     char peek() const;
-
-    /**
-     * @brief Consume current character
-     */
     void consume();
-
-    /**
-     * @brief Check if at end of file
-     */
     bool eof() const;
-
-    /**
-     * @brief Report error with context
-     * @param message Error message
-     */
     void error(const std::string& message);
+    
+    // Backward compatibility methods
+    bool expect(const std::string& expected);
+    std::string parseIdentifier();
+    std::string parseQuotedString();
+    double parseNumber();
+    void parseValues(LookupTable* table);
+    void skipUntil(char ch);
+    void parseNumberList(std::vector<double>* numbers);
+    void parseCell(Library* lib);
+    void parsePin(LibCell* cell);
+    void parseTiming(LibPin* pin);
 };
 
 } // namespace mini
 
-#endif // MINI_LIBERTY_PARSER_H
+#endif
