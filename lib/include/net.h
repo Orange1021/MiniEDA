@@ -141,6 +141,28 @@ public:
      */
     double getWireDelay() const { return wire_delay_; }
 
+    /**
+     * @brief Set wire resistance
+     * @param resistance Resistance value (unit: kΩ)
+     */
+    void setWireResistance(double resistance) { wire_resistance_ = resistance; }
+
+    /**
+     * @brief Get wire resistance
+     * @return Resistance value (unit: kΩ)
+     */
+    double getWireResistance() const { return wire_resistance_; }
+
+    /**
+     * @brief Set parasitic parameters (both resistance and capacitance)
+     * @param resistance Resistance value (unit: kΩ)
+     * @param capacitance Capacitance value (unit: pF)
+     */
+    void setParasitics(double resistance, double capacitance) {
+        wire_resistance_ = resistance;
+        wire_capacitance_ = capacitance;
+    }
+
     // ============ Special Attributes ============
     /**
      * @brief Set whether this net is a clock signal
@@ -170,6 +192,7 @@ private:
     // Timing information
     double wire_capacitance_;           ///< Wire capacitance (pF)
     double wire_delay_;                 ///< Wire delay (ns)
+    double wire_resistance_;            ///< Wire resistance (kΩ)
 
     // Attributes
     bool is_clock_;                     ///< Whether this is a clock signal

@@ -19,6 +19,7 @@ Net::Net(const std::string& name)
     , driver_(nullptr)
     , wire_capacitance_(0.0)
     , wire_delay_(0.0)
+    , wire_resistance_(0.0)
     , is_clock_(false)
 {
 }

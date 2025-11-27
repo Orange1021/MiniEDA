@@ -168,13 +168,59 @@ double TableDelayModel::calculateOutputSlew(Cell* cell, double input_slew, doubl
 }
 
 /**
- * @brief Calculate wire delay using simplified model
+ * @brief Calculate wire delay using Elmore delay model with fanout-based estimation
  */
 double TableDelayModel::calculateWireDelay(Net* net) {
-    // For now, keep the same simplified wire delay
-    // TODO: Implement Elmore delay in a future version
-    (void)net;
-    return 0.0;
+    if (!net) {
+        return 0.0;
+    }
+
+    // 1. 估算寄生参数 (因为没有布局，也没有 SPEF)
+    // 简单的线负载模型 (WLM): 假设每个扇出贡献一定的 R 和 C
+    size_t fanout = net->getFanout();
+    
+    // 基于扇出的启发式估算 (这些参数可以根据工艺库调整)
+    double estimated_r_per_fanout = 0.01;  // 0.01 kΩ = 10 Ω per fanout
+    double estimated_c_per_fanout = 0.002; // 0.002 pF = 2 fF per fanout
+    
+    double wire_r = fanout * estimated_r_per_fanout;  // kΩ
+    double wire_c = fanout * estimated_c_per_fanout;  // pF
+
+    // 2. 计算引脚负载总电容
+    double total_pin_cap = 0.0;
+    for (Pin* load_pin : net->getLoads()) {
+        // 查库获取引脚电容
+        if (load_pin && load_pin->getOwner()) {
+            std::string cell_type = load_pin->getOwner()->getTypeString();
+            std::string pin_name = load_pin->getName();
+            
+            // 从 library_ 中查找 LibCell -> LibPin -> capacitance
+            const LibCell* lib_cell = library_->getCell(cell_type);
+            if (lib_cell) {
+                const LibPin* lib_pin = lib_cell->getPin(pin_name);
+                if (lib_pin) {
+                    total_pin_cap += lib_pin->capacitance;  // pF
+                }
+            }
+        }
+    }
+
+    // 3. Elmore Delay 公式 (Lumped RC Model)
+    // Delay = R_wire * (C_load_pins + C_wire / 2)
+    // 注意：单位需要统一 - 这里使用 kΩ * pF = ns
+    double elmore_delay = wire_r * (total_pin_cap + wire_c / 2.0);  // ns
+    
+    // 调试输出 (可以后续移除)
+    if (elmore_delay > 0.0 && fanout > 1) {  // 显示所有扇出大于1的网络
+        std::cout << "    Wire delay for " << net->getName() 
+                  << ": fanout=" << fanout 
+                  << ", R=" << wire_r << "kΩ" 
+                  << ", C_wire=" << wire_c << "pF"
+                  << ", C_pins=" << total_pin_cap << "pF"
+                  << ", Delay=" << elmore_delay << "ns" << std::endl;
+    }
+    
+    return elmore_delay * 1e-9;  // 转换为秒
 }
 
 /**

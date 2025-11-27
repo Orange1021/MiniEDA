@@ -1,0 +1,468 @@
+/**
+ * @file placer_engine.cpp
+ * @brief Placement Engine Implementation for MiniPlacement
+ */
+
+#include "placer_engine.h"
+#include "visualizer.h"
+#include <iostream>
+#include <algorithm>
+#include <cmath>
+#include <unordered_map>
+#include <limits>
+#include <map>
+
+namespace mini {
+
+PlacerEngine::PlacerEngine(PlacerDB* db) 
+    : db_(db), viz_(nullptr), current_hpwl_(0.0) {
+}
+
+double PlacerEngine::calculateHPWL() const {
+    if (!db_) return 0.0;
+
+    double total_hpwl = 0.0;
+    
+    // Get netlist database
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    if (!netlist_db) return 0.0;
+    
+    // Iterate over all nets
+    for (const auto& net_ptr : netlist_db->getNets()) {
+        const Net* net = net_ptr.get();
+        if (!net) continue;
+        
+        double min_x, max_x, min_y, max_y;
+        calculateNetBoundingBox(net, min_x, max_x, min_y, max_y);
+        
+        // Add HPWL for this net
+        total_hpwl += (max_x - min_x) + (max_y - min_y);
+    }
+    
+    return total_hpwl;
+}
+
+void PlacerEngine::runGlobalPlacement() {
+    if (!db_) return;
+    
+    std::cout << "Starting Global Placement (Quadratic Wirelength Optimization)..." << std::endl;
+    
+    // Initialize with current HPWL
+    current_hpwl_ = calculateHPWL();
+    std::cout << "Initial HPWL: " << current_hpwl_ << std::endl;
+    
+    // Force-directed placement iterations
+    const int max_iterations = 50;  // Quadratic convergence is fast
+    
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        // Single iteration of force-directed algorithm
+        solveForceDirectedIteration(iter);
+        
+        // Calculate new HPWL
+        double new_hpwl = calculateHPWL();
+        
+        // Print progress
+        if (iter % 5 == 0) {
+            std::cout << "Iteration " << iter << ": HPWL = " << new_hpwl << std::endl;
+            
+            // Visualize every 5 iterations if visualizer is available
+            if (viz_) {
+                std::string filename = "quadratic_iter_" + std::to_string(iter);
+                viz_->drawPlacementWithRunId(filename, run_id_);
+            }
+        }
+        
+        // Check convergence
+        double improvement = current_hpwl_ - new_hpwl;
+        if (std::abs(improvement) < current_hpwl_ * 0.0001) {  // 0.01% improvement threshold
+            std::cout << "Converged at iteration " << iter << std::endl;
+            break;
+        }
+        
+        current_hpwl_ = new_hpwl;
+    }
+    
+    std::cout << "Global Placement completed. Final HPWL: " << current_hpwl_ << std::endl;
+    std::cout << "Improvement: " << (calculateHPWL() - current_hpwl_) << std::endl;
+}
+
+void PlacerEngine::runLegalization() {
+    if (!db_) return;
+    
+    std::cout << "Starting Legalization (Linear Packing Algorithm)..." << std::endl;
+    
+    // 1. Get core area and row parameters
+    const Rect& core_area = db_->getCoreArea();
+    double row_height = db_->getRowHeight();
+    
+    // Calculate maximum number of rows that fit in core
+    int max_rows = static_cast<int>(std::floor(core_area.height() / row_height));
+    std::cout << "  Core can accommodate " << max_rows << " rows" << std::endl;
+    
+    // 2. Collect all movable cells
+    std::vector<Cell*> movable_cells;
+    for (Cell* cell : db_->getAllCells()) {
+        const auto& info = db_->getCellInfo(cell);
+        if (!info.fixed) {  // Only process movable cells
+            movable_cells.push_back(cell);
+        }
+    }
+    
+    // 3. Sort cells: primarily by Y coordinate, secondarily by X coordinate
+    // This preserves the relative order from Global Placement
+    std::sort(movable_cells.begin(), movable_cells.end(), 
+             [this](Cell* a, Cell* b) {
+                 const auto& info_a = db_->getCellInfo(a);
+                 const auto& info_b = db_->getCellInfo(b);
+                 
+                 // Primary sort: Y coordinate (center of cell)
+                 double y_a = info_a.y + info_a.height / 2.0;
+                 double y_b = info_b.y + info_b.height / 2.0;
+                 if (std::abs(y_a - y_b) > 1e-9) {
+                     return y_a < y_b;
+                 }
+                 
+                 // Secondary sort: X coordinate
+                 return info_a.x < info_b.x;
+             });
+    
+    std::cout << "  Collected and sorted " << movable_cells.size() << " movable cells" << std::endl;
+    
+    // 4. Linear Packing: Fill rows from bottom-left to top-right
+    int current_row = 0;
+    double current_x = core_area.x_min;
+    int total_cells_placed = 0;
+    
+    for (Cell* cell : movable_cells) {
+        const auto& info = db_->getCellInfo(cell);
+        double cell_width = info.width;
+        
+        // Check if current cell fits in current row
+        if (current_x + cell_width > core_area.x_max) {
+            // Need to move to next row
+            current_row++;
+            current_x = core_area.x_min;
+            
+            // Safety check: ensure we don't exceed core boundary
+            if (current_row >= max_rows) {
+                std::cerr << "  ERROR: Core area too small! Cannot place all cells." << std::endl;
+                std::cerr << "  Maximum rows: " << max_rows << ", trying to place in row " << current_row << std::endl;
+                break;
+            }
+        }
+        
+        // Calculate Y coordinate for current row
+        double new_y = core_area.y_min + current_row * row_height;
+        
+        // Place the cell
+        db_->placeCell(cell, current_x, new_y);
+        
+        // Update cursor for next cell
+        current_x += cell_width;
+        total_cells_placed++;
+    }
+    
+    std::cout << "  Successfully legalized " << total_cells_placed << " cells" << std::endl;
+    std::cout << "  Used " << (current_row + 1) << " rows out of " << max_rows << " available" << std::endl;
+    
+    // 5. Calculate and report new HPWL
+    double new_hpwl = calculateHPWL();
+    std::cout << "  HPWL after legalization: " << new_hpwl << std::endl;
+    
+    // 6. Visualize the result
+    if (viz_) {
+        viz_->drawPlacementWithRunId("legalized", run_id_);
+    }
+    
+    std::cout << "Legalization completed!" << std::endl;
+}
+
+void PlacerEngine::runDetailedPlacement() {
+    if (!db_) return;
+    
+    std::cout << "Starting Detailed Placement (Greedy Adjacent Swap)..." << std::endl;
+    
+    // 1. Data Prep: Group cells by rows, sorted by x-coordinate
+    const Rect& core_area = db_->getCoreArea();
+    double row_height = db_->getRowHeight();
+    double core_y_min = core_area.y_min;
+    
+    // Create row structure
+    std::map<int, std::vector<Cell*>> rows;
+    
+    for (Cell* cell : db_->getAllCells()) {
+        const auto& info = db_->getCellInfo(cell);
+        if (info.fixed) continue;
+        
+        double current_y = info.y + info.height / 2.0;
+        int row_idx = static_cast<int>(std::round((current_y - core_y_min) / row_height));
+        rows[row_idx].push_back(cell);
+    }
+    
+    // Sort each row by x-coordinate
+    for (auto& [row_idx, cells_in_row] : rows) {
+        std::sort(cells_in_row.begin(), cells_in_row.end(),
+                 [this](Cell* a, Cell* b) {
+                     return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+                 });
+    }
+    
+    std::cout << "  Prepared " << rows.size() << " rows for detailed optimization" << std::endl;
+    
+    // 2. Optimization Loop: Multiple passes over all rows
+    const int max_passes = 5;
+    double initial_hpwl = calculateHPWL();
+    double current_hpwl = initial_hpwl;
+    int total_swaps = 0;
+    
+    for (int pass = 0; pass < max_passes; ++pass) {
+        int pass_swaps = 0;
+        std::cout << "  Pass " << (pass + 1) << "/" << max_passes << std::endl;
+        
+        // 3. Row Traversal: Try adjacent swaps in each row
+        for (auto& [row_idx, cells_in_row] : rows) {
+            for (size_t i = 0; i < cells_in_row.size() - 1; ++i) {
+                Cell* left_cell = cells_in_row[i];
+                Cell* right_cell = cells_in_row[i + 1];
+                
+                // Store original positions
+                const auto& left_info = db_->getCellInfo(left_cell);
+                const auto& right_info = db_->getCellInfo(right_cell);
+                double left_orig_x = left_info.x;
+                double right_orig_x = right_info.x;
+                
+                // Measure current HPWL
+                double hpwl_before = calculateHPWL();
+                
+                // Try Swap: Exchange order in vector
+                std::swap(cells_in_row[i], cells_in_row[i + 1]);
+                
+                // Re-pack: Update x coordinates to maintain tight packing
+                double current_x = (i > 0) ? 
+                    db_->getCellInfo(cells_in_row[i - 1]).x + 
+                    db_->getCellInfo(cells_in_row[i - 1]).width : 
+                    core_area.x_min;
+                
+                // Place swapped cells
+                db_->placeCell(left_cell, current_x, left_info.y);
+                current_x += left_info.width;
+                db_->placeCell(right_cell, current_x, right_info.y);
+                
+                // Measure new HPWL
+                double hpwl_after = calculateHPWL();
+                
+                // Decision: Keep swap if it improves wirelength
+                if (hpwl_after < hpwl_before - 1e-9) {  // Small epsilon for numerical stability
+                    // Keep the swap - improvement!
+                    pass_swaps++;
+                    total_swaps++;
+                } else {
+                    // Revert the swap
+                    std::swap(cells_in_row[i], cells_in_row[i + 1]);
+                    // Restore original positions
+                    db_->placeCell(left_cell, left_orig_x, left_info.y);
+                    db_->placeCell(right_cell, right_orig_x, right_info.y);
+                }
+            }
+        }
+        
+        current_hpwl = calculateHPWL();
+        std::cout << "    Pass swaps: " << pass_swaps 
+                  << ", HPWL: " << current_hpwl 
+                  << " (improvement: " << (initial_hpwl - current_hpwl) << ")" << std::endl;
+        
+        // Early termination if no improvements
+        if (pass_swaps == 0) {
+            std::cout << "  No improvements in pass " << (pass + 1) << ", early termination" << std::endl;
+            break;
+        }
+    }
+    
+    // 4. Finalize
+    double final_hpwl = calculateHPWL();
+    double total_improvement = initial_hpwl - final_hpwl;
+    
+    std::cout << "Detailed Placement completed!" << std::endl;
+    std::cout << "  Total swaps performed: " << total_swaps << std::endl;
+    std::cout << "  Initial HPWL: " << initial_hpwl << std::endl;
+    std::cout << "  Final HPWL: " << final_hpwl << std::endl;
+    std::cout << "  Total improvement: " << total_improvement << " (" 
+              << (total_improvement / initial_hpwl * 100.0) << "%)" << std::endl;
+    
+    // 5. Visualize final result
+    if (viz_) {
+        viz_->drawPlacementWithRunId("detailed", run_id_);
+    }
+}
+
+void PlacerEngine::solveForceDirectedIteration(int iter) {
+    if (!db_) return;
+    
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    if (!netlist_db) return;
+    
+    // Get all movable cells
+    auto cells = db_->getAllCells();
+    std::unordered_map<Cell*, Point> next_positions;
+    
+    // Calculate target position for each movable cell
+    for (Cell* cell : cells) {
+        const auto& info = db_->getCellInfo(cell);
+        if (info.fixed) continue;  // Skip fixed cells
+        
+        double sum_x = 0.0, sum_y = 0.0;
+        double total_weight = 0.0;
+        
+        // Iterate through all pins of this cell
+        for (const auto& pin_ptr : cell->getPins()) {
+            Pin* pin = pin_ptr.get();
+            if (!pin) continue;
+            
+            Net* net = pin->getNet();
+            if (!net) continue;
+            
+            // Calculate weight for this net (1 / (pin_count - 1))
+            size_t pin_count = net->getLoads().size() + (net->getDriver() ? 1 : 0);
+            if (pin_count <= 1) continue;  // Skip single-pin nets
+            
+            double weight = 1.0 / (pin_count - 1);
+            
+            // Iterate through all other pins on this net
+            // Check driver
+            Pin* driver = net->getDriver();
+            if (driver && driver != pin) {
+                Cell* other_cell = driver->getOwner();
+                if (other_cell) {
+                    Point center = db_->getCellCenter(other_cell);
+                    sum_x += weight * center.x;
+                    sum_y += weight * center.y;
+                    total_weight += weight;
+                }
+            }
+            
+            // Check loads
+            for (Pin* load : net->getLoads()) {
+                if (load && load != pin) {
+                    Cell* other_cell = load->getOwner();
+                    if (other_cell) {
+                        Point center = db_->getCellCenter(other_cell);
+                        sum_x += weight * center.x;
+                        sum_y += weight * center.y;
+                        total_weight += weight;
+                    }
+                }
+            }
+        }
+        
+        // Calculate new position as weighted average
+        if (total_weight > 0.0) {
+            double new_x = sum_x / total_weight;
+            double new_y = sum_y / total_weight;
+            next_positions[cell] = Point(new_x, new_y);
+        }
+    }
+    
+    // Apply new positions
+    for (const auto& [cell, new_pos] : next_positions) {
+        const auto& info = db_->getCellInfo(cell);
+        double new_x = new_pos.x - info.width / 2.0;  // Convert center to lower-left
+        double new_y = new_pos.y - info.height / 2.0;
+        db_->placeCell(cell, new_x, new_y);
+    }
+    
+    // Print progress
+    if (iter % 10 == 0) {
+        std::cout << "  Force-directed iteration " << iter 
+                  << " (moved " << next_positions.size() << " cells)" << std::endl;
+    }
+}
+
+void PlacerEngine::calculateNetBoundingBox(const Net* net, 
+                                          double& min_x, double& max_x,
+                                          double& min_y, double& max_y) const {
+    // Initialize to opposite extremes
+    min_x = std::numeric_limits<double>::max();
+    max_x = std::numeric_limits<double>::lowest();
+    min_y = std::numeric_limits<double>::max();
+    max_y = std::numeric_limits<double>::lowest();
+    
+    // Iterate through all pins connected to this net
+    // Check driver pin
+    Pin* driver = net->getDriver();
+    if (driver) {
+        Cell* cell = driver->getOwner();
+        if (cell) {
+            Point center = db_->getCellCenter(cell);
+            min_x = max_x = center.x;
+            min_y = max_y = center.y;
+        }
+    }
+    
+    // Check all load pins
+    for (Pin* load : net->getLoads()) {
+        if (load) {
+            Cell* cell = load->getOwner();
+            if (cell) {
+                Point center = db_->getCellCenter(cell);
+                min_x = std::min(min_x, center.x);
+                max_x = std::max(max_x, center.x);
+                min_y = std::min(min_y, center.y);
+                max_y = std::max(max_y, center.y);
+            }
+        }
+    }
+}
+
+bool PlacerEngine::hasOverlaps() const {
+    if (!db_) return false;
+    
+    // Check all pairs of cells for overlaps
+    auto cells = db_->getAllCells();
+    
+    for (size_t i = 0; i < cells.size(); ++i) {
+        for (size_t j = i + 1; j < cells.size(); ++j) {
+            const auto& info1 = db_->getCellInfo(cells[i]);
+            const auto& info2 = db_->getCellInfo(cells[j]);
+            
+            // Check if rectangles overlap
+            bool x_overlap = !(info1.x + info1.width <= info2.x || 
+                              info2.x + info2.width <= info1.x);
+            bool y_overlap = !(info1.y + info1.height <= info2.y || 
+                              info2.y + info2.height <= info1.y);
+            
+            if (x_overlap && y_overlap) {
+                return true;
+            }
+        }
+    }
+    
+    return false;
+}
+
+double PlacerEngine::calculateTotalOverlap() const {
+    if (!db_) return 0.0;
+    
+    double total_overlap = 0.0;
+    auto cells = db_->getAllCells();
+    
+    for (size_t i = 0; i < cells.size(); ++i) {
+        for (size_t j = i + 1; j < cells.size(); ++j) {
+            const auto& info1 = db_->getCellInfo(cells[i]);
+            const auto& info2 = db_->getCellInfo(cells[j]);
+            
+            // Calculate overlap area
+            double x_overlap = std::min(info1.x + info1.width, info2.x + info2.width) - 
+                              std::max(info1.x, info2.x);
+            double y_overlap = std::min(info1.y + info1.height, info2.y + info2.height) - 
+                              std::max(info1.y, info2.y);
+            
+            if (x_overlap > 0 && y_overlap > 0) {
+                total_overlap += x_overlap * y_overlap;
+            }
+        }
+    }
+    
+    return total_overlap;
+}
+
+} // namespace mini
