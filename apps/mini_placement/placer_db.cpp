@@ -32,6 +32,23 @@ void PlacerDB::addCell(Cell* cell, double area) {
     cell_infos_[cell] = CellInfo(0.0, 0.0, width, height);
 }
 
+void PlacerDB::addCell(Cell* cell, double width, double height) {
+    if (!cell) return;
+
+    // Initialize at origin (0, 0) with precise dimensions
+    cell_infos_[cell] = CellInfo(0.0, 0.0, width, height);
+}
+
+void PlacerDB::setCellLefMacro(Cell* cell, const LefMacro* lef_macro) {
+    if (!cell) return;
+    cell_lef_macros_[cell] = lef_macro;
+}
+
+const LefMacro* PlacerDB::getCellLefMacro(Cell* cell) const {
+    auto it = cell_lef_macros_.find(cell);
+    return (it != cell_lef_macros_.end()) ? it->second : nullptr;
+}
+
 void PlacerDB::placeCell(Cell* cell, double x, double y) {
     auto it = cell_infos_.find(cell);
     if (it != cell_infos_.end()) {

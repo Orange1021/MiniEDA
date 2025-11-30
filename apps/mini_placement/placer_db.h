@@ -9,6 +9,7 @@
 
 #include "../../lib/include/netlist_db.h"
 #include "../../lib/include/geometry.h"
+#include "../../lib/include/lef_parser.h"
 #include <unordered_map>
 #include <random>
 
@@ -65,11 +66,33 @@ public:
     double getRowHeight() const { return row_height_; }
 
     /**
-     * @brief Add a cell to the physical database
+     * @brief Add a cell to the physical database (legacy method)
      * @param cell Pointer to the netlist cell
      * @param area Cell area (from liberty library)
      */
     void addCell(Cell* cell, double area);
+
+    /**
+     * @brief Add a cell to the physical database with precise dimensions
+     * @param cell Pointer to the netlist cell
+     * @param width Cell width in micrometers
+     * @param height Cell height in micrometers
+     */
+    void addCell(Cell* cell, double width, double height);
+
+    /**
+     * @brief Set LEF macro pointer for a cell (for future routing use)
+     * @param cell Pointer to the cell
+     * @param lef_macro Pointer to LEF macro
+     */
+    void setCellLefMacro(Cell* cell, const LefMacro* lef_macro);
+
+    /**
+     * @brief Get LEF macro pointer for a cell
+     * @param cell Pointer to the cell
+     * @return Pointer to LEF macro, nullptr if not available
+     */
+    const LefMacro* getCellLefMacro(Cell* cell) const;
 
     /**
      * @brief Place a cell at specific coordinates
@@ -135,6 +158,7 @@ private:
     Rect core_area_;                                           // Placement boundary
     double row_height_;                                        // Standard row height
     std::unordered_map<Cell*, CellInfo> cell_infos_;           // Physical data
+    std::unordered_map<Cell*, const LefMacro*> cell_lef_macros_; // LEF macro pointers
     std::mt19937 random_engine_;                               // Random number generator
 };
 

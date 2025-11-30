@@ -14,24 +14,27 @@
 #include "../../lib/include/netlist_db.h"
 #include "../../lib/include/verilog_parser.h"
 #include "../../lib/include/liberty_parser.h"
+#include "../../lib/include/lef_parser.h"
 #include "placer_db.h"
 #include "placer_engine.h"
 #include "visualizer.h"
+#include "macro_mapper.h"
 
 using namespace mini;
 
 void printUsage(const char* prog_name) {
-    std::cout << "Usage: " << prog_name << " [options] -v <verilog_file> -lib <liberty_file>" << std::endl;
+    std::cout << "Usage: " << prog_name << " [options] -v <verilog_file> -lib <liberty_file> -lef <lef_file>" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -v <file>        Verilog netlist file (required)" << std::endl;
     std::cout << "  -lib <file>      Liberty library file (required)" << std::endl;
+    std::cout << "  -lef <file>      LEF physical library file (recommended for accurate sizing)" << std::endl;
     std::cout << "  -util <value>    Target utilization (default: 0.7)" << std::endl;
     std::cout << "  -rowheight <val> Row height in micrometers (default: 3.0)" << std::endl;
     std::cout << "  -help            Show this help message" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
-    std::cout << "  " << prog_name << " -v s27.v -lib sample.lib" << std::endl;
-    std::cout << "  " << prog_name << " -v s344.v -lib sample.lib -util 0.8" << std::endl;
+    std::cout << "  " << prog_name << " -v s27.v -lib sample.lib -lef nangate.lef" << std::endl;
+    std::cout << "  " << prog_name << " -v s344.v -lib sample.lib -lef nangate.lef -util 0.8" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -46,6 +49,7 @@ int main(int argc, char* argv[]) {
     // Parse Command Line Arguments
     std::string verilog_file;
     std::string liberty_file;
+    std::string lef_file;
     double utilization = 0.7;
     double row_height = 3.0;
 
@@ -74,6 +78,13 @@ int main(int argc, char* argv[]) {
                 }
             } else {
                 std::cerr << "Error: -util requires a value argument" << std::endl;
+                return 1;
+            }
+        } else if (arg == "-lef") {
+            if (i + 1 < argc) {
+                lef_file = argv[++i];
+            } else {
+                std::cerr << "Error: -lef requires a filename argument" << std::endl;
                 return 1;
             }
         } else if (arg == "-rowheight") {
@@ -147,32 +158,121 @@ int main(int argc, char* argv[]) {
         std::cout << "  Loaded library: " << library->getName() 
                   << " with " << library->getCellCount() << " cells" << std::endl;
 
-        // 3. Initialize Physical Database
+        // 3. Parse LEF Physical Library (if provided)
+        std::unique_ptr<LefLibrary> lef_library;
+        std::unique_ptr<MacroMapper> macro_mapper;
+        bool use_lef = false;
+        
+        if (!lef_file.empty()) {
+            std::cout << "\nReading LEF physical library: " << lef_file << std::endl;
+            try {
+                LefParser lef_parser(lef_file, false);  // verbose=false
+                lef_library = std::make_unique<LefLibrary>(lef_parser.parse());
+                use_lef = true;
+                
+                std::cout << "  Loaded LEF library with " << lef_library->getMacroCount() << " macros" << std::endl;
+                
+                // Initialize macro mapper
+                macro_mapper = std::make_unique<MacroMapper>(*lef_library);
+                macro_mapper->setDebugMode(true);  // Enable detailed mapping logs
+                
+                // Show some macro examples
+                auto macro_names = lef_library->getMacroNames();
+                std::cout << "  Available macros: ";
+                for (size_t i = 0; i < std::min(size_t(5), macro_names.size()); ++i) {
+                    std::cout << macro_names[i];
+                    if (i < std::min(size_t(5), macro_names.size()) - 1) {
+                        std::cout << ", ";
+                    }
+                }
+                if (macro_names.size() > 5) {
+                    std::cout << "... (" << (macro_names.size() - 5) << " more)";
+                }
+                std::cout << std::endl;
+                
+            } catch (const std::exception& e) {
+                std::cerr << "Warning: Failed to parse LEF file: " << e.what() << std::endl;
+                std::cerr << "Continuing with Liberty-based cell sizing..." << std::endl;
+                use_lef = false;
+            }
+        }
+
+        // 4. Initialize Physical Database
         std::cout << "\nInitializing Physical Database..." << std::endl;
         PlacerDB placer_db(&db);
         placer_db.setRowHeight(row_height);
         std::cout << "  Row height: " << row_height << " micrometers" << std::endl;
 
-        // Add cells with dimensions from Liberty library
+        // Add cells with dimensions from LEF or Liberty library
         double total_cell_area = 0.0;
+        int lef_matched_cells = 0;
+        int liberty_matched_cells = 0;
+        int fallback_cells = 0;
+        
         for (const auto& cell_ptr : db.getCells()) {
             Cell* cell = cell_ptr.get();
-            
-            // Look up cell in Liberty library
-            const LibCell* lib_cell = library->getCell(cell->getTypeString());
+            double cell_width = 0.0;
+            double cell_height = 0.0;
             double cell_area = 0.0;
+            bool size_found = false;
             
-            if (lib_cell) {
-                cell_area = lib_cell->area;
-            } else {
-                // Fallback: use default area for unknown cells
-                cell_area = 10.0;  // 10 square micrometers
-                std::cout << "  Warning: Cell " << cell->getName() 
-                          << " (" << cell->getTypeString() << ") not found in library, using default area" << std::endl;
+            // First try LEF library (if available)
+            if (use_lef && macro_mapper) {
+                const LefMacro* lef_macro = macro_mapper->mapType(cell->getTypeString());
+                
+                if (lef_macro) {
+                    cell_width = lef_macro->width;
+                    cell_height = lef_macro->height;
+                    cell_area = lef_macro->getArea();
+                    size_found = true;
+                    lef_matched_cells++;
+                    
+                    // Store LEF macro pointer in PlacerDB for future use
+                    placer_db.setCellLefMacro(cell, lef_macro);
+                }
             }
             
-            placer_db.addCell(cell, cell_area);
+            // Fallback to Liberty library if LEF not available or cell not found
+            if (!size_found) {
+                const LibCell* lib_cell = library->getCell(cell->getTypeString());
+                if (lib_cell) {
+                    cell_area = lib_cell->area;
+                    // Estimate dimensions from area (assume square for fallback)
+                    double size = std::sqrt(cell_area);
+                    cell_width = size;
+                    cell_height = size;
+                    size_found = true;
+                    liberty_matched_cells++;
+                }
+            }
+            
+            // Final fallback: use default dimensions
+            if (!size_found) {
+                cell_area = 10.0;  // 10 square micrometers
+                double size = std::sqrt(cell_area);
+                cell_width = size;
+                cell_height = size;
+                fallback_cells++;
+                
+                std::cout << "  Warning: Cell " << cell->getName() 
+                          << " (" << cell->getTypeString() << ") not found in any library, using default size" << std::endl;
+            }
+            
+            placer_db.addCell(cell, cell_width, cell_height);
             total_cell_area += cell_area;
+        }
+        
+        std::cout << "  Cell sizing breakdown:" << std::endl;
+        std::cout << "    LEF-based: " << lef_matched_cells << " cells" << std::endl;
+        std::cout << "    Liberty-based: " << liberty_matched_cells << " cells" << std::endl;
+        std::cout << "    Default fallback: " << fallback_cells << " cells" << std::endl;
+        
+        // Show macro mapping statistics if available
+        if (macro_mapper) {
+            auto stats = macro_mapper->getStats();
+            std::cout << "  Macro mapping statistics:" << std::endl;
+            std::cout << "    Mapping success rate: " << stats.first << "/" << stats.second 
+                      << " (" << (100.0 * stats.first / stats.second) << "%)" << std::endl;
         }
 
         // Auto-compute core area with row snapping and original utilization

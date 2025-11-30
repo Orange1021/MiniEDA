@@ -17,6 +17,7 @@ lib/*.o
 # IDE 和编辑器
 .vscode/
 .idea/
+.claude/
 *.swp
 *.swo
 *~
