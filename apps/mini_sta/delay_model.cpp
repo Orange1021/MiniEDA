@@ -5,10 +5,12 @@
  */
 
 #include "delay_model.h"
+#include "cell_mapper.h"
 #include "../../lib/include/cell.h"
 #include "../../lib/include/net.h"
 #include <iostream>
 #include <cmath>
+#include <memory>
 
 namespace mini {
 
@@ -76,6 +78,11 @@ double LinearDelayModel::calculateWireDelay(Net* net) {
 TableDelayModel::TableDelayModel(Library* lib) : library_(lib) {
     if (!library_) {
         std::cerr << "Warning: TableDelayModel initialized with null library" << std::endl;
+    } else {
+        // Initialize cell mapper with the library
+        cell_mapper_ = std::make_unique<CellMapper>(*library_);
+        // Enable debug mode to see mapping details
+        cell_mapper_->setDebugMode(false); // Set to true for debugging
     }
 }
 
@@ -87,8 +94,8 @@ double TableDelayModel::calculateCellDelay(Cell* cell, double input_slew, double
         return 0.0;  // Default fallback
     }
 
-    // 1. Find the corresponding Liberty cell
-    const LibCell* lib_cell = library_->getCell(cell->getTypeString());
+    // 1. Find the corresponding Liberty cell using CellMapper
+    const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell->getTypeString()) : nullptr;
     if (!lib_cell) {
         std::cerr << "Warning: Cell type '" << cell->getTypeString() << "' not found in library" << std::endl;
         return 0.01;  // Small default delay
@@ -134,8 +141,8 @@ double TableDelayModel::calculateOutputSlew(Cell* cell, double input_slew, doubl
         return 0.05 * 1e-9;  // Default fallback: 50ps
     }
 
-    // 1. Find the corresponding Liberty cell
-    const LibCell* lib_cell = library_->getCell(cell->getTypeString());
+    // 1. Find the corresponding Liberty cell using CellMapper
+    const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell->getTypeString()) : nullptr;
     if (!lib_cell) {
         return 0.05 * 1e-9;  // Default fallback
     }
@@ -175,27 +182,87 @@ double TableDelayModel::calculateWireDelay(Net* net) {
         return 0.0;
     }
 
-    // 1. 估算寄生参数 (因为没有布局，也没有 SPEF)
-    // 简单的线负载模型 (WLM): 假设每个扇出贡献一定的 R 和 C
-    size_t fanout = net->getFanout();
+    // HPWL-based Elmore Delay Model for Post-Placement STA
     
-    // 基于扇出的启发式估算 (这些参数可以根据工艺库调整)
-    double estimated_r_per_fanout = 0.01;  // 0.01 kΩ = 10 Ω per fanout
-    double estimated_c_per_fanout = 0.002; // 0.002 pF = 2 fF per fanout
+    // 1. Calculate bounding box for all pins on this net
+    double min_x = std::numeric_limits<double>::infinity();
+    double max_x = -std::numeric_limits<double>::infinity();
+    double min_y = std::numeric_limits<double>::infinity();
+    double max_y = -std::numeric_limits<double>::infinity();
     
-    double wire_r = fanout * estimated_r_per_fanout;  // kΩ
-    double wire_c = fanout * estimated_c_per_fanout;  // pF
-
-    // 2. 计算引脚负载总电容
+    bool has_placed_pins = false;
+    
+    // Include driver pin
+    Pin* driver_pin = net->getDriver();
+    if (driver_pin && driver_pin->getOwner() && driver_pin->getOwner()->isPlaced()) {
+        double x = driver_pin->getOwner()->getX();
+        double y = driver_pin->getOwner()->getY();
+        min_x = std::min(min_x, x);
+        max_x = std::max(max_x, x);
+        min_y = std::min(min_y, y);
+        max_y = std::max(max_y, y);
+        has_placed_pins = true;
+    }
+    
+    // Include all load pins
+    for (Pin* load_pin : net->getLoads()) {
+        if (load_pin && load_pin->getOwner() && load_pin->getOwner()->isPlaced()) {
+            double x = load_pin->getOwner()->getX();
+            double y = load_pin->getOwner()->getY();
+            min_x = std::min(min_x, x);
+            max_x = std::max(max_x, x);
+            min_y = std::min(min_y, y);
+            max_y = std::max(max_y, y);
+            has_placed_pins = true;
+        }
+    }
+    
+    // If no placed pins, fall back to fanout-based estimation
+    if (!has_placed_pins) {
+        size_t fanout = net->getFanout();
+        double estimated_r_per_fanout = 0.01;  // 0.01 kΩ = 10 Ω per fanout
+        double estimated_c_per_fanout = 0.002; // 0.002 pF = 2 fF per fanout
+        double wire_r = fanout * estimated_r_per_fanout;  // kΩ
+        double wire_c = fanout * estimated_c_per_fanout;  // pF
+        
+        double total_pin_cap = 0.0;
+        for (Pin* load_pin : net->getLoads()) {
+            if (load_pin && load_pin->getOwner()) {
+                std::string cell_type = load_pin->getOwner()->getTypeString();
+                std::string pin_name = load_pin->getName();
+                
+                const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell_type) : library_->getCell(cell_type);
+                if (lib_cell) {
+                    const LibPin* lib_pin = lib_cell->getPin(pin_name);
+                    if (lib_pin) {
+                        total_pin_cap += lib_pin->capacitance;  // pF
+                    }
+                }
+            }
+        }
+        
+        double total_cap = wire_c + total_pin_cap;
+        return wire_r * (wire_c/2.0 + total_pin_cap);  // kΩ * pF = ns
+    }
+    
+    // 2. Calculate HPWL (Half-Perimeter Wire Length)
+    double hpwl = (max_x - min_x) + (max_y - min_y);  // in micrometers
+    
+    // 3. Nangate 45nm technology parameters (approximate)
+    double unit_r = 0.005;   // kΩ/μm (5 Ω/μm)
+    double unit_c = 0.0002;  // pF/μm (0.2 fF/μm)
+    
+    double wire_r = hpwl * unit_r;  // kΩ
+    double wire_c = hpwl * unit_c;  // pF
+    
+    // 4. Calculate total pin capacitance
     double total_pin_cap = 0.0;
     for (Pin* load_pin : net->getLoads()) {
-        // 查库获取引脚电容
         if (load_pin && load_pin->getOwner()) {
             std::string cell_type = load_pin->getOwner()->getTypeString();
             std::string pin_name = load_pin->getName();
             
-            // 从 library_ 中查找 LibCell -> LibPin -> capacitance
-            const LibCell* lib_cell = library_->getCell(cell_type);
+            const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell_type) : library_->getCell(cell_type);
             if (lib_cell) {
                 const LibPin* lib_pin = lib_cell->getPin(pin_name);
                 if (lib_pin) {
@@ -204,23 +271,12 @@ double TableDelayModel::calculateWireDelay(Net* net) {
             }
         }
     }
-
-    // 3. Elmore Delay 公式 (Lumped RC Model)
-    // Delay = R_wire * (C_load_pins + C_wire / 2)
-    // 注意：单位需要统一 - 这里使用 kΩ * pF = ns
-    double elmore_delay = wire_r * (total_pin_cap + wire_c / 2.0);  // ns
     
-    // 调试输出 (可以后续移除)
-    if (elmore_delay > 0.0 && fanout > 1) {  // 显示所有扇出大于1的网络
-        std::cout << "    Wire delay for " << net->getName() 
-                  << ": fanout=" << fanout 
-                  << ", R=" << wire_r << "kΩ" 
-                  << ", C_wire=" << wire_c << "pF"
-                  << ", C_pins=" << total_pin_cap << "pF"
-                  << ", Delay=" << elmore_delay << "ns" << std::endl;
-    }
+    // 5. Elmore delay model: Delay = R_wire * (C_wire/2 + C_load)
+    double total_cap = wire_c + total_pin_cap;  // pF
+    double delay = wire_r * (wire_c/2.0 + total_pin_cap);  // kΩ * pF = ns
     
-    return elmore_delay * 1e-9;  // 转换为秒
+    return delay;
 }
 
 /**

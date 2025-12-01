@@ -132,6 +132,25 @@ public:
      */
     Pin* getPin(const std::string& pin_name) const;
 
+    // ============ Placement Accessors ============
+    /**
+     * @brief Set X coordinate
+     * @param x X coordinate
+     */
+    void setX(double x) { x_ = x; }
+
+    /**
+     * @brief Set Y coordinate
+     * @param y Y coordinate
+     */
+    void setY(double y) { y_ = y; }
+
+    /**
+     * @brief Set placed status
+     * @param placed Whether the cell has been placed
+     */
+    void setPlaced(bool placed) { placed_ = placed; }
+
     /**
      * @brief Get all pins
      */

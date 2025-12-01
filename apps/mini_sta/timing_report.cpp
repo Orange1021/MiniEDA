@@ -124,16 +124,28 @@ void TimingReporter::reportTiming(int top_k) {
               << "\n==========================================" << std::endl;
 
     // Sort endpoints by slack (ascending, worst first)
-    std::vector<TimingNode*> sorted_endpoints(endpoints.begin(), endpoints.end());
-    std::sort(sorted_endpoints.begin(), sorted_endpoints.end(),
+    // Filter out uninitialized nodes first
+    std::vector<TimingNode*> valid_endpoints;
+    for (TimingNode* node : endpoints) {
+        double at = node->getArrivalTime();
+        double rat = node->getRequiredTime();
+        
+        // Skip uninitialized nodes (same logic as in updateSlacks)
+        if (at <= -TimingNode::UNINITIALIZED / 2 || rat >= TimingNode::UNINITIALIZED / 2) {
+            continue;
+        }
+        valid_endpoints.push_back(node);
+    }
+    
+    std::sort(valid_endpoints.begin(), valid_endpoints.end(),
               [](TimingNode* a, TimingNode* b) {
                   return a->getSlack() < b->getSlack();
               });
 
     // Generate and report top_k paths
-    int paths_to_report = std::min(top_k, static_cast<int>(sorted_endpoints.size()));
+    int paths_to_report = std::min(top_k, static_cast<int>(valid_endpoints.size()));
     for (int i = 0; i < paths_to_report; ++i) {
-        TimingNode* endpoint = sorted_endpoints[i];
+        TimingNode* endpoint = valid_endpoints[i];
 
         std::cout << "\nPath " << (i + 1) << ":"
                   << "\nEndpoint: " << endpoint->getPin()->getOwner()->getName() << "/" << endpoint->getPin()->getName()

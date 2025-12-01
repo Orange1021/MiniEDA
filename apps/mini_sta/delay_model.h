@@ -15,6 +15,7 @@ namespace mini {
 class Cell;
 class Net;
 class Library;
+class CellMapper;
 
 /**
  * @class DelayModel
@@ -160,6 +161,7 @@ public:
 
 private:
     Library* library_;              ///< Pointer to Liberty library
+    std::unique_ptr<CellMapper> cell_mapper_;  ///< Cell type mapper
 
     /**
      * @brief Find the appropriate timing arc for a cell

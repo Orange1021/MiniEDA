@@ -1,44 +1,44 @@
 /**
- * @file macro_mapper.h
- * @brief Macro Mapper - Logical to Physical Cell Type Mapping
+ * @file cell_mapper.h
+ * @brief Cell Mapper - Logical to Physical Cell Type Mapping for STA
  * @details Provides intelligent mapping between logical cell types (Verilog) 
- *          and physical macros (LEF) with configurable suffix strategies.
+ *          and physical library cells (Liberty) with configurable strategies.
  */
 
-#ifndef MINI_MACRO_MAPPER_H
-#define MINI_MACRO_MAPPER_H
+#ifndef MINI_CELL_MAPPER_H
+#define MINI_CELL_MAPPER_H
 
 #include <string>
 #include <vector>
 #include <iostream>
-#include "../../lib/include/lef_parser.h"
+#include "../../lib/include/liberty.h"
 
 namespace mini {
 
 /**
- * @class MacroMapper
- * @brief Intelligent mapper from logical cell types to physical LEF macros
+ * @class CellMapper
+ * @brief Intelligent mapper from logical cell types to physical library cells
  * @details This class acts as a translator between the logical world (Verilog)
- *          and the physical world (LEF), implementing various matching strategies.
+ *          and the physical world (Liberty), implementing various matching strategies.
  */
-class MacroMapper {
+class CellMapper {
 public:
     /**
      * @brief Constructor
-     * @param lef_lib Reference to the LEF library containing physical macros
+     * @param library Reference to the Liberty library containing physical cells
      */
-    explicit MacroMapper(const LefLibrary& lef_lib);
+    explicit CellMapper(const Library& library);
 
     /**
-     * @brief Map logical cell type to best matching physical macro
+     * @brief Map logical cell type to best matching physical cell
      * @param cell_type Logical cell type from netlist (e.g., "NAND2")
-     * @return Pointer to matched LefMacro, nullptr if no match found
+     * @return Pointer to matched LibCell, nullptr if no match found
      * @details Matching strategy:
      *          1. Exact match with cell_type
      *          2. Try common drive strength suffixes (_X1, _X2, etc.)
      *          3. Fallback to alternative naming conventions
      */
-    const LefMacro* mapType(const std::string& cell_type) const;
+    const LibCell* mapType(const std::string& cell_type) const;
 
     /**
      * @brief Enable/disable debug output for mapping process
@@ -58,7 +58,7 @@ public:
     void resetStats() { successful_mappings_ = 0; total_attempts_ = 0; }
 
 private:
-    const LefLibrary& lef_lib_;
+    const Library& library_;
     bool debug_enabled_;
     
     // Statistics
@@ -73,7 +73,7 @@ private:
     // Alternative naming conventions for special cases
     std::vector<std::pair<std::string, std::string>> alternative_names_ = {
         // Basic logic gates
-        {"NOT", "INV"},           // NOT gate -> INV in LEF
+        {"NOT", "INV"},           // NOT gate -> INV in Liberty
         {"AND", "AND2"},          // Default to 2-input
         {"NAND", "NAND2"},        // Default to 2-input
         {"OR", "OR2"},            // Default to 2-input
@@ -142,37 +142,37 @@ private:
     /**
      * @brief Try exact match with given name
      * @param name Name to search for
-     * @return Pointer to LefMacro if found, nullptr otherwise
+     * @return Pointer to LibCell if found, nullptr otherwise
      */
-    const LefMacro* tryExactMatch(const std::string& name) const;
+    const LibCell* tryExactMatch(const std::string& name) const;
 
     /**
      * @brief Try matching with drive strength suffixes
      * @param base_name Base name without suffix
-     * @return Pointer to LefMacro if found, nullptr otherwise
+     * @return Pointer to LibCell if found, nullptr otherwise
      */
-    const LefMacro* tryDriveStrengthMatch(const std::string& base_name) const;
+    const LibCell* tryDriveStrengthMatch(const std::string& base_name) const;
 
     /**
      * @brief Try alternative naming conventions
      * @param cell_type Original cell type
-     * @return Pointer to LefMacro if found, nullptr otherwise
+     * @return Pointer to LibCell if found, nullptr otherwise
      */
-    const LefMacro* tryAlternativeNames(const std::string& cell_type) const;
+    const LibCell* tryAlternativeNames(const std::string& cell_type) const;
 
     /**
      * @brief Try pattern-based matching for complex cells
      * @param cell_type Original cell type
-     * @return Pointer to LefMacro if found, nullptr otherwise
+     * @return Pointer to LibCell if found, nullptr otherwise
      */
-    const LefMacro* tryPatternMatch(const std::string& cell_type) const;
+    const LibCell* tryPatternMatch(const std::string& cell_type) const;
 
     /**
      * @brief Try fuzzy matching by removing common suffixes/prefixes
      * @param cell_type Original cell type
-     * @return Pointer to LefMacro if found, nullptr otherwise
+     * @return Pointer to LibCell if found, nullptr otherwise
      */
-    const LefMacro* tryFuzzyMatch(const std::string& cell_type) const;
+    const LibCell* tryFuzzyMatch(const std::string& cell_type) const;
 
     /**
      * @brief Extract input count from cell type name
@@ -190,4 +190,4 @@ private:
 
 } // namespace mini
 
-#endif // MINI_MACRO_MAPPER_H
+#endif // MINI_CELL_MAPPER_H

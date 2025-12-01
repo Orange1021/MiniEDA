@@ -186,9 +186,62 @@ void LibertyParser::parseLibraryBody(Library* lib) {
                 skipGroup();
             }
             else if (peek() == ':') {
-                // This is an attribute
-                std::cout << "  Skipping attribute: " << keyword << std::endl;
-                skipAttribute();
+                // This is an attribute - check if it's a unit definition
+                if (keyword == "time_unit") {
+                    consume(); // ':'
+                    skipWhitespace();
+                    lib->time_unit = readString();
+                    std::cout << "  Parsed time_unit: " << lib->time_unit << std::endl;
+                    skipUntil(';');
+                }
+                else if (keyword == "capacitive_load_unit") {
+                    consume(); // ':'
+                    skipWhitespace();
+                    if (peek() == '(') {
+                        consume(); // '('
+                        skipWhitespace();
+                        double value = readNumber();
+                        std::string unit = readIdentifier();
+                        lib->capacitive_unit = std::to_string(value) + unit; // e.g., "1" + "ff"
+                        skipWhitespace();
+                        if (peek() == ')') consume();
+                    }
+                    std::cout << "  Parsed capacitive_unit: " << lib->capacitive_unit << std::endl;
+                    skipUntil(';');
+                }
+                else if (keyword == "voltage_unit") {
+                    consume(); // ':'
+                    skipWhitespace();
+                    lib->voltage_unit = readString();
+                    std::cout << "  Parsed voltage_unit: " << lib->voltage_unit << std::endl;
+                    skipUntil(';');
+                }
+                else if (keyword == "current_unit") {
+                    consume(); // ':'
+                    skipWhitespace();
+                    lib->current_unit = readString();
+                    std::cout << "  Parsed current_unit: " << lib->current_unit << std::endl;
+                    skipUntil(';');
+                }
+                else if (keyword == "pulling_resistance_unit") {
+                    consume(); // ':'
+                    skipWhitespace();
+                    lib->resistance_unit = readString();
+                    std::cout << "  Parsed resistance_unit: " << lib->resistance_unit << std::endl;
+                    skipUntil(';');
+                }
+                else if (keyword == "leakage_power_unit") {
+                    consume(); // ':'
+                    skipWhitespace();
+                    lib->power_unit = readString();
+                    std::cout << "  Parsed power_unit: " << lib->power_unit << std::endl;
+                    skipUntil(';');
+                }
+                else {
+                    // This is an attribute we don't need
+                    std::cout << "  Skipping attribute: " << keyword << std::endl;
+                    skipAttribute();
+                }
             }
             else {
                 // Unknown construct, skip it
@@ -413,11 +466,46 @@ void LibertyParser::parseTimingBody(LibTiming* timing) {
  */
 void LibertyParser::parseValuesTable(LookupTable* table) {
     skipWhitespace();
-    if (peek() != '{') {
-        error("Expected '{' to start values block");
-        return;
+    
+    // Check if we have a starting brace (some formats have it, some don't)
+    bool has_starting_brace = false;
+    if (peek() == '{') {
+        has_starting_brace = true;
+        consume();
+        skipWhitespace();
     }
-    consume();
+
+    // Parse index_1 and index_2 if present (Nangate format)
+    while (peek() != 'v' && peek() != '}' && !eof()) {
+        std::string keyword = readIdentifier();
+        skipWhitespace();
+        
+        if (keyword == "index_1" || keyword == "index_2") {
+            if (peek() == '(') {
+                consume();
+                std::string index_str = readString();
+                std::vector<double> index_values;
+                std::istringstream iss(index_str);
+                double val;
+                while (iss >> val) {
+                    index_values.push_back(val);
+                    if (iss.peek() == ',') iss.ignore();
+                }
+                
+                if (keyword == "index_1") {
+                    table->index_1 = index_values;
+                } else {
+                    table->index_2 = index_values;
+                }
+                
+                skipUntil(';');
+            }
+        } else {
+            // Skip unknown attributes
+            skipUntil(';');
+        }
+        skipWhitespace();
+    }
 
     // Parse values keyword
     if (!expect("values")) {
@@ -475,14 +563,19 @@ void LibertyParser::parseValuesTable(LookupTable* table) {
     if (peek() == ';') consume(); // Semicolon
 
     skipWhitespace();
-    if (peek() == '}') consume(); // End of block
+    if (has_starting_brace && peek() == '}') {
+        consume(); // End of block (only if we had a starting brace)
+    }
 
     // Populate LookupTable with parsed values
     if (!rows.empty()) {
-        // Use template indices from the table_template that was parsed earlier
-        // For simplicity, use hardcoded values (matching sample.lib)
-        table->index_1 = {0.01, 0.05, 0.1}; // slew
-        table->index_2 = {0.01, 0.05, 0.1}; // cap
+        // Use the parsed index values if available, otherwise use defaults
+        if (table->index_1.empty()) {
+            table->index_1 = {0.01, 0.05, 0.1}; // Default slew values
+        }
+        if (table->index_2.empty()) {
+            table->index_2 = {0.01, 0.05, 0.1}; // Default cap values
+        }
         table->values = rows;
 
         // Validate dimensions

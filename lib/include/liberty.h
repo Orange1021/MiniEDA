@@ -225,6 +225,15 @@ public:
 private:
     std::string name_;                                          ///< Library name
     std::unordered_map<std::string, LibCell> cells_;            ///< Cell name -> Cell data
+    
+public:
+    // Unit information for timing calculations
+    std::string time_unit = "1ns";                              ///< Time unit (e.g., "1ns", "1ps")
+    std::string capacitive_unit = "1pf";                        ///< Capacitance unit (e.g., "1pf", "1ff")
+    std::string voltage_unit = "1V";                            ///< Voltage unit
+    std::string current_unit = "1mA";                           ///< Current unit
+    std::string resistance_unit = "1kohm";                      ///< Resistance unit
+    std::string power_unit = "1nW";                             ///< Power unit
 };
 
 } // namespace mini

@@ -27,13 +27,22 @@ STA_OBJS := $(patsubst $(STA_DIR)/%.cpp, $(BUILD_LIB_DIR)/sta_%.o, $(STA_SRCS))
 PLACER_SRCS := $(wildcard $(PLACER_DIR)/*.cpp)
 PLACER_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/placer_%.o, $(PLACER_SRCS))
 
+# Integrated Flow 源文件
+FLOW_SRCS := apps/main_flow.cpp
+FLOW_OBJS := $(patsubst apps/%.cpp, $(BUILD_LIB_DIR)/flow_%.o, $(FLOW_SRCS))
+
+# 需要的STA和Placement对象文件（排除main函数）
+FILTERED_STA_OBJS := $(filter-out $(BUILD_LIB_DIR)/sta_main_sta.o, $(STA_OBJS))
+FILTERED_PLACER_OBJS := $(filter-out $(BUILD_LIB_DIR)/placer_main_placer.o, $(PLACER_OBJS))
+
 # 可执行文件
 STA_BIN := $(BUILD_BIN_DIR)/mini_sta
 PLACER_BIN := $(BUILD_BIN_DIR)/mini_placement
+FLOW_BIN := $(BUILD_BIN_DIR)/mini_flow
 
 # 默认目标：编译所有
 .PHONY: all
-all: $(STA_BIN) $(PLACER_BIN)
+all: $(STA_BIN) $(PLACER_BIN) $(FLOW_BIN)
 
 # 编译核心库目标文件
 $(BUILD_LIB_DIR)/%.o: $(LIB_SRC_DIR)/%.cpp
@@ -62,6 +71,17 @@ $(PLACER_BIN): $(LIB_OBJS) $(PLACER_OBJS)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "MiniPlacement 编译完成: $@"
 
+# 编译 Integrated Flow 目标文件
+$(BUILD_LIB_DIR)/flow_%.o: apps/%.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# 链接 Integrated Flow 可执行文件
+$(FLOW_BIN): $(LIB_OBJS) $(FILTERED_STA_OBJS) $(FILTERED_PLACER_OBJS) $(FLOW_OBJS)
+	@mkdir -p $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@echo "MiniFlow 编译完成: $@"
+
 # 只编译 MiniSTA
 .PHONY: sta
 sta: $(STA_BIN)
@@ -69,6 +89,10 @@ sta: $(STA_BIN)
 # 只编译 MiniPlacement
 .PHONY: placement
 placement: $(PLACER_BIN)
+
+# 只编译 Integrated Flow
+.PHONY: flow
+flow: $(FLOW_BIN)
 
 # 清理编译产物
 .PHONY: clean

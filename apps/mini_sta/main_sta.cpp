@@ -25,11 +25,11 @@ void printUsage(const char* prog_name) {
     std::cout << "Usage: " << prog_name << " [options] <verilog_file>" << std::endl;
     std::cout << "Options:" << std::endl;
     std::cout << "  -clk <period>   Set target clock period in ns (default: 10.0)" << std::endl;
-    std::cout << "  -lib <file>     Liberty library file (default: benchmarks/sample.lib)" << std::endl;
+    std::cout << "  -lib <file>     Liberty library file (default: benchmarks/NangateOpenCellLibrary_typical.lib)" << std::endl;
     std::cout << "  -help           Show this help message" << std::endl;
     std::cout << std::endl;
     std::cout << "Examples:" << std::endl;
-    std::cout << "  " << prog_name << " design.v -clk 10.0 -lib benchmarks/sample.lib" << std::endl;
+    std::cout << "  " << prog_name << " design.v -clk 10.0 -lib benchmarks/NangateOpenCellLibrary_typical.lib" << std::endl;
 }
 
 int main(int argc, char* argv[]) {
@@ -43,7 +43,7 @@ int main(int argc, char* argv[]) {
 
     // 1. Parse Command Line Arguments
     std::string verilog_file;
-    std::string liberty_file = "benchmarks/sample.lib";
+    std::string liberty_file = "benchmarks/NangateOpenCellLibrary_typical.lib";
     double clock_period = 10.0;
 
     for (int i = 1; i < argc; ++i) {
