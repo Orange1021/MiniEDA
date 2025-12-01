@@ -15,11 +15,11 @@
 #include "../lib/include/verilog_parser.h"
 #include "../lib/include/liberty_parser.h"
 #include "../lib/include/lef_parser.h"
+#include "../lib/include/visualizer.h"
 
 // Placement modules
+#include "../apps/mini_placement/placement_interface.h"
 #include "../apps/mini_placement/placer_db.h"
-#include "../apps/mini_placement/placer_engine.h"
-#include "../apps/mini_placement/macro_mapper.h"
 
 // STA modules
 #include "../apps/mini_sta/sta_engine.h"
@@ -47,7 +47,7 @@ struct FlowConfig {
     std::string liberty_file = "benchmarks/NangateOpenCellLibrary_typical.lib";
     std::string lef_file;
     double clock_period = 10.0;
-    double utilization = 0.7;
+    double utilization = 0.5;
     double row_height = 3.0;
 };
 
@@ -135,61 +135,29 @@ void backannotateCoordinates(PlacerDB& placer_db, NetlistDB& /* netlist_db */) {
 }
 
 /**
- * @brief Run complete placement flow
+ * @brief Run complete placement flow using placement interface
  */
 std::unique_ptr<PlacerDB> runPlacement(const FlowConfig& config, std::shared_ptr<NetlistDB> netlist_db) {
-    std::cout << "\n=== Running Placement Flow ===" << std::endl;
+    // Extract circuit name from verilog file path for unique run_id
+    size_t last_slash = config.verilog_file.find_last_of('/');
+    size_t last_dot = config.verilog_file.find_last_of('.');
+    std::string circuit_name = (last_slash != std::string::npos && last_dot != std::string::npos) 
+                              ? config.verilog_file.substr(last_slash + 1, last_dot - last_slash - 1)
+                              : "unknown";
+    std::string run_id = "mini_flow_" + circuit_name;
     
-    // Parse LEF physical library (if provided)
-    std::unique_ptr<LefLibrary> lef_library;
-    std::unique_ptr<MacroMapper> macro_mapper;
-    bool use_lef = false;
+    // Convert FlowConfig to PlacementConfig
+    PlacementConfig placement_config;
+    placement_config.lef_file = config.lef_file;
+    placement_config.liberty_file = config.liberty_file;
+    placement_config.utilization = config.utilization;
+    placement_config.row_height = config.row_height;
+    placement_config.verbose = true;
+    placement_config.run_id = run_id;
     
-    if (!config.lef_file.empty()) {
-        std::cout << "Reading LEF physical library: " << config.lef_file << std::endl;
-        try {
-            LefParser lef_parser(config.lef_file, false);
-            lef_library = std::make_unique<LefLibrary>(lef_parser.parse());
-            use_lef = true;
-            
-            std::cout << "  Loaded LEF library with " << lef_library->getMacroCount() << " macros" << std::endl;
-            
-            // Initialize macro mapper
-            macro_mapper = std::make_unique<MacroMapper>(*lef_library);
-            macro_mapper->setDebugMode(false);
-            
-        } catch (const std::exception& e) {
-            std::cerr << "Error parsing LEF file: " << e.what() << std::endl;
-            return nullptr;
-        }
-    }
-    
-    // Initialize placement database
-    auto placer_db = std::make_unique<PlacerDB>(netlist_db.get());
-    
-    // Set placement parameters
-    double total_cell_area = 0.0;
-    for (const auto& cell : netlist_db->getCells()) {
-        (void)cell; // Suppress unused variable warning
-        total_cell_area += 10.0; // Temporary: assume 10μm² per cell
-    }
-    
-    // Calculate core area based on utilization
-    double core_area_needed = total_cell_area / config.utilization;
-    double core_width = std::sqrt(core_area_needed);
-    double core_height = core_area_needed / core_width;
-    
-    Rect core_area(0, 0, core_width, core_height);
-    placer_db->setCoreArea(core_area);
-    placer_db->setRowHeight(config.row_height);
-    
-    // Run placement engine
-    PlacerEngine engine(placer_db.get());
-    engine.runGlobalPlacement();
-    engine.runLegalization();
-    engine.runDetailedPlacement();
-    
-    std::cout << "  Final HPWL: " << engine.getCurrentHPWL() << std::endl;
+    // Run placement using the interface (visualizer will be created internally)
+    auto placer_db = PlacementInterface::runPlacementWithVisualization(
+        placement_config, netlist_db, nullptr);
     
     return placer_db;
 }

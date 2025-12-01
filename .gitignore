@@ -55,5 +55,8 @@ Desktop.ini
 # 临时文档和对话记录
 txt/
 
+# Python generated files (visualization scripts)
+*.py
+
 # Benchmark datasets (large public datasets)
 benchmarks/

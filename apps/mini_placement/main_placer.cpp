@@ -15,9 +15,9 @@
 #include "../../lib/include/verilog_parser.h"
 #include "../../lib/include/liberty_parser.h"
 #include "../../lib/include/lef_parser.h"
+#include "../../lib/include/visualizer.h"
 #include "placer_db.h"
 #include "placer_engine.h"
-#include "visualizer.h"
 #include "macro_mapper.h"
 
 using namespace mini;
