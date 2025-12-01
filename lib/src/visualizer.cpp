@@ -138,19 +138,28 @@ void Visualizer::generatePythonScript(const std::string& script_filename,
     // Draw cells
     script_file << "# Draw cells\ncell_colors = []\n";
 
-    // Add cells to Python script
+    // Add cells to Python script with smart filtering
     for (Cell* cell : db_->getAllCells()) {
         const auto& info = db_->getCellInfo(cell);
         
         script_file << "# Cell: " << cell->getName() << "\n";
         script_file << "cell_rect = patches.Rectangle((" << info.x << ", " << info.y << "), ";
         script_file << info.width << ", " << info.height << ", ";
-        script_file << "linewidth=1, edgecolor='blue', facecolor='lightblue', alpha=0.7)\n";
+        script_file << "linewidth=1, edgecolor='blue', facecolor='lightblue', alpha=0.5)\n";
         script_file << "ax.add_patch(cell_rect)\n";
-        script_file << "ax.text(" << (info.x + info.width/2) << ", ";
-        script_file << (info.y + info.height/2) << ", '" << cell->getName() << "', ";
-        script_file << "ha='center', va='center', fontsize=8)\n\n";
+        
+        // Dynamic fontsize based on cell width
+        double font_size = std::min(6.0, info.width * 1.5);
+        
+        // Filter: only show labels for cells large enough
+        if (font_size > 3.0) {
+            script_file << "ax.text(" << (info.x + info.width/2) << ", ";
+            script_file << (info.y + info.height/2) << ", '" << cell->getName() << "', ";
+            script_file << "ha='center', va='center', fontsize=" << font_size << ", alpha=1.0)\n";
+        }
+        script_file << "\n";
     }
+
 
     // Add nets (connections)
     script_file << "# Draw nets as fly-lines\nnet_colors = []\n";

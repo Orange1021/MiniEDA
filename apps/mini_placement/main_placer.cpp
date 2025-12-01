@@ -237,10 +237,6 @@ int main(int argc, char* argv[]) {
                 const LibCell* lib_cell = library->getCell(cell->getTypeString());
                 if (lib_cell) {
                     cell_area = lib_cell->area;
-                    // Estimate dimensions from area (assume square for fallback)
-                    double size = std::sqrt(cell_area);
-                    cell_width = size;
-                    cell_height = size;
                     size_found = true;
                     liberty_matched_cells++;
                 }
@@ -249,16 +245,29 @@ int main(int argc, char* argv[]) {
             // Final fallback: use default dimensions
             if (!size_found) {
                 cell_area = 10.0;  // 10 square micrometers
-                double size = std::sqrt(cell_area);
-                cell_width = size;
-                cell_height = size;
                 fallback_cells++;
                 
                 std::cout << "  Warning: Cell " << cell->getName() 
                           << " (" << cell->getTypeString() << ") not found in any library, using default size" << std::endl;
             }
             
-            placer_db.addCell(cell, cell_width, cell_height);
+            // Add cell with proper dimensions
+            if (cell_width > 0.0 && cell_height > 0.0) {
+                // Use precise dimensions from LEF or explicit calculation
+                placer_db.addCell(cell, cell_width, cell_height);
+                // Debug: LEF or explicit path
+                std::cout << "    DEBUG: " << cell->getName() << " using LEF/explicit: " << cell_width << "x" << cell_height << std::endl;
+            } else if (size_found) {
+                // Use Liberty area with proper row height sizing
+                placer_db.addCell(cell, cell_area);
+                // Debug: Liberty area path
+                std::cout << "    DEBUG: " << cell->getName() << " using Liberty area: " << cell_area << ", expected height: " << row_height << std::endl;
+            } else {
+                // Use default dimensions
+                placer_db.addCell(cell, cell_width, cell_height);
+                // Debug: Default path
+                std::cout << "    DEBUG: " << cell->getName() << " using default: " << cell_width << "x" << cell_height << std::endl;
+            }
             total_cell_area += cell_area;
         }
         

@@ -54,6 +54,32 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
             macro_mapper = std::make_unique<MacroMapper>(*lef_library);
             macro_mapper->setDebugMode(config.verbose);
             
+            // Auto-detect technology row height from LEF library
+            double tech_row_height = config.row_height; // Default fallback
+            bool found_macro = false;
+            
+            // Iterate through all macros to find the first one (should be a standard cell)
+            for (const auto& macro_pair : lef_library->macros) {
+                const LefMacro& macro = macro_pair.second;
+                if (macro.height > 0) { // Valid macro with positive height
+                    tech_row_height = macro.height;
+                    found_macro = true;
+                    if (config.verbose) {
+                        std::cout << "  Auto-detected technology row height: " << tech_row_height 
+                                  << " μm from LEF macro: " << macro.name << std::endl;
+                    }
+                    break; // Use first valid macro found
+                }
+            }
+            
+            if (!found_macro && config.verbose) {
+                std::cout << "  Warning: No valid macro found in LEF, using default row height: " 
+                          << tech_row_height << " μm" << std::endl;
+            }
+            
+            // Update config with detected row height
+            const_cast<PlacementConfig&>(config).row_height = tech_row_height;
+            
         } catch (const std::exception& e) {
             std::cerr << "Error parsing LEF file: " << e.what() << std::endl;
             return nullptr;
@@ -98,9 +124,10 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
             const LibCell* lib_cell = liberty_library->getCell(cell->getTypeString());
             if (lib_cell) {
                 cell_area = lib_cell->area;
-                // Use square approximation for Liberty cells
-                cell_width = std::sqrt(cell_area);
-                cell_height = cell_width;
+                // Use proper row height for Liberty cells
+                double row_height = config.row_height;
+                cell_width = cell_area / row_height;
+                cell_height = row_height;
                 liberty_matched_cells++;
             }
         }
