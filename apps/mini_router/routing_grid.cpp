@@ -1,37 +1,184 @@
 /**
  * @file routing_grid.cpp
- * @brief Routing Grid Implementation for MiniRouter
+ * @brief MiniRouter v2.0 - Routing Grid Implementation
  */
 
 #include "routing_grid.h"
-#include <algorithm>
 #include <stdexcept>
+#include <iostream>
 
 namespace mini {
 
+// ============================================================================
+// Constructor
+// ============================================================================
+
 RoutingGrid::RoutingGrid() 
-    : grid_width_(0), grid_height_(0), num_layers_(2), 
-      pitch_x_(0.2), pitch_y_(0.2), core_area_(0.0, 0.0, 1.0, 1.0) {
+    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(2) {
+    // Grid will be initialized in init() method
 }
 
-RoutingGrid::~RoutingGrid() = default;
+// ============================================================================
+// Core Methods
+// ============================================================================
 
 void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y) {
+    // Store physical parameters
     core_area_ = core_area;
     pitch_x_ = pitch_x;
     pitch_y_ = pitch_y;
     
-    // Calculate grid dimensions
-    double core_width = core_area_.width();
-    double core_height = core_area_.height();
+    // Validate inputs
+    if (pitch_x_ <= 0.0 || pitch_y_ <= 0.0) {
+        throw std::invalid_argument("Pitch values must be positive");
+    }
+    
+    // Calculate discrete dimensions using ceil to ensure full coverage
+    double core_width = core_area_.x_max - core_area_.x_min;
+    double core_height = core_area_.y_max - core_area_.y_min;
     
     grid_width_ = static_cast<int>(std::ceil(core_width / pitch_x_));
     grid_height_ = static_cast<int>(std::ceil(core_height / pitch_y_));
     
-    // Resize grid data structure
-    resizeGrid();
+    // Resize 3D grid: [layer][y][x]
+    grid_.resize(num_layers_);
+    for (int layer = 0; layer < num_layers_; ++layer) {
+        grid_[layer].resize(grid_height_);
+        for (int y = 0; y < grid_height_; ++y) {
+            grid_[layer][y].resize(grid_width_, GridState::FREE);
+        }
+    }
     
-    // Initialize all cells as FREE
+    std::cout << "RoutingGrid initialized: " << grid_width_ << "x" << grid_height_ 
+              << " x" << num_layers_ << " layers" << std::endl;
+    std::cout << "Core area: (" << core_area_.x_min << "," << core_area_.y_min 
+              << ") to (" << core_area_.x_max << "," << core_area_.y_max << ")" << std::endl;
+    std::cout << "Pitch: X=" << pitch_x_ << "um, Y=" << pitch_y_ << "um" << std::endl;
+}
+
+GridPoint RoutingGrid::physToGrid(double x, double y, int layer) const {
+    // 1. Calculate relative coordinates
+    double rel_x = x - core_area_.x_min;
+    double rel_y = y - core_area_.y_min;
+    
+    // 2. Discretize using round (critical fix: not floor!)
+    // round ensures 3.19um (pitch 0.2) maps to nearest grid point 16, not floored to 15
+    int gx = static_cast<int>(std::round(rel_x / pitch_x_));
+    int gy = static_cast<int>(std::round(rel_y / pitch_y_));
+    
+    // 3. Boundary clamping to prevent array out-of-bounds crashes
+    // This handles pins that are slightly out of bounds
+    gx = clamp(gx, 0, grid_width_ - 1);
+    gy = clamp(gy, 0, grid_height_ - 1);
+    
+    // 4. Layer validation
+    if (layer < 0 || layer >= num_layers_) {
+        throw std::out_of_range("Layer index out of range");
+    }
+    
+    return GridPoint(gx, gy, layer);
+}
+
+std::vector<GridPoint> RoutingGrid::getNeighbors(const GridPoint& current) const {
+    std::vector<GridPoint> neighbors;
+    
+    if (!isValid(current)) {
+        return neighbors;  // Empty list for invalid points
+    }
+    
+    // Same-layer movement (Routing Constraints)
+    if (current.layer == 0) {  // M1: Horizontal preferred
+        // Left (x-1)
+        if (current.x > 0) {
+            neighbors.emplace_back(current.x - 1, current.y, current.layer);
+        }
+        // Right (x+1)
+        if (current.x < grid_width_ - 1) {
+            neighbors.emplace_back(current.x + 1, current.y, current.layer);
+        }
+    } else if (current.layer == 1) {  // M2: Vertical preferred
+        // Up (y+1)
+        if (current.y < grid_height_ - 1) {
+            neighbors.emplace_back(current.x, current.y + 1, current.layer);
+        }
+        // Down (y-1)
+        if (current.y > 0) {
+            neighbors.emplace_back(current.x, current.y - 1, current.layer);
+        }
+    }
+    
+    // Inter-layer movement (Via)
+    // Always allow via to the other layer at same coordinates
+    int other_layer = 1 - current.layer;  // 0 -> 1, 1 -> 0
+    neighbors.emplace_back(current.x, current.y, other_layer);
+    
+    return neighbors;
+}
+
+void RoutingGrid::addObstacle(const Rect& phys_rect, int layer) {
+    if (layer < 0 || layer >= num_layers_) {
+        throw std::out_of_range("Layer index out of range");
+    }
+    
+    // Convert physical rectangle to grid coordinates
+    GridPoint start_gp = physToGrid(phys_rect.x_min, phys_rect.y_min, layer);
+    GridPoint end_gp = physToGrid(phys_rect.x_max, phys_rect.y_max, layer);
+    
+    // Ensure start <= end
+    int min_x = std::min(start_gp.x, end_gp.x);
+    int max_x = std::max(start_gp.x, end_gp.x);
+    int min_y = std::min(start_gp.y, end_gp.y);
+    int max_y = std::max(start_gp.y, end_gp.y);
+    
+    // Mark all cells in range as OBSTACLE
+    // Don't override ROUTED cells with OBSTACLE (improvement)
+    for (int y = min_y; y <= max_y; ++y) {
+        for (int x = min_x; x <= max_x; ++x) {
+            if (grid_[layer][y][x] != GridState::ROUTED) {
+                grid_[layer][y][x] = GridState::OBSTACLE;
+            }
+        }
+    }
+}
+
+// ============================================================================
+// State Management
+// ============================================================================
+
+GridState RoutingGrid::getState(const GridPoint& gp) const {
+    if (!isValid(gp)) {
+        throw std::out_of_range("Grid point out of bounds");
+    }
+    return grid_[gp.layer][gp.y][gp.x];
+}
+
+void RoutingGrid::setState(const GridPoint& gp, GridState state) {
+    if (!isValid(gp)) {
+        throw std::out_of_range("Grid point out of bounds");
+    }
+    grid_[gp.layer][gp.y][gp.x] = state;
+}
+
+bool RoutingGrid::isFree(const GridPoint& gp) const {
+    if (!isValid(gp)) {
+        return false;  // Out of bounds is not free
+    }
+    GridState state = grid_[gp.layer][gp.y][gp.x];
+    return state == GridState::FREE || state == GridState::PIN;
+}
+
+// ============================================================================
+// Utility Methods
+// ============================================================================
+
+bool RoutingGrid::isValid(const GridPoint& gp) const {
+    return (gp.layer >= 0 && gp.layer < num_layers_ &&
+            gp.x >= 0 && gp.x < grid_width_ &&
+            gp.y >= 0 && gp.y < grid_height_);
+}
+
+void RoutingGrid::clear() {
+    // Reset all cells to FREE
     for (int layer = 0; layer < num_layers_; ++layer) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
@@ -41,164 +188,15 @@ void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y) {
     }
 }
 
-void RoutingGrid::resizeGrid() {
-    grid_.resize(num_layers_);
-    for (int layer = 0; layer < num_layers_; ++layer) {
-        grid_[layer].resize(grid_height_);
-        for (int y = 0; y < grid_height_; ++y) {
-            grid_[layer][y].resize(grid_width_, GridState::FREE);
-        }
-    }
-}
-
-void RoutingGrid::addObstacle(const Rect& rect, int layer) {
-    // Convert physical coordinates to grid coordinates
-    GridPoint start = physToGrid(rect.x_min, rect.y_min, 0);
-    GridPoint end = physToGrid(rect.x_max, rect.y_max, 0);
-    
-    // Clamp to grid boundaries
-    start.x = std::max(0, std::min(grid_width_ - 1, start.x));
-    start.y = std::max(0, std::min(grid_height_ - 1, start.y));
-    end.x = std::max(0, std::min(grid_width_ - 1, end.x));
-    end.y = std::max(0, std::min(grid_height_ - 1, end.y));
-    
-    if (layer == -1) {
-        // Add obstacle to all layers
-        for (int l = 0; l < num_layers_; ++l) {
-            markObstacleCells(start.x, start.y, end.x, end.y, l);
-        }
-    } else {
-        // Add obstacle to specific layer
-        markObstacleCells(start.x, start.y, end.x, end.y, layer);
-    }
-}
-
-void RoutingGrid::markObstacleCells(int x_start, int y_start, int x_end, int y_end, int layer) {
-    for (int y = y_start; y <= y_end && y < grid_height_; ++y) {
-        for (int x = x_start; x <= x_end && x < grid_width_; ++x) {
-            grid_[layer][y][x] = GridState::OBSTACLE;
-        }
-    }
-}
-
-void RoutingGrid::setGridState(const GridPoint& gp, GridState state) {
-    if (isValid(gp)) {
-        grid_[gp.layer][gp.y][gp.x] = state;
-    }
-}
-
-GridPoint RoutingGrid::physToGrid(double phys_x, double phys_y, int layer) const {
-    // Relative position from core area origin
-    double rel_x = phys_x - core_area_.x_min;
-    double rel_y = phys_y - core_area_.y_min;
-    
-    // Convert to grid coordinates using round for nearest grid point
-    int grid_x = static_cast<int>(std::round(rel_x / pitch_x_));
-    int grid_y = static_cast<int>(std::round(rel_y / pitch_y_));
-    
-    return GridPoint(grid_x, grid_y, layer);
-}
-
-Point RoutingGrid::gridToPhys(const GridPoint& gp) const {
-    // Convert to physical coordinates (center of grid cell)
-    double phys_x = core_area_.x_min + (gp.x + 0.5) * pitch_x_;
-    double phys_y = core_area_.y_min + (gp.y + 0.5) * pitch_y_;
-    
-    return Point(phys_x, phys_y);
-}
-
-Rect RoutingGrid::getGridCellRect(const GridPoint& gp) const {
-    Point phys_center = gridToPhys(gp);
-    return Rect(phys_center.x - pitch_x_/2, phys_center.y - pitch_y_/2, 
-                phys_center.x + pitch_x_/2, phys_center.y + pitch_y_/2);
-}
-
-bool RoutingGrid::isValid(const GridPoint& gp) const {
-    return gp.layer >= 0 && gp.layer < num_layers_ &&
-           gp.x >= 0 && gp.x < grid_width_ &&
-           gp.y >= 0 && gp.y < grid_height_;
-}
-
-bool RoutingGrid::isFree(const GridPoint& gp) const {
-    return isValid(gp) && grid_[gp.layer][gp.y][gp.x] == GridState::FREE;
-}
-
-GridState RoutingGrid::getGridState(const GridPoint& gp) const {
-    if (isValid(gp)) {
-        return grid_[gp.layer][gp.y][gp.x];
-    }
-    return GridState::OBSTACLE; // Invalid points are treated as obstacles
-}
-
-std::vector<GridPoint> RoutingGrid::getNeighbors(const GridPoint& gp) const {
-    std::vector<GridPoint> neighbors;
-    
-    if (!isValid(gp)) return neighbors;
-    
-    if (gp.layer == 0) {
-        // M1: Horizontal neighbors only
-        GridPoint left(gp.x - 1, gp.y, gp.layer);
-        GridPoint right(gp.x + 1, gp.y, gp.layer);
-        if (isValid(left)) neighbors.push_back(left);
-        if (isValid(right)) neighbors.push_back(right);
-    } else if (gp.layer == 1) {
-        // M2: Vertical neighbors only
-        GridPoint up(gp.x, gp.y - 1, gp.layer);
-        GridPoint down(gp.x, gp.y + 1, gp.layer);
-        if (isValid(up)) neighbors.push_back(up);
-        if (isValid(down)) neighbors.push_back(down);
-    }
-    
-    return neighbors;
-}
-
-std::vector<GridPoint> RoutingGrid::getViaPoints(const GridPoint& gp) const {
-    std::vector<GridPoint> via_points;
-    
-    if (!isValid(gp)) return via_points;
-    
-    // Add via points on the other layer
-    for (int layer = 0; layer < num_layers_; ++layer) {
-        if (layer != gp.layer) {
-            GridPoint via(gp.x, gp.y, layer);
-            if (isValid(via)) {
-                via_points.push_back(via);
+void RoutingGrid::markPath(const std::vector<GridPoint>& path) {
+    for (const auto& gp : path) {
+        if (isValid(gp)) {
+            // Don't override PIN states, but mark everything else as ROUTED
+            if (grid_[gp.layer][gp.y][gp.x] != GridState::PIN) {
+                grid_[gp.layer][gp.y][gp.x] = GridState::ROUTED;
             }
         }
     }
-    
-    return via_points;
-}
-
-std::unordered_map<GridState, size_t> RoutingGrid::getStatistics() const {
-    std::unordered_map<GridState, size_t> stats;
-    
-    // Initialize counters
-    stats[GridState::FREE] = 0;
-    stats[GridState::OBSTACLE] = 0;
-    stats[GridState::ROUTED] = 0;
-    stats[GridState::VIA] = 0;
-    
-    // Count cells
-    for (int layer = 0; layer < num_layers_; ++layer) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                GridState state = grid_[layer][y][x];
-                stats[state]++;
-            }
-        }
-    }
-    
-    return stats;
-}
-
-double RoutingGrid::getUtilization() const {
-    auto stats = getStatistics();
-    size_t total_cells = grid_width_ * grid_height_ * num_layers_;
-    size_t used_cells = stats[GridState::ROUTED] + stats[GridState::VIA];
-    
-    if (total_cells == 0) return 0.0;
-    return static_cast<double>(used_cells) / static_cast<double>(total_cells);
 }
 
 } // namespace mini

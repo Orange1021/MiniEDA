@@ -1,256 +1,177 @@
 /**
  * @file maze_router.h
- * @brief Maze Router Implementation for MiniRouter
- * @details Lee's Algorithm and A* Search for net routing
+ * @brief MiniRouter v2.0 - Maze Router with A* Algorithm
+ * @details Textbook-level A* pathfinding implementation for net routing
  */
 
 #ifndef MINI_MAZE_ROUTER_H
 #define MINI_MAZE_ROUTER_H
 
 #include "routing_grid.h"
-#include <vector>
 #include <unordered_map>
+#include <unordered_set>
+#include <queue>
+#include <vector>
 #include <memory>
-#include <functional>
 #include <string>
 
-// Forward declarations to avoid circular dependencies
+// Forward declarations
 namespace mini {
-class PinMapper;
-class Net;
+    class Net;
+    class Pin;
+    class PinMapper;
 }
 
 namespace mini {
 
-/**
- * @brief Routing result for a single net
- */
-struct RoutingResult {
-    bool success;                           ///< Routing success status
-    std::vector<GridPoint> path;           ///< Complete routing path
-    double wirelength;                     ///< Total wirelength in micrometers
-    int num_vias;                          ///< Number of vias used
-    std::string failure_reason;            ///< Reason for failure (if any)
-    
-    RoutingResult() : success(false), wirelength(0.0), num_vias(0) {}
-};
+// ============================================================================
+// Core Definitions
+// ============================================================================
 
 /**
- * @brief A* search node
+ * @struct AStarNode
+ * @brief Node for A* algorithm with cost information
  */
 struct AStarNode {
-    GridPoint gp;                          ///< Grid point
-    double g_cost;                         ///< Cost from start
-    double h_cost;                         ///< Heuristic cost to goal
-    double f_cost;                         ///< Total cost (g + h)
-    std::shared_ptr<AStarNode> parent;     ///< Parent pointer
+    GridPoint gp;           ///< Current grid point coordinate
+    double g_cost;          ///< Actual cost from start to this node (steps + bends + vias)
+    double h_cost;          ///< Estimated remaining cost to goal (Manhattan distance)
+    double f_cost;          ///< Total cost (F = G + H)
     
-    AStarNode(const GridPoint& point) 
-        : gp(point), g_cost(0.0), h_cost(0.0), f_cost(0.0) {}
+    AStarNode(const GridPoint& point, double g, double h)
+        : gp(point), g_cost(g), h_cost(h), f_cost(g + h) {}
     
-    // Priority queue comparison (reverse for min-heap)
+    // Comparator for priority queue (min-heap based on f_cost)
     bool operator>(const AStarNode& other) const {
         return f_cost > other.f_cost;
     }
 };
 
 /**
- * @brief Maze Router Class
- * @details Implements Lee's Algorithm and A* Search for net routing
+ * @struct RoutingResult
+ * @brief Result of routing operation
+ */
+struct RoutingResult {
+    bool success;                           ///< Whether routing succeeded
+    std::vector<std::vector<GridPoint>> segments;  ///< Path segments for multi-pin nets
+    int total_wirelength;                   ///< Total wire length in grid units
+    int total_vias;                         ///< Total number of vias used
+    std::string error_message;              ///< Error message if failed
+    
+    RoutingResult() : success(false), total_wirelength(0), total_vias(0) {}
+};
+
+// ============================================================================
+// MazeRouter Class
+// ============================================================================
+
+/**
+ * @class MazeRouter
+ * @brief A* pathfinding router for net routing
  */
 class MazeRouter {
+private:
+    RoutingGrid* grid_;
+    PinMapper* pin_mapper_;  ///< [Key] Unified Key generator
+    
+    // --- Cost Parameters ---
+    double via_cost_ = 10.0;              ///< Via cost (expensive, minimize usage)
+    double wire_cost_per_unit_ = 1.0;     ///< Wire cost per unit length
+    
+    // --- Statistics ---
+    int total_routed_nets_ = 0;
+    int failed_nets_ = 0;
+    double total_wirelength_ = 0.0;
+    int total_vias_ = 0;
+
 public:
     /**
      * @brief Constructor
      * @param grid Pointer to routing grid
-     * @param pin_mapper Pointer to pin mapper for unified key generation
+     * @param pin_mapper Pointer to pin mapper for key generation
      */
-    explicit MazeRouter(RoutingGrid* grid, PinMapper* pin_mapper = nullptr);
+    MazeRouter(RoutingGrid* grid, PinMapper* pin_mapper);
     
     /**
-     * @brief Destructor
-     */
-    ~MazeRouter();
-
-    // ============ Main Routing Interface ============
-    
-    /**
-     * @brief Route a single net
+     * @brief Unified entry point for routing a net
      * @param net Pointer to the net to route
-     * @param pin_locations Map of pin locations in physical coordinates
-     * @return Routing result containing path and statistics
+     * @param pin_locations Map of pin keys to physical coordinates
+     * @return Routing result
      */
     RoutingResult routeNet(Net* net, 
                           const std::unordered_map<std::string, Point>& pin_locations);
     
     /**
-     * @brief Route multiple nets (global routing)
-     * @param nets Vector of nets to route
-     * @param pin_locations Map of all pin locations
-     * @return Vector of routing results
+     * @brief Core A* pathfinding algorithm
+     * @param start Starting grid point
+     * @param end Ending grid point
+     * @param path Output path if found
+     * @return True if path found, false otherwise
      */
-    std::vector<RoutingResult> routeNets(
-        const std::vector<Net*>& nets,
-        const std::unordered_map<std::string, Point>& pin_locations);
-
-    // ============ Algorithm Selection ============
+    bool findPath(const GridPoint& start, const GridPoint& end, 
+                  std::vector<GridPoint>& path);
+    
+    // --- Configuration ---
+    void setViaCost(double cost) { via_cost_ = cost; }
+    void setWireCostPerUnit(double cost) { wire_cost_per_unit_ = cost; }
+    
+    // --- Statistics ---
+    int getTotalRoutedNets() const { return total_routed_nets_; }
+    int getFailedNets() const { return failed_nets_; }
+    double getTotalWirelength() const { return total_wirelength_; }
+    int getTotalVias() const { return total_vias_; }
     
     /**
-     * @brief Set routing algorithm
-     * @param use_astar True for A* search, False for Lee's Algorithm
+     * @brief Reset statistics
      */
-    void setAlgorithm(bool use_astar) { use_astar_ = use_astar; }
-    
-    /**
-     * @brief Enable/disable rip-up and reroute
-     * @param enable True to enable rip-up and reroute
-     */
-    void setRipUpAndReroute(bool enable) { ripup_reroute_enabled_ = enable; }
-    
-    /**
-     * @brief Set maximum routing attempts per net
-     * @param max_attempts Maximum number of attempts
-     */
-    void setMaxAttempts(int max_attempts) { max_attempts_ = max_attempts; }
-
-    // ============ Cost Functions ============
-    
-    /**
-     * @brief Set via cost multiplier
-     * @param via_cost Cost multiplier for via usage
-     */
-    void setViaCost(double via_cost) { via_cost_ = via_cost; }
-    
-    /**
-     * @brief Set congestion cost multiplier
-     * @param congestion_cost Cost multiplier for congested areas
-     */
-    void setCongestionCost(double congestion_cost) { congestion_cost_ = congestion_cost; }
-
-    // ============ Statistics ============
-    
-    /**
-     * @brief Get routing statistics
-     * @return Map of statistic names to values
-     */
-    std::unordered_map<std::string, double> getStatistics() const;
+    void resetStatistics();
 
 private:
-    // Core components
-    RoutingGrid* grid_;                    ///< Routing grid
-    PinMapper* pin_mapper_;                 ///< Pin mapper for unified key generation
-    bool use_astar_;                       ///< Algorithm selection flag
-    bool ripup_reroute_enabled_;           ///< Rip-up and reroute flag
-    int max_attempts_;                     ///< Maximum routing attempts
-    
-    // Cost parameters
-    double via_cost_;                      ///< Via cost multiplier
-    double congestion_cost_;               ///< Congestion cost multiplier
-    
-    // Statistics
-    mutable std::unordered_map<std::string, double> stats_;
-
-    // ============ Core Routing Algorithms ============
+    /**
+     * @brief Backtrack to reconstruct path from came_from map
+     * @param came_from Map of node -> parent
+     * @param current Current node (end point)
+     * @return Reconstructed path from start to end
+     */
+    std::vector<GridPoint> backtrack(
+        const std::unordered_map<GridPoint, GridPoint, GridPointHash>& came_from,
+        const GridPoint& current) const;
     
     /**
-     * @brief Lee's Algorithm (BFS) for shortest path
-     * @param source Starting grid point
-     * @param target Target grid point
-     * @param path Output path from source to target
-     * @return True if path found, false otherwise
+     * @brief Calculate movement cost between two adjacent grid points
+     * @param from Source grid point
+     * @param to Destination grid point
+     * @return Movement cost
      */
-    bool leeAlgorithm(const GridPoint& source, const GridPoint& target, 
-                     std::vector<GridPoint>& path);
-    
-    /**
-     * @brief A* Search for optimal path
-     * @param source Starting grid point
-     * @param target Target grid point
-     * @param path Output path from source to target
-     * @return True if path found, false otherwise
-     */
-    bool aStarSearch(const GridPoint& source, const GridPoint& target,
-                    std::vector<GridPoint>& path);
-    
-    /**
-     * @brief Multi-pin routing (Steiner tree approach)
-     * @param pins Vector of pin grid points
-     * @param paths Output vector of paths connecting all pins
-     * @return True if all pins connected, false otherwise
-     */
-    bool routeMultiPin(const std::vector<GridPoint>& pins, 
-                      std::vector<std::vector<GridPoint>>& paths);
-
-    // ============ Helper Functions ============
+    double calculateMovementCost(const GridPoint& from, const GridPoint& to) const;
     
     /**
      * @brief Calculate Manhattan distance heuristic
-     * @param from Starting point
-     * @param to Target point
-     * @return Manhattan distance
+     * @param from Source grid point
+     * @param to Destination grid point
+     * @return Manhattan distance in physical units
      */
     double manhattanDistance(const GridPoint& from, const GridPoint& to) const;
     
     /**
-     * @brief Calculate movement cost between adjacent points
-     * @param from Current point
-     * @param next Next point
-     * @return Movement cost
-     */
-    double getMovementCost(const GridPoint& from, const GridPoint& next) const;
-    
-    /**
-     * @brief Reconstruct path from parent pointers
-     * @param target Target point
-     * @param came_from Map of parent pointers
-     * @param path Output path (reversed order)
-     */
-    void reconstructPath(const GridPoint& target,
-                        const std::unordered_map<GridPoint, GridPoint, GridPointHash>& came_from,
-                        std::vector<GridPoint>& path) const;
-    
-    /**
-     * @brief Mark path as routed in the grid
+     * @brief Mark path on routing grid as ROUTED
      * @param path Path to mark
      */
-    void markPathRouted(const std::vector<GridPoint>& path);
+    void markPath(const std::vector<GridPoint>& path);
     
     /**
-     * @brief Unmark path from the grid (for rip-up)
-     * @param path Path to unmark
+     * @brief Calculate wire length of a path
+     * @param path Path to calculate
+     * @return Wire length in grid units
      */
-    void unmarkPath(const std::vector<GridPoint>& path);
+    int calculateWirelength(const std::vector<GridPoint>& path) const;
     
     /**
-     * @brief Convert pin physical location to grid point
-     * @param pin_name Pin name
-     * @param pin_locations Map of pin locations
-     * @param preferred_layer Preferred routing layer
-     * @return Grid point for the pin
-     */
-    GridPoint pinToGridPoint(const std::string& pin_name,
-                            const std::unordered_map<std::string, Point>& pin_locations,
-                            int preferred_layer = 0) const;
-    
-    /**
-     * @brief Calculate wirelength of a path
-     * @param path Routing path
-     * @return Total wirelength in micrometers
-     */
-    double calculateWirelength(const std::vector<GridPoint>& path) const;
-    
-    /**
-     * @brief Count number of vias in a path
-     * @param path Routing path
+     * @brief Count vias in a path
+     * @param path Path to analyze
      * @return Number of vias
      */
     int countVias(const std::vector<GridPoint>& path) const;
-    
-    /**
-     * @brief Update routing statistics
-     * @param result Routing result to include in statistics
-     */
-    void updateStatistics(const RoutingResult& result);
 };
 
 } // namespace mini

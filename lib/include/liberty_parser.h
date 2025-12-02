@@ -40,6 +40,7 @@ private:
     } state_;
 
     std::string error_message_;
+    bool verbose_ = false;
 
     // --- Core parsing methods ---
     

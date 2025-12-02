@@ -1,210 +1,121 @@
 /**
  * @file routing_grid.h
- * @brief Routing Grid for MiniRouter
- * @details Core data structure for 2-layer HV routing grid representation
+ * @brief MiniRouter v2.0 - Routing Grid Definition
+ * @details Robust and minimalistic routing grid design for A* pathfinding
  */
 
 #ifndef MINI_ROUTING_GRID_H
 #define MINI_ROUTING_GRID_H
 
-#include "../../lib/include/geometry.h"
 #include <vector>
-#include <unordered_set>
-#include <memory>
+#include <functional>
+#include <algorithm>
+#include <cmath>
+#include "../../lib/include/geometry.h"
 
 namespace mini {
 
+// ============================================================================
+// Core Definitions
+// ============================================================================
+
 /**
- * @brief Grid point in 3D routing space (x, y, layer)
+ * @enum GridState
+ * @brief State machine for each grid point
+ */
+enum class GridState {
+    FREE,      ///< Default state, can be routed
+    OBSTACLE,  ///< Blocked by macro internal metal or blockage
+    ROUTED,    ///< Occupied by previous net (dynamic obstacle)
+    VIA,       ///< Via hole connecting upper and lower layers
+    PIN        ///< Destination marker (target), accessible even in obstacles
+};
+
+/**
+ * @struct GridPoint
+ * @brief 3D coordinate point for A* algorithm operations
  */
 struct GridPoint {
-    int x, y;        ///< Grid coordinates
-    int layer;       ///< Layer: 0=M1 (horizontal), 1=M2 (vertical)
-    
+    int x, y, layer;  ///< Coordinates: layer (0=M1, 1=M2), x, y positions
+
+    // Constructor
     GridPoint() : x(0), y(0), layer(0) {}
-    GridPoint(int x_, int y_, int layer_) : x(x_), y(y_), layer(layer_) {}
-    
-    // Equality operator for unordered_map and unordered_set
+    GridPoint(int x_val, int y_val, int layer_val) : x(x_val), y(y_val), layer(layer_val) {}
+
+    // Equality operator (required for comparisons)
     bool operator==(const GridPoint& other) const {
         return x == other.x && y == other.y && layer == other.layer;
     }
 };
 
-/**
- * @brief Hash function for GridPoint
- */
+// Hash function for GridPoint (required for std::unordered_map keys)
 struct GridPointHash {
-    size_t operator()(const GridPoint& gp) const {
-        // Combine hashes using bit manipulation for better distribution
-        size_t h1 = std::hash<int>{}(gp.x);
-        size_t h2 = std::hash<int>{}(gp.y);
-        size_t h3 = std::hash<int>{}(gp.layer);
-        
-        // Use a common hash combination technique
-        return h1 ^ (h2 << 1) ^ (h2 >> 1) ^ (h3 << 2) ^ (h3 >> 2);
+    std::size_t operator()(const GridPoint& gp) const {
+        // Combine hash values using a simple but effective approach
+        return std::hash<int>()(gp.x) ^ 
+               (std::hash<int>()(gp.y) << 1) ^ 
+               (std::hash<int>()(gp.layer) << 2);
     }
 };
 
-/**
- * @brief Grid cell state enumeration
- */
-enum class GridState {
-    FREE,        ///< Available for routing
-    OBSTACLE,    ///< Occupied by cell or blocked
-    ROUTED,      ///< Already used by a net
-    VIA          ///< Via location connecting M1-M2
-};
+// ============================================================================
+// RoutingGrid Class
+// ============================================================================
 
 /**
- * @brief Routing Grid Class
- * @details Represents the chip area as a 3D grid for maze routing
+ * @class RoutingGrid
+ * @brief Physical to discrete world mapping and grid management
  */
 class RoutingGrid {
+private:
+    // --- Physical Parameters (from init) ---
+    Rect core_area_;      ///< Chip core area (origin at x_min, y_min)
+    double pitch_x_;      ///< X-direction grid spacing (e.g., 0.19um)
+    double pitch_y_;      ///< Y-direction grid spacing (e.g., 0.19um)
+
+    // --- Discrete Dimensions (calculated) ---
+    int grid_width_;      ///< Total number of X-direction cells
+    int grid_height_;     ///< Total number of Y-direction cells
+    int num_layers_;      ///< Number of layers (fixed to 2)
+
+    // --- Core Data Storage ---
+    /// 3D array: [layer][y][x] -> GridState
+    /// Using nested vectors for dynamic resizing
+    std::vector<std::vector<std::vector<GridState>>> grid_;
+
 public:
-    /**
-     * @brief Constructor
-     */
+    // Constructor
     RoutingGrid();
-    
-    /**
-     * @brief Destructor
-     */
-    ~RoutingGrid();
 
-    // ============ Grid Initialization ============
+    // Core Methods
+    void init(const Rect& core_area, double pitch_x, double pitch_y);
+    GridPoint physToGrid(double x, double y, int layer) const;
+    std::vector<GridPoint> getNeighbors(const GridPoint& current) const;
+    void addObstacle(const Rect& phys_rect, int layer);
     
-    /**
-     * @brief Initialize grid based on core area and routing pitch
-     * @param core_area Core area rectangle for routing
-     * @param pitch_x Horizontal routing pitch (in micrometers)
-     * @param pitch_y Vertical routing pitch (in micrometers)
-     */
-    void init(const Rect& core_area, double pitch_x = 0.2, double pitch_y = 0.2);
-    
-    /**
-     * @brief Get grid dimensions
-     * @return Pair of (width, height) in grid cells
-     */
-    std::pair<int, int> getGridSize() const { return {grid_width_, grid_height_}; }
-    
-    /**
-     * @brief Get routing pitch
-     * @return Pair of (pitch_x, pitch_y) in micrometers
-     */
-    std::pair<double, double> getPitch() const { return {pitch_x_, pitch_y_}; }
-
-    // ============ Obstacle Management ============
-    
-    /**
-     * @brief Add obstacle (occupied by cell)
-     * @param rect Obstacle rectangle in physical coordinates
-     * @param layer Layer where obstacle exists (0=M1, 1=M2, -1=all layers)
-     */
-    void addObstacle(const Rect& rect, int layer = -1);
-    
-    /**
-     * @brief Mark grid point as occupied
-     * @param gp Grid point to mark
-     * @param state New state for the grid point
-     */
-    void setGridState(const GridPoint& gp, GridState state);
-
-    // ============ Coordinate Conversion ============
-    
-    /**
-     * @brief Convert physical coordinates to grid coordinates
-     * @param phys_x Physical x coordinate
-     * @param phys_y Physical y coordinate
-     * @param layer Layer number
-     * @return Grid point
-     */
-    GridPoint physToGrid(double phys_x, double phys_y, int layer) const;
-    
-    /**
-     * @brief Convert grid coordinates to physical coordinates
-     * @param gp Grid point
-     * @return Physical point (center of grid cell)
-     */
-    Point gridToPhys(const GridPoint& gp) const;
-    
-    /**
-     * @brief Get physical bounds of a grid cell
-     * @param gp Grid point
-     * @return Rectangle representing the grid cell
-     */
-    Rect getGridCellRect(const GridPoint& gp) const;
-
-    // ============ Grid State Queries ============
-    
-    /**
-     * @brief Check if grid point is valid (within bounds)
-     * @param gp Grid point to check
-     * @return True if valid, false otherwise
-     */
-    bool isValid(const GridPoint& gp) const;
-    
-    /**
-     * @brief Check if grid point is available for routing
-     * @param gp Grid point to check
-     * @return True if free for routing, false otherwise
-     */
+    // State Management
+    GridState getState(const GridPoint& gp) const;
+    void setState(const GridPoint& gp, GridState state);
     bool isFree(const GridPoint& gp) const;
     
-    /**
-     * @brief Get grid state at point
-     * @param gp Grid point
-     * @return Grid state
-     */
-    GridState getGridState(const GridPoint& gp) const;
-
-    // ============ Neighbor Queries ============
+    // Utility Methods
+    bool isValid(const GridPoint& gp) const;
+    void clear();
+    void markPath(const std::vector<GridPoint>& path);
     
-    /**
-     * @brief Get valid neighboring grid points
-     * @param gp Current grid point
-     * @return Vector of valid neighboring points
-     * @details For M1: horizontal neighbors only; For M2: vertical neighbors only
-     */
-    std::vector<GridPoint> getNeighbors(const GridPoint& gp) const;
-    
-    /**
-     * @brief Get via points (same x,y on different layers)
-     * @param gp Current grid point
-     * @return Vector of via points
-     */
-    std::vector<GridPoint> getViaPoints(const GridPoint& gp) const;
-
-    // ============ Statistics ============
-    
-    /**
-     * @brief Get routing statistics
-     * @return Map of state counts
-     */
-    std::unordered_map<GridState, size_t> getStatistics() const;
-    
-    /**
-     * @brief Calculate routing resource utilization
-     * @return Utilization percentage (0.0 to 1.0)
-     */
-    double getUtilization() const;
+    // Getters
+    int getGridWidth() const { return grid_width_; }
+    int getGridHeight() const { return grid_height_; }
+    int getNumLayers() const { return num_layers_; }
+    double getPitchX() const { return pitch_x_; }
+    double getPitchY() const { return pitch_y_; }
+    const Rect& getCoreArea() const { return core_area_; }
 
 private:
-    // Grid dimensions
-    int grid_width_;       ///< Number of grid cells in X direction
-    int grid_height_;      ///< Number of grid cells in Y direction
-    int num_layers_;       ///< Number of routing layers (fixed at 2)
-    
-    // Physical parameters
-    double pitch_x_;       ///< Horizontal routing pitch (micrometers)
-    double pitch_y_;       ///< Vertical routing pitch (micrometers)
-    Rect core_area_;       ///< Core area for routing
-    
-    // Grid data structure
-    std::vector<std::vector<std::vector<GridState>>> grid_;  ///< 3D grid [layer][y][x]
-    
-    // Helper methods
-    void resizeGrid();
-    void markObstacleCells(int x_start, int y_start, int x_end, int y_end, int layer);
+    // Helper Methods
+    int clamp(int value, int min_val, int max_val) const {
+        return std::max(min_val, std::min(value, max_val));
+    }
 };
 
 } // namespace mini

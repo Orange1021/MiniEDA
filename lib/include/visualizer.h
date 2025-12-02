@@ -9,12 +9,15 @@
 
 #include <string>
 #include <vector>
+#include "geometry.h"
 
 namespace mini {
 
 // Forward declarations to avoid circular dependency
 class PlacerDB;
+class RoutingGrid;
 struct RoutingResult;
+struct GridPoint;
 
 /**
  * @class Visualizer
@@ -54,10 +57,12 @@ public:
      * @brief Draw routed placement with routing paths
      * @param filename Output filename
      * @param routing_results Vector of routing results
+     * @param routing_grid Pointer to routing grid for coordinate conversion
      * @details Generates visualization showing cells and Manhattan routing
      */
     void drawRoutedPlacement(const std::string& filename, 
-                           const std::vector<RoutingResult>& routing_results);
+                           const std::vector<RoutingResult>& routing_results,
+                           RoutingGrid* routing_grid = nullptr);
 
 private:
     PlacerDB* db_;  // Placement database
@@ -75,10 +80,20 @@ private:
      * @param script_filename Python script filename
      * @param image_filename Output image filename
      * @param routing_results Vector of routing results
+     * @param routing_grid Pointer to routing grid for coordinate conversion
      */
     void generateRoutedPythonScript(const std::string& script_filename, 
                                    const std::string& image_filename,
-                                   const std::vector<RoutingResult>& routing_results);
+                                   const std::vector<RoutingResult>& routing_results,
+                                   RoutingGrid* routing_grid);
+
+    /**
+     * @brief Convert grid point to physical coordinates
+     * @param gp Grid point
+     * @param routing_grid Routing grid for conversion
+     * @return Physical coordinates
+     */
+    Point gridToPhys(const GridPoint& gp, RoutingGrid* routing_grid);
 
     /**
      * @brief Execute Python script

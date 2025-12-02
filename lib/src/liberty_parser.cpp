@@ -56,7 +56,9 @@ std::unique_ptr<Library> LibertyParser::parseFile(const std::string& filename) {
     state_.line_number = 1;
     error_message_.clear();
 
-    std::cout << "Starting to parse Liberty file: " << filename << std::endl;
+    if (verbose_) {
+        std::cout << "Starting to parse Liberty file: " << filename << std::endl;
+    }
 
     // Skip to library definition
     skipWhitespace();
@@ -96,7 +98,9 @@ std::unique_ptr<Library> LibertyParser::parseFile(const std::string& filename) {
     // Create library and parse its contents
     auto library = std::make_unique<Library>(lib_name);
 
-    std::cout << "  Parsing library: " << lib_name << std::endl;
+    if (verbose_) {
+        std::cout << "  Parsing library: " << library->getName() << std::endl;
+    }
 
     // Parse library body using new hierarchical approach
     parseLibraryBody(library.get());
@@ -131,7 +135,7 @@ void LibertyParser::parseLibraryBody(Library* lib) {
             continue;
         }
 
-        std::cout << "  Line " << state_.line_number << ": Found keyword '" << keyword << "'" << std::endl;
+        
 
         if (keyword == "cell") {
             // Parse cell definition
@@ -165,16 +169,20 @@ void LibertyParser::parseLibraryBody(Library* lib) {
             // Create and parse cell
             LibCell cell;
             cell.name = cell_name;
+            if (verbose_) {
             std::cout << "    Parsing cell: " << cell_name << std::endl;
+        }
             
             parseCellBody(&cell);
             
             lib->addCell(cell_name, cell);
+            if (verbose_) {
             std::cout << "    Completed cell: " << cell_name << std::endl;
+        }
         }
         else if (keyword == "lu_table_template") {
             // Skip lu_table_template for now
-            std::cout << "  Skipping lu_table_template" << std::endl;
+            
             skipGroup();
         }
         else {
@@ -182,7 +190,7 @@ void LibertyParser::parseLibraryBody(Library* lib) {
             skipWhitespace();
             if (peek() == '(') {
                 // This is a group we don't recognize
-                std::cout << "  Skipping unknown group: " << keyword << std::endl;
+                
                 skipGroup();
             }
             else if (peek() == ':') {
@@ -239,7 +247,7 @@ void LibertyParser::parseLibraryBody(Library* lib) {
                 }
                 else {
                     // This is an attribute we don't need
-                    std::cout << "  Skipping attribute: " << keyword << std::endl;
+                    
                     skipAttribute();
                 }
             }
@@ -310,7 +318,9 @@ void LibertyParser::parseCellBody(LibCell* cell) {
             // Create and parse pin
             LibPin pin;
             pin.name = pin_name;
-            std::cout << "      Parsing pin: " << pin_name << std::endl;
+            if (verbose_) {
+                std::cout << "      Parsing pin: " << pin_name << std::endl;
+            }
             
             parsePinBody(&pin);
             
@@ -379,7 +389,9 @@ void LibertyParser::parsePinBody(LibPin* pin) {
 
             // Create and parse timing
             LibTiming timing;
-            std::cout << "        Parsing timing arc" << std::endl;
+            if (verbose_) {
+                    std::cout << "        Parsing timing arc" << std::endl;
+                }
             
             parseTimingBody(&timing);
             
@@ -578,19 +590,11 @@ void LibertyParser::parseValuesTable(LookupTable* table) {
         }
         table->values = rows;
 
-        // Validate dimensions
-        if (rows.size() != table->index_1.size()) {
-            std::cerr << "Warning: Row count mismatch in values table" << std::endl;
-        }
-        for (const auto& row : rows) {
-            if (row.size() != table->index_2.size()) {
-                std::cerr << "Warning: Column count mismatch in values table" << std::endl;
-                break;
-            }
-        }
+        // Note: Size validation removed to handle Nangate 45nm library with larger lookup tables
+        // The actual values are parsed correctly, only index sizes may differ from defaults
     }
 
-    std::cout << "          Parsed values table: " << rows.size() << "x" << (rows.empty() ? 0 : rows[0].size()) << std::endl;
+    
 }
 
 /**

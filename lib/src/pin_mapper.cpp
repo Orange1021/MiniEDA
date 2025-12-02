@@ -11,7 +11,9 @@
 namespace mini {
 
 PinMapper::PinMapper(const LefLibrary& lef_lib, const MacroMapper& macro_mapper)
-    : lef_lib_(lef_lib), macro_mapper_(macro_mapper), debug_enabled_(false),
+    : lef_lib_(const_cast<LefLibrary&>(lef_lib)), 
+      macro_mapper_(const_cast<MacroMapper&>(macro_mapper)), 
+      debug_enabled_(false),
       successful_mappings_(0), total_attempts_(0) {
 }
 
@@ -226,10 +228,31 @@ const LefPort* PinMapper::tryHeuristicMapping(const LefMacro* macro, const std::
     return nullptr;
 }
 
-void PinMapper::debugLog(const std::string& message) const {
-    if (debug_enabled_) {
-        std::cout << "[PinMapper] " << message << std::endl;
+std::string PinMapper::getPinKey(Cell* cell, Pin* pin) const {
+    if (!cell) return "";
+
+    // 1. 统一处理 I/O 端口 (这是修复 VDD:Z 问题的核心)
+    if (cell->getType() == CellType::INPUT || cell->getType() == CellType::OUTPUT) {
+        // 对于 I/O，Key 永远只是 Cell 的名字 (如 "CK", "VDD")
+        return cell->getName();
     }
+
+    // 2. 统一处理标准单元
+    if (!pin) return "";
+    
+    // 获取物理引脚名 (Y -> ZN)
+    std::string phys_pin = const_cast<PinMapper*>(this)->getPhysicalPinName(cell->getTypeString(), pin->getName());
+    
+    // 组合 Key (U1:ZN)
+    std::string key = cell->getName() + ":" + phys_pin;
+    
+    return key;
 }
+
+void PinMapper::debugLog(const std::string& message) const {
+    
+}
+
+
 
 } // namespace mini

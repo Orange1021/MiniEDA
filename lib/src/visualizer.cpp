@@ -4,9 +4,12 @@
  */
 
 #include "visualizer.h"
+#include "../../apps/mini_placement/placer_db.h"
+#include "../../apps/mini_router/routing_grid.h"
 #include <fstream>
-#include <iostream>
 #include <sstream>
+#include <iomanip>
+#include <iostream>
 
 // Forward declaration and include for PlacerDB
 #include "../../apps/mini_placement/placer_db.h"
@@ -113,35 +116,38 @@ void Visualizer::exportToCSV(const std::string& filename) {
 }
 
 void Visualizer::drawRoutedPlacement(const std::string& filename, 
-                                   const std::vector<RoutingResult>& routing_results) {
-    if (!db_) return;
-
-    // Remove .png extension if present
-    std::string image_name = filename;
-    size_t dot_pos = image_name.find_last_of('.');
-    if (dot_pos != std::string::npos) {
-        image_name = image_name.substr(0, dot_pos);
-    }
+                                    const std::vector<RoutingResult>& routing_results,
+                                    RoutingGrid* routing_grid) {
+    std::string script_filename = filename + ".py";
+    std::string image_filename = filename + ".png";
     
-    // Create subdirectory for this run
-    std::string run_dir = "visualizations/routed";
-    std::string mkdir_cmd = "mkdir -p " + run_dir;
-    std::system(mkdir_cmd.c_str());
-
-    // Generate script filename and image path
-    std::string script_filename = run_dir + "/plot_" + image_name + ".py";
-    std::string image_path = run_dir + "/" + image_name + ".png";
-    
-    // Generate Python script
-    generateRoutedPythonScript(script_filename, image_path, routing_results);
-    
-    // Execute the script
+    generateRoutedPythonScript(script_filename, image_filename, routing_results, routing_grid);
     executePythonScript(script_filename);
 }
 
+Point Visualizer::gridToPhys(const GridPoint& gp, RoutingGrid* routing_grid) {
+    if (!routing_grid) {
+        return Point(0.0, 0.0);  // Fallback
+    }
+    
+    // Convert grid coordinates to physical coordinates
+    // This is the inverse of physToGrid in RoutingGrid
+    const Rect& core_area = routing_grid->getCoreArea();
+    double pitch_x = routing_grid->getPitchX();
+    double pitch_y = routing_grid->getPitchY();
+    
+    // Grid point to physical coordinates (remove +0.5 offset to match RoutingGrid::physToGrid)
+    // Grid point represents the intersection, not the cell center
+    double phys_x = core_area.x_min + gp.x * pitch_x;
+    double phys_y = core_area.y_min + gp.y * pitch_y;
+    
+    return Point(phys_x, phys_y);
+}
+
 void Visualizer::generateRoutedPythonScript(const std::string& script_filename, 
-                                           const std::string& image_filename,
-                                           const std::vector<RoutingResult>& routing_results) {
+                                            const std::string& image_filename,
+                                            const std::vector<RoutingResult>& routing_results,
+                                            RoutingGrid* routing_grid) {
     std::ofstream script_file(script_filename);
     if (!script_file.is_open()) {
         std::cerr << "Error: Cannot create Python script: " << script_filename << std::endl;
@@ -179,36 +185,39 @@ void Visualizer::generateRoutedPythonScript(const std::string& script_filename,
     // Draw routing paths
     script_file << "# Draw routing paths\n";
     for (const auto& result : routing_results) {
-        if (!result.success || result.path.empty()) continue;
+        if (!result.success || result.segments.empty()) continue;
         
-        const auto& path = result.path;
-        script_file << "# Net path (wirelength: " << result.wirelength << " um, vias: " << result.num_vias << ")\n";
+        script_file << "# Net paths (wirelength: " << result.total_wirelength << " units, vias: " << result.total_vias << ")\n";
         
-        // Draw segments
-        for (size_t i = 0; i < path.size() - 1; ++i) {
-            const GridPoint& curr = path[i];
-            const GridPoint& next = path[i + 1];
-            
-            // Convert grid coordinates to physical coordinates
-            double x1 = core.x_min + (curr.x + 0.5) * 0.19;  // Assuming 0.19um pitch
-            double y1 = core.y_min + (curr.y + 0.5) * 0.19;
-            double x2 = core.x_min + (next.x + 0.5) * 0.19;
-            double y2 = core.y_min + (next.y + 0.5) * 0.19;
-            
-            // Determine color based on layer
-            std::string color;
-            if (curr.layer == 0) {
-                color = "blue";    // M1 - horizontal
-            } else {
-                color = "red";     // M2 - vertical
-            }
-            
-            script_file << "plt.plot([" << x1 << ", " << x2 << "], [" << y1 << ", " << y2 << "], ";
-            script_file << "color='" << color << "', linewidth=0.5)\n";
-            
-            // Draw via if layer changes
-            if (curr.layer != next.layer) {
-                script_file << "plt.plot(" << x1 << ", " << y1 << ", 'ko', markersize=2)\n";
+        // Draw each segment
+        for (const auto& path : result.segments) {
+
+        // Draw segments in this path
+            for (size_t i = 0; i < path.size() - 1; ++i) {
+                const GridPoint& curr = path[i];
+                const GridPoint& next = path[i + 1];
+
+                // Convert grid coordinates to physical coordinates using helper method
+                Point phys_curr = gridToPhys(curr, routing_grid);
+                Point phys_next = gridToPhys(next, routing_grid);
+
+                // Determine color based on layer
+                std::string color;
+                if (curr.layer == 0) {
+                    color = "blue";    // M1 - horizontal
+                } else {
+                    color = "red";     // M2 - vertical
+                }
+
+                script_file << "plt.plot([" << phys_curr.x << ", " << phys_next.x << "], ["
+                             << phys_curr.y << ", " << phys_next.y << "], ";
+                script_file << "color='" << color << "', linewidth=1.0)\n";
+
+                // Draw via if layer changes
+                if (curr.layer != next.layer) {
+                    script_file << "plt.scatter(" << phys_curr.x << ", " << phys_curr.y
+                                 << ", color='black', marker='o', s=10, zorder=5)\n";
+                }
             }
         }
         script_file << "\n";

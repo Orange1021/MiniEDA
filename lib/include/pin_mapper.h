@@ -11,7 +11,10 @@
 #include <string>
 #include <vector>
 #include <unordered_map>
+#include <memory>
 #include "lef_parser.h"
+#include "liberty.h"
+#include "cell.h"
 
 // Forward declaration to avoid circular dependency
 namespace mini {
@@ -77,6 +80,12 @@ public:
     void setDebugMode(bool enabled) { debug_enabled_ = enabled; }
 
     /**
+     * @brief Debug logging helper
+     * @param message Debug message to print
+     */
+    void debugLog(const std::string& message) const;
+
+    /**
      * @brief Get mapping statistics
      * @return Pair of (successful_mappings, total_attempts)
      */
@@ -87,14 +96,22 @@ public:
      */
     void resetStats() { successful_mappings_ = 0; total_attempts_ = 0; }
 
+public:
+    // [新增] 终极 Key 生成器
+    // 直接传入 Cell 和 Pin 对象，由 PinMapper 内部统一判断它是 I/O 还是 StdCell
+    std::string getPinKey(Cell* cell, Pin* pin) const;
+
 private:
-    const LefLibrary& lef_lib_;
-    const MacroMapper& macro_mapper_;
-    bool debug_enabled_;
+    // Core data
+    LefLibrary& lef_lib_;
+    MacroMapper& macro_mapper_;
+    
+    // Debug flag
+    bool debug_enabled_ = false;
     
     // Statistics
-    mutable size_t successful_mappings_;
-    mutable size_t total_attempts_;
+    size_t successful_mappings_ = 0;
+    size_t total_attempts_ = 0;
 
     /**
      * @brief Try direct pin name match in LEF macro
@@ -112,11 +129,7 @@ private:
      */
     const LefPort* tryHeuristicMapping(const LefMacro* macro, const std::string& netlist_pin_name) const;
 
-    /**
-     * @brief Debug logging helper
-     * @param message Debug message to print
-     */
-    void debugLog(const std::string& message) const;
+    
 };
 
 } // namespace mini

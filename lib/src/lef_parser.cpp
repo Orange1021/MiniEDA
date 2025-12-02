@@ -83,9 +83,6 @@ bool LefParser::nextToken(std::string& token) {
         if (c == ';' || c == '{' || c == '}') {
             token = std::string(1, c);
             column_number_++;
-            if (verbose_) {
-                std::cout << "Token: '" << token << "' at line " << line_number_ << std::endl;
-            }
             return true; // Return separator as token
         }
         file_.unget(); // Not a separator, put it back
@@ -108,9 +105,7 @@ bool LefParser::nextToken(std::string& token) {
         return false;
     }
     
-    if (verbose_) {
-        std::cout << "Token: '" << token << "' at line " << line_number_ << std::endl;
-    }
+    
     
     return true;
 }
@@ -263,20 +258,14 @@ Rect LefParser::parsePolygon() {
         max_x = std::max(max_x, x);
         max_y = std::max(max_y, y);
         
-        if (verbose_) {
-            std::cout << "    POLYGON vertex " << vertex_count << ": (" << x << ", " << y << ")" << std::endl;
-        }
+        
     }
     
     if (vertex_count < 3) {
         error("POLYGON must have at least 3 vertices");
     }
     
-    if (verbose_) {
-        std::cout << "    Parsed POLYGON with " << vertex_count << " vertices" << std::endl;
-        std::cout << "    Bounding box: (" << min_x << "," << min_y 
-                  << ") to (" << max_x << "," << max_y << ")" << std::endl;
-    }
+    
     
     return Rect{min_x, min_y, max_x, max_y};
 }
@@ -287,9 +276,7 @@ void LefParser::parseMacro(LefLibrary& library) {
         error("Expected macro name after MACRO");
     }
     
-    if (verbose_) {
-        std::cout << "Parsing macro: " << macro_name << std::endl;
-    }
+    
     
     LefMacro macro(macro_name, 0.0, 0.0);
     
@@ -297,7 +284,7 @@ void LefParser::parseMacro(LefLibrary& library) {
     std::string token;
     while (nextToken(token)) {
         if (verbose_) {
-            std::cout << "  Macro token: '" << token << "'" << std::endl;
+            
         }
         
         if (token == "END") {
@@ -316,9 +303,7 @@ void LefParser::parseMacro(LefLibrary& library) {
             parsePin(macro);
         } else if (token == "OBS") {
             // Skip OBS block - ends with bare END, not END OBS
-            if (verbose_) {
-                std::cout << "    Skipping OBS block" << std::endl;
-            }
+            
             std::string skip_token;
             while (nextToken(skip_token)) {
                 if (skip_token == "END") {
@@ -358,10 +343,7 @@ void LefParser::parseMacro(LefLibrary& library) {
     
     library.addMacro(macro);
     
-    if (verbose_) {
-        std::cout << "Added macro: " << macro_name << " (" << macro.width 
-                  << " x " << macro.height << ") with " << macro.pins.size() << " pins" << std::endl;
-    }
+    
 }
 
 void LefParser::parseSize(double& width, double& height) {
@@ -370,9 +352,7 @@ void LefParser::parseSize(double& width, double& height) {
     height = parseNumber();
     consumeSemicolon();
     
-    if (verbose_) {
-        std::cout << "  Size: " << width << " x " << height << std::endl;
-    }
+    
 }
 
 void LefParser::parsePin(LefMacro& macro) {
@@ -381,9 +361,7 @@ void LefParser::parsePin(LefMacro& macro) {
         error("Expected pin name after PIN");
     }
     
-    if (verbose_) {
-        std::cout << "  Parsing pin: " << pin_name << std::endl;
-    }
+    
     
     LefPort port;
     
@@ -429,18 +407,13 @@ void LefParser::parsePin(LefMacro& macro) {
     
     macro.addPin(pin_name, port);
     
-    if (verbose_) {
-        std::cout << "    Added pin with " << port.getRects().size() << " rectangles" << std::endl;
-    }
+    
 }
 
 void LefParser::parsePort(LefPort& port) {
     // Parse port content until END
     std::string token;
     while (nextToken(token)) {
-        if (verbose_) {
-            std::cout << "    PORT token: '" << token << "'" << std::endl;
-        }
         
         if (token == "END") {
             // Check if next token is PORT (optional)
@@ -463,19 +436,13 @@ void LefParser::parsePort(LefPort& port) {
             Rect rect = parseRect();
             port.addRect(rect);
             
-            if (verbose_) {
-                std::cout << "      Added RECT: (" << rect.x_min << "," << rect.y_min 
-                          << ") to (" << rect.x_max << "," << rect.y_max << ")" << std::endl;
-            }
+            
         } else if (token == "POLYGON") {
             // Parse POLYGON statement and convert to bounding box
             Rect rect = parsePolygon();
             port.addRect(rect);
             
-            if (verbose_) {
-                std::cout << "      Added POLYGON as RECT: (" << rect.x_min << "," << rect.y_min 
-                          << ") to (" << rect.x_max << "," << rect.y_max << ")" << std::endl;
-            }
+            
         } else {
             // Skip unknown statements
             skipStatement();
@@ -541,9 +508,7 @@ LefLibrary LefParser::parse() {
         }
     }
     
-    if (verbose_) {
-        std::cout << "Successfully parsed " << library.getMacroCount() << " macros" << std::endl;
-    }
+    
     
     return library;
 }

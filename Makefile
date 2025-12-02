@@ -28,8 +28,8 @@ STA_OBJS := $(patsubst $(STA_DIR)/%.cpp, $(BUILD_LIB_DIR)/sta_%.o, $(STA_SRCS))
 PLACER_SRCS := $(wildcard $(PLACER_DIR)/*.cpp)
 PLACER_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/placer_%.o, $(PLACER_SRCS))
 
-# MiniRouter 源文件
-ROUTER_SRCS := $(wildcard $(ROUTER_DIR)/*.cpp)
+# MiniRouter 源文件 (排除测试文件)
+ROUTER_SRCS := $(filter-out $(ROUTER_DIR)/test_%.cpp, $(wildcard $(ROUTER_DIR)/*.cpp))
 ROUTER_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/router_%.o, $(ROUTER_SRCS))
 
 # Integrated Flow 源文件
