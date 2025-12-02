@@ -12,8 +12,9 @@
 
 namespace mini {
 
-// Forward declaration to avoid circular dependency
+// Forward declarations to avoid circular dependency
 class PlacerDB;
+struct RoutingResult;
 
 /**
  * @class Visualizer
@@ -49,6 +50,15 @@ public:
      */
     void exportToCSV(const std::string& filename);
 
+    /**
+     * @brief Draw routed placement with routing paths
+     * @param filename Output filename
+     * @param routing_results Vector of routing results
+     * @details Generates visualization showing cells and Manhattan routing
+     */
+    void drawRoutedPlacement(const std::string& filename, 
+                           const std::vector<RoutingResult>& routing_results);
+
 private:
     PlacerDB* db_;  // Placement database
 
@@ -59,6 +69,16 @@ private:
      */
     void generatePythonScript(const std::string& script_filename, 
                             const std::string& image_filename);
+
+    /**
+     * @brief Generate Python script for routed layout
+     * @param script_filename Python script filename
+     * @param image_filename Output image filename
+     * @param routing_results Vector of routing results
+     */
+    void generateRoutedPythonScript(const std::string& script_filename, 
+                                   const std::string& image_filename,
+                                   const std::vector<RoutingResult>& routing_results);
 
     /**
      * @brief Execute Python script

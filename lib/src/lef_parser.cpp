@@ -8,6 +8,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <limits>
 
 namespace mini {
 
@@ -230,6 +231,56 @@ Rect LefParser::parseRect() {
     return Rect{x1, y1, x2, y2};
 }
 
+Rect LefParser::parsePolygon() {
+    // Parse polygon coordinates and convert to bounding box
+    double min_x = std::numeric_limits<double>::infinity();
+    double min_y = std::numeric_limits<double>::infinity();
+    double max_x = -std::numeric_limits<double>::infinity();
+    double max_y = -std::numeric_limits<double>::infinity();
+    
+    std::string token;
+    int vertex_count = 0;
+    
+    // Read coordinates until we hit semicolon
+    while (nextToken(token)) {
+        if (token == ";") {
+            break;  // End of polygon definition
+        }
+        
+        // Parse X coordinate
+        double x = std::stod(token);
+        if (!nextToken(token)) {
+            error("Expected Y coordinate after X coordinate in POLYGON");
+        }
+        
+        // Parse Y coordinate  
+        double y = std::stod(token);
+        vertex_count++;
+        
+        // Update bounding box
+        min_x = std::min(min_x, x);
+        min_y = std::min(min_y, y);
+        max_x = std::max(max_x, x);
+        max_y = std::max(max_y, y);
+        
+        if (verbose_) {
+            std::cout << "    POLYGON vertex " << vertex_count << ": (" << x << ", " << y << ")" << std::endl;
+        }
+    }
+    
+    if (vertex_count < 3) {
+        error("POLYGON must have at least 3 vertices");
+    }
+    
+    if (verbose_) {
+        std::cout << "    Parsed POLYGON with " << vertex_count << " vertices" << std::endl;
+        std::cout << "    Bounding box: (" << min_x << "," << min_y 
+                  << ") to (" << max_x << "," << max_y << ")" << std::endl;
+    }
+    
+    return Rect{min_x, min_y, max_x, max_y};
+}
+
 void LefParser::parseMacro(LefLibrary& library) {
     std::string macro_name;
     if (!nextToken(macro_name)) {
@@ -417,8 +468,14 @@ void LefParser::parsePort(LefPort& port) {
                           << ") to (" << rect.x_max << "," << rect.y_max << ")" << std::endl;
             }
         } else if (token == "POLYGON") {
-            // Skip POLYGON statements (complex shapes)
-            skipStatement();
+            // Parse POLYGON statement and convert to bounding box
+            Rect rect = parsePolygon();
+            port.addRect(rect);
+            
+            if (verbose_) {
+                std::cout << "      Added POLYGON as RECT: (" << rect.x_min << "," << rect.y_min 
+                          << ") to (" << rect.x_max << "," << rect.y_max << ")" << std::endl;
+            }
         } else {
             // Skip unknown statements
             skipStatement();

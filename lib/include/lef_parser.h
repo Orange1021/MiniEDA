@@ -203,6 +203,7 @@ private:
     void skipToEndKeyword(const std::string& keyword);
     double parseNumber();
     Rect parseRect();
+    Rect parsePolygon();  // Convert POLYGON to bounding box
     
     // LEF parsing methods
     void parseLefLibrary();

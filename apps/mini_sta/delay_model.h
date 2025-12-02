@@ -8,6 +8,7 @@
 #define MINI_DELAY_MODEL_H
 
 #include "../../lib/include/liberty.h"
+#include "cell_mapper.h"
 
 namespace mini {
 
@@ -15,7 +16,6 @@ namespace mini {
 class Cell;
 class Net;
 class Library;
-class CellMapper;
 
 /**
  * @class DelayModel

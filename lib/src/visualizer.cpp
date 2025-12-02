@@ -10,6 +10,7 @@
 
 // Forward declaration and include for PlacerDB
 #include "../../apps/mini_placement/placer_db.h"
+#include "../../apps/mini_router/maze_router.h"
 
 namespace mini {
 
@@ -109,6 +110,138 @@ void Visualizer::exportToCSV(const std::string& filename) {
 
     csv_file.close();
     std::cout << "Exported placement to CSV: " << filename << std::endl;
+}
+
+void Visualizer::drawRoutedPlacement(const std::string& filename, 
+                                   const std::vector<RoutingResult>& routing_results) {
+    if (!db_) return;
+
+    // Remove .png extension if present
+    std::string image_name = filename;
+    size_t dot_pos = image_name.find_last_of('.');
+    if (dot_pos != std::string::npos) {
+        image_name = image_name.substr(0, dot_pos);
+    }
+    
+    // Create subdirectory for this run
+    std::string run_dir = "visualizations/routed";
+    std::string mkdir_cmd = "mkdir -p " + run_dir;
+    std::system(mkdir_cmd.c_str());
+
+    // Generate script filename and image path
+    std::string script_filename = run_dir + "/plot_" + image_name + ".py";
+    std::string image_path = run_dir + "/" + image_name + ".png";
+    
+    // Generate Python script
+    generateRoutedPythonScript(script_filename, image_path, routing_results);
+    
+    // Execute the script
+    executePythonScript(script_filename);
+}
+
+void Visualizer::generateRoutedPythonScript(const std::string& script_filename, 
+                                           const std::string& image_filename,
+                                           const std::vector<RoutingResult>& routing_results) {
+    std::ofstream script_file(script_filename);
+    if (!script_file.is_open()) {
+        std::cerr << "Error: Cannot create Python script: " << script_filename << std::endl;
+        return;
+    }
+
+    // Get core area
+    const Rect& core = db_->getCoreArea();
+
+    script_file << "#!/usr/bin/env python3\n";
+    script_file << "import matplotlib.pyplot as plt\n";
+    script_file << "import matplotlib.patches as patches\n\n";
+    script_file << "# Create figure and axis\n";
+    script_file << "fig, ax = plt.subplots(1, 1, figsize=(12, 10))\n\n";
+
+    // Draw core area boundary
+    script_file << "# Draw core area boundary\n";
+    script_file << "core_rect = patches.Rectangle((" << core.x_min << ", " << core.y_min << "), ";
+    script_file << core.width() << ", " << core.height() << ", ";
+    script_file << "linewidth=2, edgecolor='black', facecolor='none')\n";
+    script_file << "ax.add_patch(core_rect)\n\n";
+
+    // Draw cells (gray background for routed layout)
+    script_file << "# Draw cells\n";
+    for (Cell* cell : db_->getAllCells()) {
+        const auto& info = db_->getCellInfo(cell);
+        
+        script_file << "# Cell: " << cell->getName() << "\n";
+        script_file << "cell_rect = patches.Rectangle((" << info.x << ", " << info.y << "), ";
+        script_file << info.width << ", " << info.height << ", ";
+        script_file << "linewidth=0.5, edgecolor='gray', facecolor='lightgray', alpha=0.6)\n";
+        script_file << "ax.add_patch(cell_rect)\n";
+    }
+
+    // Draw routing paths
+    script_file << "# Draw routing paths\n";
+    for (const auto& result : routing_results) {
+        if (!result.success || result.path.empty()) continue;
+        
+        const auto& path = result.path;
+        script_file << "# Net path (wirelength: " << result.wirelength << " um, vias: " << result.num_vias << ")\n";
+        
+        // Draw segments
+        for (size_t i = 0; i < path.size() - 1; ++i) {
+            const GridPoint& curr = path[i];
+            const GridPoint& next = path[i + 1];
+            
+            // Convert grid coordinates to physical coordinates
+            double x1 = core.x_min + (curr.x + 0.5) * 0.19;  // Assuming 0.19um pitch
+            double y1 = core.y_min + (curr.y + 0.5) * 0.19;
+            double x2 = core.x_min + (next.x + 0.5) * 0.19;
+            double y2 = core.y_min + (next.y + 0.5) * 0.19;
+            
+            // Determine color based on layer
+            std::string color;
+            if (curr.layer == 0) {
+                color = "blue";    // M1 - horizontal
+            } else {
+                color = "red";     // M2 - vertical
+            }
+            
+            script_file << "plt.plot([" << x1 << ", " << x2 << "], [" << y1 << ", " << y2 << "], ";
+            script_file << "color='" << color << "', linewidth=0.5)\n";
+            
+            // Draw via if layer changes
+            if (curr.layer != next.layer) {
+                script_file << "plt.plot(" << x1 << ", " << y1 << ", 'ko', markersize=2)\n";
+            }
+        }
+        script_file << "\n";
+    }
+
+    // Set plot properties
+    script_file << "# Set plot properties\n";
+    script_file << "ax.set_aspect('equal')\n";
+    script_file << "ax.set_xlim(" << (core.x_min - 10) << ", " << (core.x_max + 10) << ")\n";
+    script_file << "ax.set_ylim(" << (core.y_min - 10) << ", " << (core.y_max + 10) << ")\n";
+    script_file << "ax.set_xlabel('X (micrometers)')\n";
+    script_file << "ax.set_ylabel('Y (micrometers)')\n";
+    script_file << "ax.set_title('MiniRouter - " << image_filename << "')\n";
+    script_file << "ax.grid(True, alpha=0.3)\n\n";
+
+    // Add legend
+    script_file << "# Add legend\n";
+    script_file << "from matplotlib.lines import Line2D\n";
+    script_file << "legend_elements = [\n";
+    script_file << "    Line2D([0], [0], color='blue', linewidth=1, label='Metal 1 (Horizontal)'),\n";
+    script_file << "    Line2D([0], [0], color='red', linewidth=1, label='Metal 2 (Vertical)'),\n";
+    script_file << "    Line2D([0], [0], marker='o', color='w', markerfacecolor='k', markersize=4, label='Via')\n";
+    script_file << "]\n";
+    script_file << "ax.legend(handles=legend_elements, loc='upper right')\n\n";
+
+    // Save the plot
+    script_file << "# Save the plot\n";
+    script_file << "plt.tight_layout()\n";
+    script_file << "plt.savefig('" << image_filename << "', dpi=150, bbox_inches='tight')\n";
+    script_file << "plt.close()\n\n";
+    script_file << "print(\"Routed plot saved as: " << image_filename << "\")\n";
+
+    script_file.close();
 }
 
 void Visualizer::generatePythonScript(const std::string& script_filename, 

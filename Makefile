@@ -14,6 +14,7 @@ BUILD_BIN_DIR := build/bin
 # 应用目录
 STA_DIR := apps/mini_sta
 PLACER_DIR := apps/mini_placement
+ROUTER_DIR := apps/mini_router
 
 # 核心库源文件
 LIB_SRCS := $(wildcard $(LIB_SRC_DIR)/*.cpp)
@@ -27,6 +28,10 @@ STA_OBJS := $(patsubst $(STA_DIR)/%.cpp, $(BUILD_LIB_DIR)/sta_%.o, $(STA_SRCS))
 PLACER_SRCS := $(wildcard $(PLACER_DIR)/*.cpp)
 PLACER_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/placer_%.o, $(PLACER_SRCS))
 
+# MiniRouter 源文件
+ROUTER_SRCS := $(wildcard $(ROUTER_DIR)/*.cpp)
+ROUTER_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/router_%.o, $(ROUTER_SRCS))
+
 # Integrated Flow 源文件
 FLOW_SRCS := apps/main_flow.cpp
 FLOW_OBJS := $(patsubst apps/%.cpp, $(BUILD_LIB_DIR)/flow_%.o, $(FLOW_SRCS))
@@ -38,11 +43,12 @@ FILTERED_PLACER_OBJS := $(filter-out $(BUILD_LIB_DIR)/placer_main_placer.o, $(PL
 # 可执行文件
 STA_BIN := $(BUILD_BIN_DIR)/mini_sta
 PLACER_BIN := $(BUILD_BIN_DIR)/mini_placement
+ROUTER_BIN := $(BUILD_BIN_DIR)/mini_router
 FLOW_BIN := $(BUILD_BIN_DIR)/mini_flow
 
 # 默认目标：编译所有
 .PHONY: all
-all: $(STA_BIN) $(PLACER_BIN) $(FLOW_BIN)
+all: $(STA_BIN) $(PLACER_BIN) $(ROUTER_BIN) $(FLOW_BIN)
 
 # 编译核心库目标文件
 $(BUILD_LIB_DIR)/%.o: $(LIB_SRC_DIR)/%.cpp
@@ -59,6 +65,11 @@ $(BUILD_LIB_DIR)/placer_%.o: $(PLACER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# 编译 MiniRouter 目标文件
+$(BUILD_LIB_DIR)/router_%.o: $(ROUTER_DIR)/%.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # 链接 MiniSTA 可执行文件
 $(STA_BIN): $(LIB_OBJS) $(STA_OBJS)
 	@mkdir -p $(BUILD_BIN_DIR)
@@ -70,6 +81,12 @@ $(PLACER_BIN): $(LIB_OBJS) $(PLACER_OBJS)
 	@mkdir -p $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "MiniPlacement 编译完成: $@"
+
+# 链接 MiniRouter 可执行文件
+$(ROUTER_BIN): $(LIB_OBJS) $(ROUTER_OBJS) $(FILTERED_PLACER_OBJS)
+	@mkdir -p $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
+	@echo "MiniRouter 编译完成: $@"
 
 # 编译 Integrated Flow 目标文件
 $(BUILD_LIB_DIR)/flow_%.o: apps/%.cpp
@@ -89,6 +106,10 @@ sta: $(STA_BIN)
 # 只编译 MiniPlacement
 .PHONY: placement
 placement: $(PLACER_BIN)
+
+# 只编译 MiniRouter
+.PHONY: router
+router: $(ROUTER_BIN)
 
 # 只编译 Integrated Flow
 .PHONY: flow
@@ -110,6 +131,11 @@ run-sta: $(STA_BIN)
 run-placement: $(PLACER_BIN)
 	$(PLACER_BIN) $(ARGS)
 
+# 运行 MiniRouter (可以通过 ARGS 传递参数)
+.PHONY: run-router
+run-router: $(ROUTER_BIN)
+	$(ROUTER_BIN) $(ARGS)
+
 # 显示帮助信息
 .PHONY: help
 help:
@@ -117,7 +143,10 @@ help:
 	@echo "  all         - 编译所有应用程序 (默认)"
 	@echo "  sta         - 只编译 MiniSTA"
 	@echo "  placement   - 只编译 MiniPlacement"
+	@echo "  router      - 只编译 MiniRouter"
+	@echo "  flow        - 只编译 MiniFlow"
 	@echo "  clean       - 清理所有编译产物"
 	@echo "  run-sta     - 运行 MiniSTA (使用 ARGS=... 传递参数)"
 	@echo "  run-placement - 运行 MiniPlacement (使用 ARGS=... 传递参数)"
+	@echo "  run-router  - 运行 MiniRouter (使用 ARGS=... 传递参数)"
 	@echo "  help        - 显示此帮助信息"
