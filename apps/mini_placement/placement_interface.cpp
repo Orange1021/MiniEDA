@@ -4,7 +4,7 @@
  */
 
 #include "placement_interface.h"
-#include "placer_db.h"
+#include "../../lib/include/placer_db.h"
 #include "placer_engine.h"
 #include "macro_mapper.h"
 #include "../../lib/include/visualizer.h"

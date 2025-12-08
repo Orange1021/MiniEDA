@@ -97,8 +97,8 @@ public:
     void resetStats() { successful_mappings_ = 0; total_attempts_ = 0; }
 
 public:
-    // [新增] 终极 Key 生成器
-    // 直接传入 Cell 和 Pin 对象，由 PinMapper 内部统一判断它是 I/O 还是 StdCell
+    // [New] Ultimate Key generator
+    // Directly pass Cell and Pin objects, PinMapper internally determines if it's I/O or StdCell
     std::string getPinKey(Cell* cell, Pin* pin) const;
 
 private:

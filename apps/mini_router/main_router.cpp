@@ -4,6 +4,7 @@
  */
 
 #include "maze_router.h"
+#include "routing_interface.h"
 #include "../../lib/include/netlist_db.h"
 #include "../../lib/include/verilog_parser.h"
 #include "../../lib/include/liberty_parser.h"
@@ -13,7 +14,7 @@
 #include "../../lib/include/app_config.h"
 #include "../../lib/include/arg_parser.h"
 #include "../../apps/mini_placement/placement_interface.h"
-#include "../../apps/mini_placement/placer_db.h"
+#include "../../lib/include/placer_db.h"
 #include "../../apps/mini_placement/macro_mapper.h"
 #include <iostream>
 #include <memory>
@@ -235,7 +236,7 @@ int main(int argc, char* argv[]) {
         auto start_time = std::chrono::high_resolution_clock::now();
         
         // ====================================================================
-        // Phase 1: 加载与配置 (Setup)
+        // Phase 1: Loading and Configuration (Setup)
         // ====================================================================
         std::cout << "\n=== Phase 1: Loading and Configuration ===" << std::endl;
         
@@ -312,7 +313,7 @@ int main(int argc, char* argv[]) {
     }
         
         // ====================================================================
-        // Phase 2: 布局 (Placement)
+        // Phase 2: Placement
         // ====================================================================
         std::cout << "\n=== Phase 2: Placement ===" << std::endl;
         
@@ -335,7 +336,7 @@ int main(int argc, char* argv[]) {
         std::cout << "  Placement completed successfully" << std::endl;
         
         // ====================================================================
-        // Phase 3: 布线准备 (Routing Prep) - CRITICAL data bridge
+        // Phase 3: Routing Preparation (Routing Prep) - CRITICAL data bridge
         // ====================================================================
         std::cout << "\n=== Phase 3: Routing Preparation ===" << std::endl;
         
@@ -381,7 +382,7 @@ int main(int argc, char* argv[]) {
         std::cout << "    Added " << obstacle_count << " cell obstacles on Layer 0" << std::endl;
 
         // ====================================================================
-        // Phase 4: 执行与可视化 (Execution)
+        // Phase 4: Execution and Visualization
         // ====================================================================
         std::cout << "\n=== Phase 4: Routing Execution ===" << std::endl;
         

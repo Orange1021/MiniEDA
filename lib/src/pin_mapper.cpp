@@ -231,19 +231,19 @@ const LefPort* PinMapper::tryHeuristicMapping(const LefMacro* macro, const std::
 std::string PinMapper::getPinKey(Cell* cell, Pin* pin) const {
     if (!cell) return "";
 
-    // 1. 统一处理 I/O 端口 (这是修复 VDD:Z 问题的核心)
+    // 1. Unified handling of I/O ports (core fix for VDD:Z issue)
     if (cell->getType() == CellType::INPUT || cell->getType() == CellType::OUTPUT) {
-        // 对于 I/O，Key 永远只是 Cell 的名字 (如 "CK", "VDD")
+        // For I/O, Key is always just the Cell name (e.g., "CK", "VDD")
         return cell->getName();
     }
 
-    // 2. 统一处理标准单元
+    // 2. Unified handling of standard cells
     if (!pin) return "";
     
-    // 获取物理引脚名 (Y -> ZN)
+    // Get physical pin name (Y -> ZN)
     std::string phys_pin = const_cast<PinMapper*>(this)->getPhysicalPinName(cell->getTypeString(), pin->getName());
     
-    // 组合 Key (U1:ZN)
+    // Combine Key (U1:ZN)
     std::string key = cell->getName() + ":" + phys_pin;
     
     return key;

@@ -8,7 +8,7 @@
 #define MINI_PLACER_ENGINE_H
 
 #include "../../lib/include/visualizer.h"
-#include "placer_db.h"
+#include "../../lib/include/placer_db.h"
 
 namespace mini {
 

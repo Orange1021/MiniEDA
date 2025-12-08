@@ -18,7 +18,7 @@
 #include "../../lib/include/visualizer.h"
 #include "../../lib/include/app_config.h"
 #include "../../lib/include/arg_parser.h"
-#include "placer_db.h"
+#include "../../lib/include/placer_db.h"
 #include "placer_engine.h"
 #include "macro_mapper.h"
 

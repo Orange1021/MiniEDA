@@ -1,168 +1,188 @@
-# EDA 后端工具链项目 Makefile
+# EDA Backend Toolchain Project Makefile
 
-# 编译器和编译选项
+# Compiler and compilation options
 CXX := g++
 CXXFLAGS := -std=c++17 -Wall -Wextra -I./lib/include
 LDFLAGS :=
 
-# 目录定义
+# Directory definitions
 LIB_SRC_DIR := lib/src
 LIB_INC_DIR := lib/include
 BUILD_LIB_DIR := build/lib
 BUILD_BIN_DIR := build/bin
 
-# 应用目录
+# Application directories
 STA_DIR := apps/mini_sta
 PLACER_DIR := apps/mini_placement
 ROUTER_DIR := apps/mini_router
 
-# 核心库源文件
+# Core library source files
 LIB_SRCS := $(wildcard $(LIB_SRC_DIR)/*.cpp)
 LIB_OBJS := $(patsubst $(LIB_SRC_DIR)/%.cpp, $(BUILD_LIB_DIR)/%.o, $(LIB_SRCS))
 
-# 额外需要的应用源文件（被lib依赖）
-APP_LIB_SRCS := $(PLACER_DIR)/macro_mapper.cpp $(PLACER_DIR)/placer_db.cpp
-APP_LIB_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/lib_%.o, $(APP_LIB_SRCS))
+# Additional application source files (dependencies for lib)
+APP_LIB_SRCS := $(STA_DIR)/cell_mapper.cpp $(STA_DIR)/delay_model.cpp $(STA_DIR)/sta_engine.cpp \
+               $(STA_DIR)/timing_checks.cpp $(STA_DIR)/timing_constraints.cpp $(STA_DIR)/timing_graph.cpp \
+               $(STA_DIR)/timing_path.cpp $(STA_DIR)/timing_report.cpp \
+               $(PLACER_DIR)/placer_engine.cpp $(PLACER_DIR)/macro_mapper.cpp \
+               $(ROUTER_DIR)/routing_grid.cpp $(ROUTER_DIR)/maze_router.cpp
 
-# 更新LIB_OBJS包含应用库文件
+# Additional dependencies for STA (needs MacroMapper)
+STA_DEPS := $(BUILD_LIB_DIR)/lib_macro_mapper.o
+
+# Build application library object files for placement
+PLACER_APP_LIB_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/lib_%.o, $(filter $(PLACER_DIR)/%.cpp,$(APP_LIB_SRCS)))
+
+# Build application library object files for router
+ROUTER_APP_LIB_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/lib_%.o, $(filter $(ROUTER_DIR)/%.cpp,$(APP_LIB_SRCS)))
+
+# Build application library object files for STA
+STA_APP_LIB_OBJS := $(patsubst $(STA_DIR)/%.cpp, $(BUILD_LIB_DIR)/lib_%.o, $(filter $(STA_DIR)/%.cpp,$(APP_LIB_SRCS)))
+
+# All application library objects
+APP_LIB_OBJS := $(PLACER_APP_LIB_OBJS) $(ROUTER_APP_LIB_OBJS) $(STA_APP_LIB_OBJS)
+
+# Update LIB_OBJS to include application library files
 ALL_LIB_OBJS := $(LIB_OBJS) $(APP_LIB_OBJS)
 
-# MiniSTA 源文件
+# MiniSTA source files
 STA_SRCS := $(wildcard $(STA_DIR)/*.cpp)
 STA_OBJS := $(patsubst $(STA_DIR)/%.cpp, $(BUILD_LIB_DIR)/sta_%.o, $(STA_SRCS))
 
-# MiniPlacement 源文件 (排除已经在APP_LIB_SRCS中的文件)
-PLACER_SRCS := $(filter-out $(APP_LIB_SRCS), $(wildcard $(PLACER_DIR)/*.cpp))
+# MiniPlacement source files (exclude files already in APP_LIB_SRCS and main function)
+PLACER_SRCS := $(filter-out $(APP_LIB_SRCS) main_placer.cpp,$(wildcard $(PLACER_DIR)/*.cpp))
 PLACER_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/placer_%.o, $(PLACER_SRCS))
 
-# MiniRouter 源文件
-ROUTER_SRCS := $(wildcard $(ROUTER_DIR)/*.cpp)
+# MiniRouter source files (exclude files already in APP_LIB_SRCS and main function)
+ROUTER_SRCS := $(filter-out $(APP_LIB_SRCS) main_router.cpp,$(wildcard $(ROUTER_DIR)/*.cpp))
 ROUTER_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/router_%.o, $(ROUTER_SRCS))
 
-# MiniRouter 源文件 (排除 main_router.cpp)
-FILTERED_ROUTER_SRCS := $(filter-out $(ROUTER_DIR)/main_router.cpp, $(ROUTER_SRCS))
-FILTERED_ROUTER_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/router_%.o, $(FILTERED_ROUTER_SRCS))
-
-# Integrated Flow 源文件
+# Integrated Flow source files
 FLOW_SRCS := apps/main_flow.cpp
 FLOW_OBJS := $(patsubst apps/%.cpp, $(BUILD_LIB_DIR)/flow_%.o, $(FLOW_SRCS))
 
-# 需要的STA和Placement对象文件（排除main函数）
-FILTERED_STA_OBJS := $(filter-out $(BUILD_LIB_DIR)/sta_main_sta.o, $(STA_OBJS))
-FILTERED_PLACER_OBJS := $(filter-out $(BUILD_LIB_DIR)/placer_main_placer.o, $(PLACER_OBJS))
+# Required STA and Placement object files (exclude main functions)
+FLOW_OBJS := $(filter-out $(BUILD_LIB_DIR)/sta_main_sta.o $(BUILD_LIB_DIR)/lib_main_placer.o $(BUILD_LIB_DIR)/main_router.o,$(LIB_OBJS))
 
-# 可执行文件
+# Executable files
 STA_BIN := $(BUILD_BIN_DIR)/mini_sta
 PLACER_BIN := $(BUILD_BIN_DIR)/mini_placement
 ROUTER_BIN := $(BUILD_BIN_DIR)/mini_router
 FLOW_BIN := $(BUILD_BIN_DIR)/mini_flow
 
-# 默认目标：编译所有
+# Default target: build all
 .PHONY: all
 all: $(STA_BIN) $(PLACER_BIN) $(ROUTER_BIN) $(FLOW_BIN)
 
-# 编译核心库目标文件
+# Compile core library object files
 $(BUILD_LIB_DIR)/%.o: $(LIB_SRC_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 编译 MiniSTA 目标文件
+# Compile MiniSTA object files
 $(BUILD_LIB_DIR)/sta_%.o: $(STA_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 编译应用库目标文件（被lib依赖）
+# Compile application library object files for placement
 $(BUILD_LIB_DIR)/lib_%.o: $(PLACER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 编译 MiniPlacement 目标文件
+# Compile application library object files for router
+$(BUILD_LIB_DIR)/lib_%.o: $(ROUTER_DIR)/%.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile application library object files for STA
+$(BUILD_LIB_DIR)/lib_%.o: $(STA_DIR)/%.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile MiniPlacement object files
 $(BUILD_LIB_DIR)/placer_%.o: $(PLACER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 编译 MiniRouter 目标文件
+# Compile MiniRouter object files
 $(BUILD_LIB_DIR)/router_%.o: $(ROUTER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 链接 MiniSTA 可执行文件
-$(STA_BIN): $(ALL_LIB_OBJS) $(STA_OBJS)
-	@mkdir -p $(BUILD_BIN_DIR)
+# Link MiniSTA executable
+$(BUILD_BIN_DIR)/mini_sta: $(BUILD_LIB_DIR)/sta_main_sta.o $(STA_OBJS) $(STA_DEPS) $(LIB_OBJS) | $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-	@echo "MiniSTA 编译完成: $@"
+	@echo "MiniSTA compilation completed: $@"
 
-# 链接 MiniPlacement 可执行文件
-$(PLACER_BIN): $(ALL_LIB_OBJS) $(PLACER_OBJS)
-	@mkdir -p $(BUILD_BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-	@echo "MiniPlacement 编译完成: $@"
+# Link MiniPlacement executable
+$(BUILD_BIN_DIR)/mini_placement: $(BUILD_LIB_DIR)/lib_main_placer.o $(LIB_OBJS) $(APP_LIB_OBJS) | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "MiniPlacement compilation completed: $@"
 
-# 链接 MiniRouter 可执行文件
-$(ROUTER_BIN): $(ALL_LIB_OBJS) $(ROUTER_OBJS) $(FILTERED_PLACER_OBJS)
-	@mkdir -p $(BUILD_BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-	@echo "MiniRouter 编译完成: $@"
+# Link MiniRouter executable
+$(BUILD_BIN_DIR)/mini_router: $(BUILD_LIB_DIR)/router_main_router.o $(ROUTER_OBJS) $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/placer_placement_interface.o | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "MiniRouter compilation completed: $@"
 
-# 编译 Integrated Flow 目标文件
+# Compile Integrated Flow object files
 $(BUILD_LIB_DIR)/flow_%.o: apps/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
-# 链接 Integrated Flow 可执行文件
-$(FLOW_BIN): $(ALL_LIB_OBJS) $(FILTERED_STA_OBJS) $(FILTERED_PLACER_OBJS) $(FILTERED_ROUTER_OBJS) $(FLOW_OBJS)
-	@mkdir -p $(BUILD_BIN_DIR)
-	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
-	@echo "MiniFlow 编译完成: $@"
+# Link Integrated Flow executable
+$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/placer_placement_interface.o $(BUILD_LIB_DIR)/router_routing_interface.o | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "MiniFlow compilation completed: $@"
+	@echo "MiniFlow compilation completed: $@"
 
-# 只编译 MiniSTA
+# Build MiniSTA only
 .PHONY: sta
 sta: $(STA_BIN)
 
-# 只编译 MiniPlacement
+# Build MiniPlacement only
 .PHONY: placement
 placement: $(PLACER_BIN)
 
-# 只编译 MiniRouter
+# Build MiniRouter only
 .PHONY: router
 router: $(ROUTER_BIN)
 
-# 只编译 Integrated Flow
+# Build Integrated Flow only
 .PHONY: flow
 flow: $(FLOW_BIN)
 
-# 清理编译产物
+# Clean build artifacts
 .PHONY: clean
 clean:
 	rm -rf $(BUILD_LIB_DIR)/*.o $(BUILD_BIN_DIR)/*
-	@echo "清理完成"
+	@echo "Cleanup completed"
 
-# 运行 MiniSTA (可以通过 ARGS 传递参数)
+# Run MiniSTA (parameters can be passed via ARGS)
 .PHONY: run-sta
 run-sta: $(STA_BIN)
 	$(STA_BIN) $(ARGS)
 
-# 运行 MiniPlacement (可以通过 ARGS 传递参数)
+# Run MiniPlacement (parameters can be passed via ARGS)
 .PHONY: run-placement
 run-placement: $(PLACER_BIN)
 	$(PLACER_BIN) $(ARGS)
 
-# 运行 MiniRouter (可以通过 ARGS 传递参数)
+# Run MiniRouter (parameters can be passed via ARGS)
 .PHONY: run-router
 run-router: $(ROUTER_BIN)
 	$(ROUTER_BIN) $(ARGS)
 
-# 显示帮助信息
+# Show help information
 .PHONY: help
 help:
-	@echo "可用的 make 目标："
-	@echo "  all         - 编译所有应用程序 (默认)"
-	@echo "  sta         - 只编译 MiniSTA"
-	@echo "  placement   - 只编译 MiniPlacement"
-	@echo "  router      - 只编译 MiniRouter"
-	@echo "  flow        - 只编译 MiniFlow"
-	@echo "  clean       - 清理所有编译产物"
-	@echo "  run-sta     - 运行 MiniSTA (使用 ARGS=... 传递参数)"
-	@echo "  run-placement - 运行 MiniPlacement (使用 ARGS=... 传递参数)"
-	@echo "  run-router  - 运行 MiniRouter (使用 ARGS=... 传递参数)"
-	@echo "  help        - 显示此帮助信息"
+	@echo "Available make targets:"
+	@echo "  all         - Build all applications (default)"
+	@echo "  sta         - Build MiniSTA only"
+	@echo "  placement   - Build MiniPlacement only"
+	@echo "  router      - Build MiniRouter only"
+	@echo "  flow        - Build MiniFlow only"
+	@echo "  clean       - Clean all build artifacts"
+	@echo "  run-sta     - Run MiniSTA (use ARGS=... to pass parameters)"
+	@echo "  run-placement - Run MiniPlacement (use ARGS=... to pass parameters)"
+	@echo "  run-router  - Run MiniRouter (use ARGS=... to pass parameters)"
+	@echo "  help        - Show this help information"

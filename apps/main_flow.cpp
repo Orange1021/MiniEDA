@@ -23,7 +23,7 @@
 
 // Placement modules
 #include "../apps/mini_placement/placement_interface.h"
-#include "../apps/mini_placement/placer_db.h"
+#include "../lib/include/placer_db.h"
 
 // Routing modules
 #include "../apps/mini_router/routing_interface.h"

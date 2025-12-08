@@ -4,7 +4,7 @@
  */
 
 #include "visualizer.h"
-#include "../../apps/mini_placement/placer_db.h"
+#include "placer_db.h"
 #include "../../apps/mini_router/routing_grid.h"
 #include <fstream>
 #include <sstream>
@@ -12,7 +12,7 @@
 #include <iostream>
 
 // Forward declaration and include for PlacerDB
-#include "../../apps/mini_placement/placer_db.h"
+#include "placer_db.h"
 #include "../../apps/mini_router/maze_router.h"
 
 namespace mini {

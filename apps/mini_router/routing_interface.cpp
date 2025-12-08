@@ -10,7 +10,7 @@
 #include "../../lib/include/liberty_parser.h"
 #include "../../lib/include/pin_mapper.h"
 #include "../../lib/include/visualizer.h"
-#include "../../apps/mini_placement/placer_db.h"
+#include "../../lib/include/placer_db.h"
 #include "../../apps/mini_placement/macro_mapper.h"
 #include <iostream>
 #include <iomanip>
