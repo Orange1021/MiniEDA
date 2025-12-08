@@ -118,6 +118,23 @@ void Visualizer::exportToCSV(const std::string& filename) {
 void Visualizer::drawRoutedPlacement(const std::string& filename, 
                                     const std::vector<RoutingResult>& routing_results,
                                     RoutingGrid* routing_grid) {
+    // Extract directory from filename
+    size_t last_slash = filename.find_last_of('/');
+    std::string directory;
+    std::string basename;
+    
+    if (last_slash != std::string::npos) {
+        directory = filename.substr(0, last_slash);
+        basename = filename.substr(last_slash + 1);
+    } else {
+        directory = ".";
+        basename = filename;
+    }
+    
+    // Create directory if it doesn't exist
+    std::string mkdir_cmd = "mkdir -p " + directory;
+    std::system(mkdir_cmd.c_str());
+    
     std::string script_filename = filename + ".py";
     std::string image_filename = filename + ".png";
     

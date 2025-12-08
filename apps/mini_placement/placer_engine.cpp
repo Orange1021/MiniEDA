@@ -169,7 +169,18 @@ void PlacerEngine::runLegalization() {
     double new_hpwl = calculateHPWL();
     std::cout << "  HPWL after legalization: " << new_hpwl << std::endl;
     
-    // 6. Visualize the result
+    // Update cached HPWL to maintain consistency
+    current_hpwl_ = new_hpwl;
+    
+    // 6. Verify no overlaps
+    bool has_overlaps = hasOverlaps();
+    double total_overlap = calculateTotalOverlap();
+    std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
+    if (has_overlaps) {
+        std::cout << "  Total overlap area: " << total_overlap << std::endl;
+    }
+    
+    // 7. Visualize the result
     if (viz_) {
         viz_->drawPlacementWithRunId("legalized", run_id_);
     }
@@ -181,6 +192,14 @@ void PlacerEngine::runDetailedPlacement() {
     if (!db_) return;
     
     std::cout << "Starting Detailed Placement (Greedy Adjacent Swap)..." << std::endl;
+    
+    // PRE-CHECK: Verify no overlaps before detailed placement
+    std::cout << "  Pre-check overlap status: ";
+    if (hasOverlaps()) {
+        std::cout << "FOUND OVERLAPS - This should not happen!" << std::endl;
+    } else {
+        std::cout << "No overlaps (good)" << std::endl;
+    }
     
     // 1. Data Prep: Group cells by rows, sorted by x-coordinate
     const Rect& core_area = db_->getCoreArea();
@@ -222,46 +241,84 @@ void PlacerEngine::runDetailedPlacement() {
         // 3. Row Traversal: Try adjacent swaps in each row
         for (auto& [row_idx, cells_in_row] : rows) {
             for (size_t i = 0; i < cells_in_row.size() - 1; ++i) {
-                Cell* left_cell = cells_in_row[i];
-                Cell* right_cell = cells_in_row[i + 1];
+                Cell* left_cell = cells_in_row[i];      // Originally on the left
+                Cell* right_cell = cells_in_row[i + 1]; // Originally on the right
                 
-                // Store original positions
-                const auto& left_info = db_->getCellInfo(left_cell);
-                const auto& right_info = db_->getCellInfo(right_cell);
-                double left_orig_x = left_info.x;
-                double right_orig_x = right_info.x;
+                // Store original cell information for potential rollback
+                const auto left_orig_info = db_->getCellInfo(left_cell);
+                const auto right_orig_info = db_->getCellInfo(right_cell);
                 
-                // Measure current HPWL
-                double hpwl_before = calculateHPWL();
-                
-                // Try Swap: Exchange order in vector
-                std::swap(cells_in_row[i], cells_in_row[i + 1]);
-                
-                // Re-pack: Update x coordinates to maintain tight packing
-                double current_x = (i > 0) ? 
+                // Calculate reference X coordinate (starting point for this pair)
+                double start_x = (i > 0) ? 
                     db_->getCellInfo(cells_in_row[i - 1]).x + 
                     db_->getCellInfo(cells_in_row[i - 1]).width : 
                     core_area.x_min;
                 
-                // Place swapped cells
-                db_->placeCell(left_cell, current_x, left_info.y);
-                current_x += left_info.width;
-                db_->placeCell(right_cell, current_x, right_info.y);
+                // PROACTIVE BOUNDARY CHECK: Calculate proposed positions after swap
+                // After swap: right_cell becomes the new "left", left_cell becomes the new "right"
+                double proposed_x_new_left = start_x;
+                double proposed_x_new_right = start_x + db_->getCellInfo(right_cell).width;
                 
-                // Measure new HPWL
+                // RIGHT BOUNDARY VALIDATION: Ensure swap won't exceed core area
+                double row_limit = core_area.x_max;
+                if (proposed_x_new_right + db_->getCellInfo(left_cell).width > row_limit) {
+                    // VIOLATION: Swap would cause overflow beyond core boundary
+                    // ACTION: Abort this swap attempt, move to next iteration
+                    continue;
+                }
+                
+                // ADDITIONAL VALIDATION: Check for conflicts with subsequent cells in the same row
+                bool has_conflict = false;
+                if (i + 2 < cells_in_row.size()) {
+                    Cell* next_cell = cells_in_row[i + 2];
+                    const auto& next_info = db_->getCellInfo(next_cell);
+                    double next_cell_left = next_info.x;
+                    
+                    // Check if our swapped right cell would overlap with the next cell
+                    if (proposed_x_new_right + db_->getCellInfo(left_cell).width > next_cell_left) {
+                        has_conflict = true;
+                    }
+                }
+                
+                if (has_conflict) {
+                    // VIOLATION: Swap would cause overlap with subsequent cell
+                    // ACTION: Abort this swap attempt, move to next iteration
+                    continue;
+                }
+                
+                // Measure current HPWL before making changes
+                double hpwl_before = calculateHPWL();
+                
+                // ATOMIC SWAP EXECUTION: Exchange order in vector
+                std::swap(cells_in_row[i], cells_in_row[i + 1]);
+                
+                // COMMIT PHYSICAL PLACEMENT: Update positions with validated coordinates
+                db_->placeCell(right_cell, proposed_x_new_left, right_orig_info.y);   // Original right, now left
+                db_->placeCell(left_cell, proposed_x_new_right, left_orig_info.y);    // Original left, now right
+                
+                // Measure new HPWL after swap
                 double hpwl_after = calculateHPWL();
                 
-                // Decision: Keep swap if it improves wirelength
+                // DECISION LOGIC: Keep swap only if it improves wirelength AND doesn't cause overlaps
                 if (hpwl_after < hpwl_before - 1e-9) {  // Small epsilon for numerical stability
-                    // Keep the swap - improvement!
-                    pass_swaps++;
-                    total_swaps++;
+                    // Check for overlaps after the swap
+                    if (!hasOverlaps()) {
+                        // ACCEPT the swap - improvement achieved and no overlaps!
+                        pass_swaps++;
+                        total_swaps++;
+                    } else {
+                        // ROLLBACK due to overlaps: Revert both vector order and physical positions
+                        std::swap(cells_in_row[i], cells_in_row[i + 1]);
+                        // Restore original coordinates (safest approach, no recalculation)
+                        db_->placeCell(left_cell, left_orig_info.x, left_orig_info.y);
+                        db_->placeCell(right_cell, right_orig_info.x, right_orig_info.y);
+                    }
                 } else {
-                    // Revert the swap
+                    // SAFE ROLLBACK: Revert both vector order and physical positions
                     std::swap(cells_in_row[i], cells_in_row[i + 1]);
-                    // Restore original positions
-                    db_->placeCell(left_cell, left_orig_x, left_info.y);
-                    db_->placeCell(right_cell, right_orig_x, right_info.y);
+                    // Restore original coordinates (safest approach, no recalculation)
+                    db_->placeCell(left_cell, left_orig_info.x, left_orig_info.y);
+                    db_->placeCell(right_cell, right_orig_info.x, right_orig_info.y);
                 }
             }
         }
@@ -282,6 +339,9 @@ void PlacerEngine::runDetailedPlacement() {
     double final_hpwl = calculateHPWL();
     double total_improvement = initial_hpwl - final_hpwl;
     
+    // Update cached HPWL to maintain consistency
+    current_hpwl_ = final_hpwl;
+    
     std::cout << "Detailed Placement completed!" << std::endl;
     std::cout << "  Total swaps performed: " << total_swaps << std::endl;
     std::cout << "  Initial HPWL: " << initial_hpwl << std::endl;
@@ -289,7 +349,15 @@ void PlacerEngine::runDetailedPlacement() {
     std::cout << "  Total improvement: " << total_improvement << " (" 
               << (total_improvement / initial_hpwl * 100.0) << "%)" << std::endl;
     
-    // 5. Visualize final result
+    // 5. Final overlap check
+    bool has_overlaps = hasOverlaps();
+    double total_overlap = calculateTotalOverlap();
+    std::cout << "  Final overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
+    if (has_overlaps) {
+        std::cout << "  Total overlap area: " << total_overlap << std::endl;
+    }
+    
+    // 6. Visualize final result
     if (viz_) {
         viz_->drawPlacementWithRunId("detailed", run_id_);
     }
@@ -418,6 +486,7 @@ bool PlacerEngine::hasOverlaps() const {
     
     // Check all pairs of cells for overlaps
     auto cells = db_->getAllCells();
+    int overlap_count = 0;
     
     for (size_t i = 0; i < cells.size(); ++i) {
         for (size_t j = i + 1; j < cells.size(); ++j) {
@@ -425,18 +494,43 @@ bool PlacerEngine::hasOverlaps() const {
             const auto& info2 = db_->getCellInfo(cells[j]);
             
             // Check if rectangles overlap
-            bool x_overlap = !(info1.x + info1.width <= info2.x || 
-                              info2.x + info2.width <= info1.x);
-            bool y_overlap = !(info1.y + info1.height <= info2.y || 
-                              info2.y + info2.height <= info1.y);
+            double right1 = info1.x + info1.width;
+            double right2 = info2.x + info2.width;
+            double top1 = info1.y + info1.height;
+            double top2 = info2.y + info2.height;
+            
+            // Add small epsilon to handle floating-point precision issues
+            // True overlap means actual intersection, not just edge touching
+            const double EPSILON = 1e-9;
+            
+            bool x_overlap = !(right1 <= info2.x + EPSILON || right2 <= info1.x + EPSILON);
+            bool y_overlap = !(top1 <= info2.y + EPSILON || top2 <= info1.y + EPSILON);
             
             if (x_overlap && y_overlap) {
-                return true;
+                overlap_count++;
+                if (overlap_count <= 3) {  // Only print first 3 overlaps to avoid spam
+                    std::cout << "    OVERLAP DETECTED: " << cells[i]->getName() 
+                              << " and " << cells[j]->getName() << std::endl;
+                    std::cout << "      " << cells[i]->getName() << ": (" << info1.x 
+                              << "," << info1.y << ") size=" << info1.width << "x" << info1.height 
+                              << " -> x:[" << info1.x << "," << right1 << "] y:[" << info1.y << "," << top1 << "]" << std::endl;
+                    std::cout << "      " << cells[j]->getName() << ": (" << info2.x 
+                              << "," << info2.y << ") size=" << info2.width << "x" << info2.height 
+                              << " -> x:[" << info2.x << "," << right2 << "] y:[" << info2.y << "," << top2 << "]" << std::endl;
+                    std::cout << "      x_overlap=" << x_overlap << " (right1=" << right1 << " <= x2=" << info2.x << "=" << (right1 <= info2.x) 
+                              << " OR right2=" << right2 << " <= x1=" << info1.x << "=" << (right2 <= info1.x) << ")" << std::endl;
+                    std::cout << "      y_overlap=" << y_overlap << " (top1=" << top1 << " <= y2=" << info2.y << "=" << (top1 <= info2.y) 
+                              << " OR top2=" << top2 << " <= y1=" << info1.y << "=" << (top2 <= info1.y) << ")" << std::endl;
+                }
             }
         }
     }
     
-    return false;
+    if (overlap_count > 0) {
+        std::cout << "    Total overlaps found: " << overlap_count << std::endl;
+    }
+    
+    return overlap_count > 0;
 }
 
 double PlacerEngine::calculateTotalOverlap() const {

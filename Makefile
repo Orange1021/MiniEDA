@@ -20,17 +20,28 @@ ROUTER_DIR := apps/mini_router
 LIB_SRCS := $(wildcard $(LIB_SRC_DIR)/*.cpp)
 LIB_OBJS := $(patsubst $(LIB_SRC_DIR)/%.cpp, $(BUILD_LIB_DIR)/%.o, $(LIB_SRCS))
 
+# 额外需要的应用源文件（被lib依赖）
+APP_LIB_SRCS := $(PLACER_DIR)/macro_mapper.cpp $(PLACER_DIR)/placer_db.cpp
+APP_LIB_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/lib_%.o, $(APP_LIB_SRCS))
+
+# 更新LIB_OBJS包含应用库文件
+ALL_LIB_OBJS := $(LIB_OBJS) $(APP_LIB_OBJS)
+
 # MiniSTA 源文件
 STA_SRCS := $(wildcard $(STA_DIR)/*.cpp)
 STA_OBJS := $(patsubst $(STA_DIR)/%.cpp, $(BUILD_LIB_DIR)/sta_%.o, $(STA_SRCS))
 
-# MiniPlacement 源文件
-PLACER_SRCS := $(wildcard $(PLACER_DIR)/*.cpp)
+# MiniPlacement 源文件 (排除已经在APP_LIB_SRCS中的文件)
+PLACER_SRCS := $(filter-out $(APP_LIB_SRCS), $(wildcard $(PLACER_DIR)/*.cpp))
 PLACER_OBJS := $(patsubst $(PLACER_DIR)/%.cpp, $(BUILD_LIB_DIR)/placer_%.o, $(PLACER_SRCS))
 
-# MiniRouter 源文件 (排除测试文件)
-ROUTER_SRCS := $(filter-out $(ROUTER_DIR)/test_%.cpp, $(wildcard $(ROUTER_DIR)/*.cpp))
+# MiniRouter 源文件
+ROUTER_SRCS := $(wildcard $(ROUTER_DIR)/*.cpp)
 ROUTER_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/router_%.o, $(ROUTER_SRCS))
+
+# MiniRouter 源文件 (排除 main_router.cpp)
+FILTERED_ROUTER_SRCS := $(filter-out $(ROUTER_DIR)/main_router.cpp, $(ROUTER_SRCS))
+FILTERED_ROUTER_OBJS := $(patsubst $(ROUTER_DIR)/%.cpp, $(BUILD_LIB_DIR)/router_%.o, $(FILTERED_ROUTER_SRCS))
 
 # Integrated Flow 源文件
 FLOW_SRCS := apps/main_flow.cpp
@@ -60,6 +71,11 @@ $(BUILD_LIB_DIR)/sta_%.o: $(STA_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# 编译应用库目标文件（被lib依赖）
+$(BUILD_LIB_DIR)/lib_%.o: $(PLACER_DIR)/%.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # 编译 MiniPlacement 目标文件
 $(BUILD_LIB_DIR)/placer_%.o: $(PLACER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
@@ -71,19 +87,19 @@ $(BUILD_LIB_DIR)/router_%.o: $(ROUTER_DIR)/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # 链接 MiniSTA 可执行文件
-$(STA_BIN): $(LIB_OBJS) $(STA_OBJS)
+$(STA_BIN): $(ALL_LIB_OBJS) $(STA_OBJS)
 	@mkdir -p $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "MiniSTA 编译完成: $@"
 
 # 链接 MiniPlacement 可执行文件
-$(PLACER_BIN): $(LIB_OBJS) $(PLACER_OBJS)
+$(PLACER_BIN): $(ALL_LIB_OBJS) $(PLACER_OBJS)
 	@mkdir -p $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "MiniPlacement 编译完成: $@"
 
 # 链接 MiniRouter 可执行文件
-$(ROUTER_BIN): $(LIB_OBJS) $(ROUTER_OBJS) $(FILTERED_PLACER_OBJS)
+$(ROUTER_BIN): $(ALL_LIB_OBJS) $(ROUTER_OBJS) $(FILTERED_PLACER_OBJS)
 	@mkdir -p $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "MiniRouter 编译完成: $@"
@@ -94,7 +110,7 @@ $(BUILD_LIB_DIR)/flow_%.o: apps/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # 链接 Integrated Flow 可执行文件
-$(FLOW_BIN): $(LIB_OBJS) $(FILTERED_STA_OBJS) $(FILTERED_PLACER_OBJS) $(FLOW_OBJS)
+$(FLOW_BIN): $(ALL_LIB_OBJS) $(FILTERED_STA_OBJS) $(FILTERED_PLACER_OBJS) $(FILTERED_ROUTER_OBJS) $(FLOW_OBJS)
 	@mkdir -p $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $^ -o $@ $(LDFLAGS)
 	@echo "MiniFlow 编译完成: $@"

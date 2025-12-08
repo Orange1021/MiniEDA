@@ -10,6 +10,8 @@
 #include "../../lib/include/lef_parser.h"
 #include "../../lib/include/pin_mapper.h"
 #include "../../lib/include/visualizer.h"
+#include "../../lib/include/app_config.h"
+#include "../../lib/include/arg_parser.h"
 #include "../../apps/mini_placement/placement_interface.h"
 #include "../../apps/mini_placement/placer_db.h"
 #include "../../apps/mini_placement/macro_mapper.h"
@@ -19,54 +21,32 @@
 
 using namespace mini;
 
-void printUsage(const char* prog_name) {
-    std::cout << "Usage: " << prog_name << " [options] <verilog_file>" << std::endl;
-    std::cout << "Options:" << std::endl;
-    std::cout << "  -v <file>        Verilog netlist file (required)" << std::endl;
-    std::cout << "  -lib <file>      Liberty library file (required)" << std::endl;
-    std::cout << "  -lef <file>      LEF physical library file (optional)" << std::endl;
-    std::cout << "  -util <value>    Target utilization (default: 0.7)" << std::endl;
-    std::cout << "  -via_cost <cost> Via penalty cost (default: 10.0)" << std::endl;
-    std::cout << "  -wire_cost <cost> Wire cost per unit (default: 1.0)" << std::endl;
-    std::cout << "  -help            Show this help message" << std::endl;
+/**
+ * @brief Convert AppConfig to PlacementConfig
+ */
+PlacementConfig toPlacementConfig(const AppConfig& app_config) {
+    PlacementConfig placement_config;
+    placement_config.lef_file = app_config.lef_file;
+    placement_config.liberty_file = app_config.liberty_file;
+    placement_config.utilization = app_config.utilization;
+    placement_config.row_height = app_config.row_height;
+    placement_config.verbose = app_config.verbose;
+    placement_config.run_id = app_config.run_id + "_placement";
+    return placement_config;
 }
 
-struct RouterConfig {
-    std::string verilog_file;
-    std::string liberty_file = "benchmarks/NangateOpenCellLibrary_typical.lib";
-    std::string lef_file;
-    double utilization = 0.7;
-    double via_cost = 10.0;
-    double wire_cost = 1.0;
-};
-
-bool parseArguments(int argc, char* argv[], RouterConfig& config) {
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        
-        if (arg == "-help") {
-            return false;
-        } else if (arg == "-v" && i + 1 < argc) {
-            config.verilog_file = argv[++i];
-        } else if (arg == "-lib" && i + 1 < argc) {
-            config.liberty_file = argv[++i];
-        } else if (arg == "-lef" && i + 1 < argc) {
-            config.lef_file = argv[++i];
-        } else if (arg == "-util" && i + 1 < argc) {
-            config.utilization = std::stod(argv[++i]);
-        } else if (arg == "-via_cost" && i + 1 < argc) {
-            config.via_cost = std::stod(argv[++i]);
-        } else if (arg == "-wire_cost" && i + 1 < argc) {
-            config.wire_cost = std::stod(argv[++i]);
-        } else if (arg[0] != '-') {
-            config.verilog_file = arg;
-        } else {
-            std::cerr << "Error: Unknown option " << arg << std::endl;
-            return false;
-        }
-    }
-    
-    return !config.verilog_file.empty();
+/**
+ * @brief Convert AppConfig to RoutingConfig
+ */
+RoutingConfig toRoutingConfig(const AppConfig& app_config) {
+    RoutingConfig routing_config;
+    routing_config.lef_file = app_config.lef_file;
+    routing_config.liberty_file = app_config.liberty_file;
+    routing_config.via_cost = app_config.via_cost;
+    routing_config.wire_cost = app_config.wire_cost;
+    routing_config.verbose = app_config.verbose;
+    routing_config.run_id = app_config.run_id + "_routing";
+    return routing_config;
 }
 
 /**
@@ -231,11 +211,25 @@ int main(int argc, char* argv[]) {
     std::cout << "MiniRouter v2.0 - Pipeline Pattern Router" << std::endl;
     std::cout << "===========================================" << std::endl;
     
-    RouterConfig config;
-    if (!parseArguments(argc, argv, config)) {
-        printUsage(argv[0]);
+    // ========================================================================
+    // 1. Parse unified configuration
+    // ========================================================================
+    AppConfig config;
+    if (!parseAndValidate(argc, argv, config)) {
         return 1;
     }
+    
+    // Force routing mode
+    if (!config.routing_mode) {
+        std::cout << "Note: Auto-switching to routing mode" << std::endl;
+        config.routing_mode = true;
+        config.flow_mode = false;
+        config.sta_mode = false;
+        config.placement_mode = false;
+    }
+    
+    // Auto-generate run_id from circuit name
+    config.generateRunId();
     
     try {
         auto start_time = std::chrono::high_resolution_clock::now();
@@ -245,61 +239,88 @@ int main(int argc, char* argv[]) {
         // ====================================================================
         std::cout << "\n=== Phase 1: Loading and Configuration ===" << std::endl;
         
-        // Parse Verilog netlist
-        std::cout << "Parsing Verilog netlist: " << config.verilog_file << std::endl;
-        VerilogParser v_parser;
-        auto netlist_db = std::make_shared<NetlistDB>();
-        if (!v_parser.parseFile(config.verilog_file, *netlist_db)) {
-            std::cerr << "Error: Failed to parse Verilog file" << std::endl;
-            return 1;
-        }
+        // ========================================================================
+    // 2. Parse Verilog netlist
+    // ========================================================================
+    std::cout << "\n=== Parsing Verilog Netlist ===" << std::endl;
+    std::cout << "Reading: " << config.verilog_file << std::endl;
+    
+    VerilogParser v_parser;
+    auto netlist_db = std::make_shared<NetlistDB>();
+    if (!v_parser.parseFile(config.verilog_file, *netlist_db)) {
+        std::cerr << "Error: Failed to parse Verilog file" << std::endl;
+        return 1;
+    }
+    
+    if (config.verbose) {
         std::cout << "  Parsed " << netlist_db->getNumCells() << " cells, " 
                   << netlist_db->getNumNets() << " nets" << std::endl;
-        
-        // Parse Liberty library
-        std::cout << "Parsing Liberty library: " << config.liberty_file << std::endl;
-        LibertyParser lib_parser;
-        auto library = lib_parser.parseFile(config.liberty_file);
-        if (!library) {
-            std::cerr << "Error: Failed to parse Liberty file: " << lib_parser.getError() << std::endl;
-            return 1;
-        }
+    }
+    
+    // ========================================================================
+    // 3. Parse Liberty library
+    // ========================================================================
+    std::cout << "\n=== Parsing Liberty Library ===" << std::endl;
+    std::cout << "Reading: " << config.liberty_file << std::endl;
+    
+    LibertyParser lib_parser;
+    auto library = lib_parser.parseFile(config.liberty_file);
+    if (!library) {
+        std::cerr << "Error: Failed to parse Liberty file: " << lib_parser.getError() << std::endl;
+        return 1;
+    }
+    
+    if (config.verbose) {
         std::cout << "  Loaded library: " << library->getName() 
                   << " with " << library->getCellCount() << " cells" << std::endl;
+    }
         
-        // Parse LEF library (if provided)
-        std::unique_ptr<LefLibrary> lef_lib;
-        double row_height = 3.0;  // Default fallback
+        // ========================================================================
+    // 4. Parse LEF library (if provided)
+    // ========================================================================
+    std::unique_ptr<LefLibrary> lef_lib;
+    double row_height = config.row_height;  // Start with config value
+    
+    if (!config.lef_file.empty()) {
+        std::cout << "\n=== Parsing LEF Physical Library ===" << std::endl;
+        std::cout << "Reading: " << config.lef_file << std::endl;
         
-        if (!config.lef_file.empty()) {
-            std::cout << "Parsing LEF library: " << config.lef_file << std::endl;
-            LefParser lef_parser(config.lef_file, true);  // Enable verbose
-            lef_lib = std::make_unique<LefLibrary>(lef_parser.parse());
-            if (!lef_lib) {
-                std::cerr << "Error: Failed to parse LEF file" << std::endl;
-                return 1;
-            }
-            std::cout << "  Loaded LEF library with " << lef_lib->macros.size() << " macros" << std::endl;
-            
-            // Auto-detect row height from LEF
-            row_height = autoDetectRowHeight(*lef_lib);
-        } else {
-            std::cout << "  No LEF file provided, using default row height: " << row_height << " um" << std::endl;
+        LefParser lef_parser(config.lef_file, config.verbose);
+        lef_lib = std::make_unique<LefLibrary>(lef_parser.parse());
+        if (!lef_lib) {
+            std::cerr << "Error: Failed to parse LEF file" << std::endl;
+            return 1;
         }
+        
+        if (config.verbose) {
+            std::cout << "  Loaded LEF library with " << lef_lib->macros.size() << " macros" << std::endl;
+        }
+        
+        // Auto-detect row height from LEF
+        for (const auto& pair : lef_lib->macros) {
+            const LefMacro& macro = pair.second;
+            row_height = macro.height;
+            if (config.verbose) {
+                std::cout << "  Auto-detected row height: " << row_height 
+                          << " um from LEF macro: " << macro.name << std::endl;
+            }
+            break;
+        }
+    } else {
+        std::cout << "\n=== No LEF File ===" << std::endl;
+        std::cout << "Using configured row height: " << row_height << " um" << std::endl;
+    }
         
         // ====================================================================
         // Phase 2: 布局 (Placement)
         // ====================================================================
         std::cout << "\n=== Phase 2: Placement ===" << std::endl;
         
-        // Setup placement configuration
-        PlacementConfig placement_config;
-        placement_config.liberty_file = config.liberty_file;
-        placement_config.lef_file = config.lef_file;
-        placement_config.utilization = config.utilization;
-        placement_config.row_height = row_height;
-        placement_config.verbose = true;
-        placement_config.run_id = "mini_router_run";
+        // ========================================================================
+    // 5. Setup placement configuration
+    // ========================================================================
+    PlacementConfig placement_config = toPlacementConfig(config);
+    placement_config.row_height = row_height;  // Use detected height
         
         // Run placement
         auto placer_db = PlacementInterface::runPlacement(placement_config, netlist_db);
@@ -364,11 +385,13 @@ int main(int argc, char* argv[]) {
         // ====================================================================
         std::cout << "\n=== Phase 4: Routing Execution ===" << std::endl;
         
-        // Create PinMapper and MazeRouter
-        PinMapper pin_mapper(*lef_lib, macro_mapper);
-        MazeRouter router(&routing_grid, &pin_mapper);
-        router.setViaCost(0.1);  // Almost free vias to test if more nets need them
-        router.setWireCostPerUnit(config.wire_cost);
+        // ========================================================================
+    // 7. Create PinMapper and MazeRouter
+    // ========================================================================
+    PinMapper pin_mapper(*lef_lib, macro_mapper);
+    MazeRouter router(&routing_grid, &pin_mapper);
+    router.setViaCost(config.via_cost);
+    router.setWireCostPerUnit(config.wire_cost);
         
         // Route all nets and collect results for visualization
         std::cout << "Routing " << netlist_db->getNumNets() << " nets..." << std::endl;
@@ -406,6 +429,17 @@ int main(int argc, char* argv[]) {
         // Create visualizer and generate routed layout
         Visualizer visualizer(placer_db.get());
 
+        // ========================================================================
+    // 8. Generate visualization
+    // ========================================================================
+    if (!config.enable_visualization) {
+        std::cout << "\n=== Visualization Disabled ===" << std::endl;
+    } else {
+        std::cout << "\n=== Generating Visualization ===" << std::endl;
+        
+        // Create visualizer and generate routed layout
+        Visualizer visualizer(placer_db.get());
+
         // Extract circuit name from verilog file path
         std::string circuit_name = "circuit";
         size_t last_slash = config.verilog_file.find_last_of("/");
@@ -422,6 +456,7 @@ int main(int argc, char* argv[]) {
         // Generate routed layout visualization
         visualizer.drawRoutedPlacement(output_name, routing_results, &routing_grid);
         std::cout << "  Generated routed layout visualization: " << output_name << ".png" << std::endl;
+    }
         
         auto end_time = std::chrono::high_resolution_clock::now();
         auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);

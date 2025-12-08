@@ -16,140 +16,101 @@
 #include "../../lib/include/liberty_parser.h"
 #include "../../lib/include/lef_parser.h"
 #include "../../lib/include/visualizer.h"
+#include "../../lib/include/app_config.h"
+#include "../../lib/include/arg_parser.h"
 #include "placer_db.h"
 #include "placer_engine.h"
 #include "macro_mapper.h"
 
 using namespace mini;
 
-void printUsage(const char* prog_name) {
-    std::cout << "Usage: " << prog_name << " [options] -v <verilog_file> -lib <liberty_file> -lef <lef_file>" << std::endl;
-    std::cout << "Options:" << std::endl;
-    std::cout << "  -v <file>        Verilog netlist file (required)" << std::endl;
-    std::cout << "  -lib <file>      Liberty library file (required)" << std::endl;
-    std::cout << "  -lef <file>      LEF physical library file (recommended for accurate sizing)" << std::endl;
-    std::cout << "  -util <value>    Target utilization (default: 0.7)" << std::endl;
-    std::cout << "  -rowheight <val> Row height in micrometers (default: 3.0)" << std::endl;
-    std::cout << "  -help            Show this help message" << std::endl;
-    std::cout << std::endl;
-    std::cout << "Examples:" << std::endl;
-    std::cout << "  " << prog_name << " -v s27.v -lib sample.lib -lef nangate.lef" << std::endl;
-    std::cout << "  " << prog_name << " -v s344.v -lib sample.lib -lef nangate.lef -util 0.8" << std::endl;
+/**
+ * @brief Auto-detect row height from LEF library (with fallback to config)
+ */
+double detectRowHeight(const AppConfig& config) {
+    double row_height = config.row_height;  // Start with config value
+    
+    if (!config.lef_file.empty()) {
+        try {
+            LefParser lef_parser(config.lef_file, config.verbose);
+            auto lef_library = std::make_unique<LefLibrary>(lef_parser.parse());
+            if (lef_library && !lef_library->macros.empty()) {
+                // Use first macro's height as row height
+                const LefMacro& macro = lef_library->macros.begin()->second;
+                row_height = macro.height;
+                if (config.verbose) {
+                    std::cout << "  Auto-detected row height: " << row_height 
+                              << " um from LEF macro: " << macro.name << std::endl;
+                }
+            }
+        } catch (const std::exception& e) {
+            if (config.verbose) {
+                std::cout << "  Warning: Failed to parse LEF for row height: " 
+                          << e.what() << std::endl;
+                std::cout << "  Using configured row height: " << row_height << " um" << std::endl;
+            }
+        }
+    }
+    
+    return row_height;
 }
 
 int main(int argc, char* argv[]) {
     std::cout << "MiniPlacement - Chip Placement Tool" << std::endl;
     std::cout << "===================================" << std::endl;
 
-    if (argc < 2) {
-        printUsage(argv[0]);
+    // ========================================================================
+    // 1. Parse unified configuration
+    // ========================================================================
+    AppConfig config;
+    if (!parseAndValidate(argc, argv, config)) {
         return 1;
     }
-
-    // Parse Command Line Arguments
-    std::string verilog_file;
-    std::string liberty_file;
-    std::string lef_file;
-    double utilization = 0.7;
-    double row_height = 3.0;
-
-    for (int i = 1; i < argc; ++i) {
-        std::string arg = argv[i];
-        if (arg == "-v") {
-            if (i + 1 < argc) {
-                verilog_file = argv[++i];
-            } else {
-                std::cerr << "Error: -v requires a filename argument" << std::endl;
-                return 1;
-            }
-        } else if (arg == "-lib") {
-            if (i + 1 < argc) {
-                liberty_file = argv[++i];
-            } else {
-                std::cerr << "Error: -lib requires a filename argument" << std::endl;
-                return 1;
-            }
-        } else if (arg == "-util") {
-            if (i + 1 < argc) {
-                utilization = std::stod(argv[++i]);
-                if (utilization <= 0.0 || utilization > 1.0) {
-                    std::cerr << "Error: Utilization must be between 0.0 and 1.0" << std::endl;
-                    return 1;
-                }
-            } else {
-                std::cerr << "Error: -util requires a value argument" << std::endl;
-                return 1;
-            }
-        } else if (arg == "-lef") {
-            if (i + 1 < argc) {
-                lef_file = argv[++i];
-            } else {
-                std::cerr << "Error: -lef requires a filename argument" << std::endl;
-                return 1;
-            }
-        } else if (arg == "-rowheight") {
-            if (i + 1 < argc) {
-                row_height = std::stod(argv[++i]);
-                if (row_height <= 0.0) {
-                    std::cerr << "Error: Row height must be positive" << std::endl;
-                    return 1;
-                }
-            } else {
-                std::cerr << "Error: -rowheight requires a value argument" << std::endl;
-                return 1;
-            }
-        } else if (arg == "-help") {
-            printUsage(argv[0]);
-            return 0;
-        } else if (arg[0] == '-') {
-            std::cerr << "Error: Unknown option " << arg << std::endl;
-            printUsage(argv[0]);
-            return 1;
-        }
+    
+    // Force placement mode
+    if (!config.placement_mode) {
+        std::cout << "Note: Auto-switching to placement mode" << std::endl;
+        config.placement_mode = true;
+        config.flow_mode = false;
+        config.sta_mode = false;
+        config.routing_mode = false;
     }
-
-    // Validate required arguments
-    if (verilog_file.empty()) {
-        std::cerr << "Error: Verilog file is required (use -v)" << std::endl;
-        return 1;
-    }
-    if (liberty_file.empty()) {
-        std::cerr << "Error: Liberty file is required (use -lib)" << std::endl;
-        return 1;
-    }
+    
+    // Auto-generate run_id from circuit name
+    config.generateRunId();
 
     auto start_time = std::chrono::high_resolution_clock::now();
 
-    // Generate timestamp for this run
-    auto now = std::chrono::system_clock::now();
-    auto time_t = std::chrono::system_clock::to_time_t(now);
-    auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
-        now.time_since_epoch()) % 1000;
-    
-    std::ostringstream timestamp;
-    timestamp << std::put_time(std::localtime(&time_t), "%Y%m%d_%H%M%S");
-    timestamp << "_" << std::setfill('0') << std::setw(3) << ms.count();
-    
-    std::string run_id = timestamp.str();
-    std::cout << "Run ID: " << run_id << std::endl;
+    // Use configured run_id
+    std::cout << "Run ID: " << config.run_id << std::endl;
 
     try {
-        // 1. Parse Verilog & Build Netlist
-        std::cout << "Reading Verilog file: " << verilog_file << std::endl;
-        NetlistDB db("design");
-        VerilogParser v_parser;
-        if (!v_parser.parseFile(verilog_file, db)) {
-            std::cerr << "Error: Failed to parse Verilog file" << std::endl;
-            return 1;
-        }
+        // ========================================================================
+    // 2. Parse Verilog & Build Netlist
+    // ========================================================================
+    std::cout << "\n=== Parsing Verilog Netlist ===" << std::endl;
+    std::cout << "Reading: " << config.verilog_file << std::endl;
+    
+    NetlistDB db("design");
+    VerilogParser v_parser;
+    if (!v_parser.parseFile(config.verilog_file, db)) {
+        std::cerr << "Error: Failed to parse Verilog file" << std::endl;
+        return 1;
+    }
 
+    if (config.verbose) {
         std::cout << "  Parsed " << db.getCells().size() << " cells" << std::endl;
         std::cout << "  Parsed " << db.getNets().size() << " nets" << std::endl;
+    }
 
-        // 2. Parse Liberty Library
-        std::cout << "\nReading Liberty library: " << liberty_file << std::endl;
-        LibertyParser l_parser;
-        auto library = l_parser.parseFile(liberty_file);
+    // ========================================================================
+    // 3. Parse Liberty Library
+    // ========================================================================
+    std::cout << "\n=== Parsing Liberty Library ===" << std::endl;
+    std::cout << "Reading: " << config.liberty_file << std::endl;
+    
+    LibertyParser l_parser;
+    auto library = l_parser.parseFile(config.liberty_file);
         if (!library) {
             std::cerr << "Error: Failed to parse Liberty file: " << l_parser.getError() << std::endl;
             return 1;
@@ -163,10 +124,11 @@ int main(int argc, char* argv[]) {
         std::unique_ptr<MacroMapper> macro_mapper;
         bool use_lef = false;
         
-        if (!lef_file.empty()) {
-            std::cout << "\nReading LEF physical library: " << lef_file << std::endl;
+        if (!config.lef_file.empty()) {
+            std::cout << "\n=== Reading LEF Physical Library ===" << std::endl;
+            std::cout << "Reading: " << config.lef_file << std::endl;
             try {
-                LefParser lef_parser(lef_file, false);  // verbose=false
+                LefParser lef_parser(config.lef_file, config.verbose);
                 lef_library = std::make_unique<LefLibrary>(lef_parser.parse());
                 use_lef = true;
                 
@@ -199,12 +161,17 @@ int main(int argc, char* argv[]) {
 
         // 4. Initialize Physical Database
         std::cout << "\nInitializing Physical Database..." << std::endl;
+        
+        // Detect actual row height from LEF (override config if available)
+        double actual_row_height = detectRowHeight(config);
+        
         PlacerDB placer_db(&db);
-        placer_db.setRowHeight(row_height);
-        std::cout << "  Row height: " << row_height << " micrometers" << std::endl;
+        placer_db.setRowHeight(actual_row_height);
+        std::cout << "  Row height: " << actual_row_height << " micrometers" << std::endl;
+        
+        // We'll calculate core area after adding cells
 
         // Add cells with dimensions from LEF or Liberty library
-        double total_cell_area = 0.0;
         int lef_matched_cells = 0;
         int liberty_matched_cells = 0;
         int fallback_cells = 0;
@@ -261,14 +228,16 @@ int main(int argc, char* argv[]) {
                 // Use Liberty area with proper row height sizing
                 placer_db.addCell(cell, cell_area);
                 // Debug: Liberty area path
-                std::cout << "    DEBUG: " << cell->getName() << " using Liberty area: " << cell_area << ", expected height: " << row_height << std::endl;
+                if (config.verbose) {
+                    std::cout << "    DEBUG: " << cell->getName() << " using Liberty area: " << cell_area << ", expected height: " << detectRowHeight(config) << std::endl;
+                }
             } else {
                 // Use default dimensions
                 placer_db.addCell(cell, cell_width, cell_height);
                 // Debug: Default path
                 std::cout << "    DEBUG: " << cell->getName() << " using default: " << cell_width << "x" << cell_height << std::endl;
             }
-            total_cell_area += cell_area;
+            // cell_area will be accumulated later
         }
         
         std::cout << "  Cell sizing breakdown:" << std::endl;
@@ -284,23 +253,34 @@ int main(int argc, char* argv[]) {
                       << " (" << (100.0 * stats.first / stats.second) << "%)" << std::endl;
         }
 
-        // Auto-compute core area with row snapping and original utilization
-        double target_utilization = utilization;  // Use original utilization (0.7)
-        double required_core_area = total_cell_area / target_utilization;
-        double core_width = std::sqrt(required_core_area);  // Make it square
-        
-        double row_height = 3.0;  // Same as row_height set in PlacerDB
-        int num_rows = static_cast<int>(std::ceil(core_width / row_height));
-        double core_height = num_rows * row_height;
-        
-        Rect core_area(0.0, 0.0, core_width, core_height);
-        placer_db.setCoreArea(core_area);
+        // Row height already detected and set above
 
-        std::cout << "  Total cell area: " << total_cell_area << " square micrometers" << std::endl;
-        std::cout << "  Target utilization: " << (target_utilization * 100) << "%" << std::endl;
-        std::cout << "  Core area: " << core_width << " x " << core_height 
-                  << " = " << (core_width * core_height) << " square micrometers" << std::endl;
-        std::cout << "  Row capacity: " << num_rows << " rows (each " << row_height << " μm tall)" << std::endl;
+        // Calculate and set core area based on total cell area and utilization
+        double total_cell_area = 0.0;
+        for (const auto& cell_ptr : db.getCells()) {
+            Cell* cell = cell_ptr.get();
+            const auto& info = placer_db.getCellInfo(cell);
+            total_cell_area += info.width * info.height;
+        }
+        
+        // Calculate core area based on utilization with row height alignment
+        double core_area_needed = total_cell_area / config.utilization;
+        double core_width = std::sqrt(core_area_needed);
+        
+        // Align core height to row height
+        int num_rows = static_cast<int>(std::ceil(core_width / actual_row_height));
+        double core_height = num_rows * actual_row_height;
+        
+        Rect core_area(0, 0, core_width, core_height);
+        placer_db.setCoreArea(core_area);
+        
+        if (config.verbose) {
+            std::cout << "  Total cell area: " << total_cell_area << " square micrometers" << std::endl;
+            std::cout << "  Target utilization: " << (config.utilization * 100) << "%" << std::endl;
+            std::cout << "  Core area: " << core_width << " x " << core_height 
+                      << " = " << (core_width * core_height) << " square micrometers" << std::endl;
+            std::cout << "  Row capacity: " << num_rows << " rows (each " << actual_row_height << " μm tall)" << std::endl;
+        }
 
         // 4. Initialize Visualizer
         std::cout << "\nSetting up Visualizer..." << std::endl;
@@ -309,14 +289,16 @@ int main(int argc, char* argv[]) {
         // 5. Initialize Random Placement
         std::cout << "\nInitializing Random Placement..." << std::endl;
         placer_db.initializeRandom();
-        visualizer.drawPlacementWithRunId("00_random", run_id);
-        std::cout << "  Random placement completed, saved to " << run_id << "_00_random.png" << std::endl;
+        visualizer.drawPlacementWithRunId("00_random", config.run_id);
+        if (config.verbose) {
+            std::cout << "  Random placement completed, saved to " << config.run_id << "_00_random.png" << std::endl;
+        }
 
         // 6. Setup Placement Engine
         std::cout << "\nSetting up Placement Engine..." << std::endl;
         PlacerEngine engine(&placer_db);
         engine.setVisualizer(&visualizer);
-        engine.setRunId(run_id);
+        engine.setRunId(config.run_id);
 
         // 7. Run Global Placement
         std::cout << "\n=== Running Global Placement ===" << std::endl;
@@ -336,10 +318,10 @@ int main(int argc, char* argv[]) {
         std::cout << "===================================" << std::endl;
         std::cout << "Final HPWL: " << engine.getCurrentHPWL() << std::endl;
         std::cout << "Output files in visualizations/ folder:" << std::endl;
-        std::cout << "  - " << run_id << "_00_random.png (initial placement)" << std::endl;
-        std::cout << "  - " << run_id << "_quadratic_iter_*.png (global placement progress)" << std::endl;
-        std::cout << "  - " << run_id << "_legalized.png (after legalization)" << std::endl;
-        std::cout << "  - " << run_id << "_detailed.png (final optimized placement)" << std::endl;
+        std::cout << "  - " << config.run_id << "_00_random.png (initial placement)" << std::endl;
+        std::cout << "  - " << config.run_id << "_quadratic_iter_*.png (global placement progress)" << std::endl;
+        std::cout << "  - " << config.run_id << "_legalized.png (after legalization)" << std::endl;
+        std::cout << "  - " << config.run_id << "_detailed.png (final optimized placement)" << std::endl;
 
     } catch (const std::exception& e) {
         std::cerr << "Fatal Error: " << e.what() << std::endl;
