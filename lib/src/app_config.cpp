@@ -3,7 +3,7 @@
  * @brief MiniEDA Application Configuration Implementation
  */
 
-#include "../include/app_config.h"
+#include "../../lib/include/app_config.h"
 #include <iostream>
 
 namespace mini {

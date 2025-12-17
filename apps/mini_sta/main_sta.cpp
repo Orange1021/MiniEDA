@@ -83,9 +83,9 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-        // 4. Build Timing Graph
+        // 4. Build Timing Graph with Liberty library for accurate arc extraction
         std::cout << "Building Timing Graph..." << std::endl;
-        TimingGraph timing_graph(&db);
+        TimingGraph timing_graph(&db, library.get());
         if (!timing_graph.buildFromNetlist()) {
             std::cerr << "Error: Failed to build timing graph" << std::endl;
             return 1;
@@ -96,15 +96,36 @@ int main(int argc, char* argv[]) {
         auto delay_model = std::make_shared<TableDelayModel>(library.get());
 
         // ========================================================================
-    // 4. Setup timing constraints
+    // 4. Setup timing constraints with industrial-grade features
     // ========================================================================
     TimingConstraints constraints;
     constraints.createClock("main_clk", "CK", config.clock_period);
-
-        // Optionally set I/O delays (these can be configured later)
-        // For now, use default delays (0.0) for all ports
-        // Example: constraints.setInputDelay("G0", 1.0);
-        // Example: constraints.setOutputDelay("G17", 1.0);
+    
+    // [NEW] Set industrial-grade timing constraints
+    constraints.setClockUncertainty(config.clock_uncertainty);
+    constraints.setMaxTransition(config.max_transition);
+    
+    // Set default input/output delays for all ports
+    constraints.setDefaultInputDelay(config.default_input_delay);
+    constraints.setDefaultOutputDelay(config.default_output_delay);
+    
+    if (config.default_input_delay > 0.0) {
+        std::cout << "  Setting default input delay: " << config.default_input_delay << " ns" << std::endl;
+    }
+    
+    if (config.default_output_delay > 0.0) {
+        std::cout << "  Setting default output delay: " << config.default_output_delay << " ns" << std::endl;
+    }
+    
+    // Set port-specific input delays
+    for (size_t i = 0; i < config.input_delay_ports.size(); ++i) {
+        constraints.setInputDelay(config.input_delay_ports[i], config.input_delay_values[i]);
+    }
+    
+    // Set port-specific output delays
+    for (size_t i = 0; i < config.output_delay_ports.size(); ++i) {
+        constraints.setOutputDelay(config.output_delay_ports[i], config.output_delay_values[i]);
+    }
 
         // 6. Run STA with NLDM
         std::cout << "\nInitializing STA Engine with NLDM..." << std::endl;

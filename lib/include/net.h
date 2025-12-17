@@ -163,6 +163,24 @@ public:
         wire_capacitance_ = capacitance;
     }
 
+    /**
+     * @brief Set wire length (physical routing length)
+     * @param length Wire length (unit: μm)
+     */
+    void setWireLength(double length) { wire_length_ = length; }
+
+    /**
+     * @brief Get wire length
+     * @return Wire length (unit: μm)
+     */
+    double getWireLength() const { return wire_length_; }
+
+    /**
+     * @brief Check if wire length has been set (routed)
+     * @return true if wire length > 0, false otherwise
+     */
+    bool hasWireLength() const { return wire_length_ > 0.0; }
+
     // ============ Special Attributes ============
     /**
      * @brief Set whether this net is a clock signal
@@ -193,6 +211,7 @@ private:
     double wire_capacitance_;           ///< Wire capacitance (pF)
     double wire_delay_;                 ///< Wire delay (ns)
     double wire_resistance_;            ///< Wire resistance (kΩ)
+    double wire_length_;                ///< Wire length from routing (μm)
 
     // Attributes
     bool is_clock_;                     ///< Whether this is a clock signal

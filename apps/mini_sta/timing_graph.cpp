@@ -8,6 +8,9 @@
 #include "../../lib/include/netlist_db.h"
 #include "../../lib/include/cell.h"
 #include "../../lib/include/net.h"
+#include "../../lib/include/liberty.h"
+#include "../../lib/include/liberty_pin_mapper.h"
+#include "cell_mapper.h"
 #include <algorithm>
 #include <stdexcept>
 #include <iostream>
@@ -21,8 +24,17 @@ namespace mini {
 /**
  * @brief Constructor
  */
-TimingGraph::TimingGraph(NetlistDB* netlist)
-    : netlist_(netlist) {
+TimingGraph::TimingGraph(NetlistDB* netlist, Library* library)
+    : netlist_(netlist), library_(library) {
+    // Initialize CellMapper if Liberty library is available
+    if (library_) {
+        cell_mapper_ = std::make_unique<CellMapper>(*library_);
+        cell_mapper_->setDebugMode(false); // Production mode - disable debug output
+    }
+    
+    // Initialize PinMapper for professional pin name translation
+    pin_mapper_ = std::make_unique<LibertyPinMapper>();
+    pin_mapper_->setDebugMode(false); // Set to true for debugging
 }
 
 /**
@@ -152,16 +164,17 @@ TimingNode* TimingGraph::createNode(Pin* pin) {
  * @param type Arc type
  * @param from_node Source node
  * @param to_node Destination node
+ * @param lib_timing Pointer to Liberty timing data (for CELL_ARC)
  * @return Pointer to created TimingArc
  */
-TimingArc* TimingGraph::createArc(TimingArcType type, TimingNode* from_node, TimingNode* to_node) {
+TimingArc* TimingGraph::createArc(TimingArcType type, TimingNode* from_node, TimingNode* to_node, const LibTiming* lib_timing) {
     if (!from_node || !to_node) {
         std::cerr << "Warning: createArc with null node!" << std::endl;
         return nullptr;
     }
 
-    // Create new arc
-    auto arc = std::make_unique<TimingArc>(type, from_node, to_node);
+    // Create new arc with Liberty timing data binding
+    auto arc = std::make_unique<TimingArc>(type, from_node, to_node, 0.0, lib_timing);
     TimingArc* arc_ptr = arc.get();
 
     // Store in container
@@ -175,34 +188,109 @@ TimingArc* TimingGraph::createArc(TimingArcType type, TimingNode* from_node, Tim
 }
 
 /**
- * @brief Build cell arcs (internal paths in cells)
- * @details For combinational cells: Input Pin -> Output Pin
+ * @brief Build cell arcs using Liberty-based timing arc extraction
+ * @details Creates only the timing arcs explicitly defined in Liberty library
+ * This eliminates false paths and enables accurate NLDM delay calculation
  * @return true if successful, false otherwise
  */
 bool TimingGraph::buildCellArcs() {
     size_t cell_arc_count = 0;
+    size_t liberty_arc_count = 0;
+    size_t fallback_arc_count = 0;
 
     for (const auto& cell : netlist_->getCells()) {
+        
+        
         // Skip I/O ports and sequential cells for now
         if (cell->isPort() || cell->isSequential()) {
             continue;
         }
 
-        // For combinational cells, create arcs from inputs to outputs
+        // For combinational cells, extract timing arcs from Liberty
         if (cell->isCombinational()) {
-            std::vector<Pin*> input_pins = cell->getInputPins();
-            std::vector<Pin*> output_pins = cell->getOutputPins();
-
-            // For simplicity, connect all inputs to all outputs
-            // This is a simplification - real tools would use timing arcs from liberty files
-            for (Pin* input_pin : input_pins) {
-                for (Pin* output_pin : output_pins) {
-                    TimingNode* from_node = getNode(input_pin);
-                    TimingNode* to_node = getNode(output_pin);
-
-                    if (from_node && to_node) {
-                        createArc(TimingArcType::CELL_ARC, from_node, to_node);
-                        cell_arc_count++;
+            // Try Liberty-based arc extraction first
+            if (library_ && cell_mapper_) {
+                // Use CellMapper to map logical cell type to physical Liberty cell
+                const LibCell* lib_cell = cell_mapper_->mapType(cell->getTypeString());
+                
+                if (lib_cell) {
+                    // Liberty-based arc extraction (INDUSTRIAL MODE)
+                    // Iterate through all pins in the Liberty cell
+                    for (const auto& pin_entry : lib_cell->pins) {
+                        const LibPin& lib_pin = pin_entry.second;
+                        
+                        // Only process output pins (they contain timing arcs)
+                        if (!lib_pin.isOutput()) {
+                            continue;
+                        }
+                        
+                        // [CRITICAL] Use professional PinMapper to translate to Verilog names
+                        std::string verilog_pin_name = pin_mapper_->getNetlistPinName(
+                            cell->getTypeString(), lib_pin.name);
+                        Pin* output_pin = cell->getPin(verilog_pin_name);
+                        if (!output_pin) {
+                            continue;
+                        }
+                        
+                        TimingNode* to_node = getNode(output_pin);
+                        if (!to_node) {
+                            continue;
+                        }
+                        
+                        // Iterate through all timing arcs for this output pin
+                        for (const LibTiming& lib_timing : lib_pin.timing_arcs) {
+                            // [CRITICAL] Use professional PinMapper to translate input pin names
+                            std::string verilog_input_pin = pin_mapper_->getNetlistPinName(
+                                cell->getTypeString(), lib_timing.related_pin);
+                            Pin* input_pin = cell->getPin(verilog_input_pin);
+                            if (!input_pin) {
+                                continue;
+                            }
+                            
+                            TimingNode* from_node = getNode(input_pin);
+                            if (!from_node) {
+                                continue;
+                            }
+                            
+                            // Create arc with Liberty timing data binding
+                            createArc(TimingArcType::CELL_ARC, from_node, to_node, &lib_timing);
+                            cell_arc_count++;
+                            liberty_arc_count++;
+                        }
+                    }
+                } else {
+                    // Fallback: Liberty cell not found, use legacy fully connected logic
+                    std::vector<Pin*> input_pins = cell->getInputPins();
+                    std::vector<Pin*> output_pins = cell->getOutputPins();
+                    
+                    for (Pin* input_pin : input_pins) {
+                        for (Pin* output_pin : output_pins) {
+                            TimingNode* from_node = getNode(input_pin);
+                            TimingNode* to_node = getNode(output_pin);
+                            
+                            if (from_node && to_node) {
+                                createArc(TimingArcType::CELL_ARC, from_node, to_node, nullptr);
+                                cell_arc_count++;
+                                fallback_arc_count++;
+                            }
+                        }
+                    }
+                }
+            } else {
+                // No Liberty library provided, use legacy fully connected logic
+                std::vector<Pin*> input_pins = cell->getInputPins();
+                std::vector<Pin*> output_pins = cell->getOutputPins();
+                
+                for (Pin* input_pin : input_pins) {
+                    for (Pin* output_pin : output_pins) {
+                        TimingNode* from_node = getNode(input_pin);
+                        TimingNode* to_node = getNode(output_pin);
+                        
+                        if (from_node && to_node) {
+                            createArc(TimingArcType::CELL_ARC, from_node, to_node, nullptr);
+                            cell_arc_count++;
+                            fallback_arc_count++;
+                        }
                     }
                 }
             }
@@ -210,6 +298,13 @@ bool TimingGraph::buildCellArcs() {
     }
 
     std::cout << "  Created " << cell_arc_count << " cell arcs." << std::endl;
+    if (liberty_arc_count > 0) {
+        std::cout << "    Liberty-based arcs: " << liberty_arc_count << std::endl;
+    }
+    if (fallback_arc_count > 0) {
+        std::cout << "    Fallback arcs (no Liberty data): " << fallback_arc_count << std::endl;
+    }
+    
     return true;
 }
 
@@ -426,6 +521,8 @@ std::vector<TimingNode*> TimingGraph::topologicalSortKahn() const {
 
     return order;
 }
+
+
 
 /**
  * @brief Calculate in-degrees of all nodes

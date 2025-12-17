@@ -5,8 +5,8 @@
  *          and generating consistent lookup keys across the entire EDA flow.
  */
 
-#ifndef MINI_PIN_MAPPER_H
-#define MINI_PIN_MAPPER_H
+#ifndef MINI_LEF_PIN_MAPPER_H
+#define MINI_LEF_PIN_MAPPER_H
 
 #include <string>
 #include <vector>
@@ -27,21 +27,21 @@ class MacroMapper;
 namespace mini {
 
 /**
- * @class PinMapper
- * @brief Unified pin mapping and key generation system
+ * @class LefPinMapper
+ * @brief Unified LEF physical pin mapping and key generation system
  * @details This class provides a single source of truth for:
  *          1. Mapping logical pin names (Verilog) to physical pin names (LEF)
  *          2. Generating consistent lookup keys for pin location maps
  *          3. Eliminating mapping logic duplication between modules
  */
-class PinMapper {
+class LefPinMapper {
 public:
     /**
      * @brief Constructor
-     * @param lef_lib Reference to LEF library containing physical macros
-     * @param macro_mapper Reference to macro mapper for cell type mapping
+     * @param lef_lib LEF library containing physical pin definitions
+     * @param macro_mapper Cell type to LEF macro mapper
      */
-    PinMapper(const LefLibrary& lef_lib, const MacroMapper& macro_mapper);
+    LefPinMapper(const LefLibrary& lef_lib, const MacroMapper& macro_mapper);
 
     /**
      * @brief Get physical pin name from logical pin name
@@ -51,7 +51,7 @@ public:
      * @details Uses the same heuristic mapping logic as buildPinLocationMap
      */
     std::string getPhysicalPinName(const std::string& cell_type, 
-                                  const std::string& logical_pin_name);
+                                  const std::string& logical_pin_name) const;
 
     /**
      * @brief Generate consistent lookup key for pin location maps
@@ -110,8 +110,8 @@ private:
     bool debug_enabled_ = false;
     
     // Statistics
-    size_t successful_mappings_ = 0;
-    size_t total_attempts_ = 0;
+    mutable size_t successful_mappings_ = 0;
+    mutable size_t total_attempts_ = 0;
 
     /**
      * @brief Try direct pin name match in LEF macro
@@ -134,4 +134,4 @@ private:
 
 } // namespace mini
 
-#endif // MINI_PIN_MAPPER_H
+#endif // MINI_LEF_PIN_MAPPER_H

@@ -17,12 +17,14 @@ namespace mini {
 /**
  * @brief Constructor
  */
-TimingArc::TimingArc(TimingArcType type, TimingNode* from, TimingNode* to, double delay)
+TimingArc::TimingArc(TimingArcType type, TimingNode* from, TimingNode* to, double delay, const LibTiming* lib_timing)
     : type_(type),
       from_node_(from),
       to_node_(to),
       delay_(delay),
-      output_slew_(0.0) {
+      output_slew_(0.0),
+      output_slew_min_(0.0),
+      lib_timing_(lib_timing) {
 }
 
 /**
@@ -65,7 +67,8 @@ TimingNode::TimingNode(Pin* pin)
       rat_min_(-UNINITIALIZED),       // Initialize to negative infinity (for max calculation)
       slack_setup_(0.0),
       slack_hold_(0.0),
-      slew_(0.0) {
+      slew_(0.0),
+      pin_capacitance_(0.0) {
 }
 
 /**
@@ -75,11 +78,12 @@ TimingNode::~TimingNode() = default;
 
 /**
  * @brief Reset timing data to uninitialized state
- * @details Clears arrival_time, required_time, slack, and slew for new analysis
- * @note at_max initialized to -INF (for max propagation)
+ * @details Initializes:
+ *       at_max initialized to -INF (for max propagation)
  *       at_min initialized to +INF (for min propagation)
  *       rat_max initialized to +INF (for min propagation - RAT)
  *       rat_min initialized to -INF (for max propagation - Hold RAT)
+ *       slew_max/slew_min initialized to 0 (will be set during propagation)
  */
 void TimingNode::reset() {
     at_max_ = -UNINITIALIZED;          // Negative infinity: start very low for max calculation
@@ -88,7 +92,8 @@ void TimingNode::reset() {
     rat_min_ = -UNINITIALIZED;          // Negative infinity: start very low for max calculation (Hold RAT)
     slack_setup_ = 0.0;
     slack_hold_ = 0.0;
-    slew_ = 0.0;
+    slew_max_ = 0.0;                   // Setup path slew (will be set during propagation)
+    slew_min_ = 0.0;                   // Hold path slew (will be set during propagation)
 }
 
 /**

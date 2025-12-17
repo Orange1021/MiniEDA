@@ -20,6 +20,9 @@ class NetlistDB;
 class Pin;
 class Cell;
 class Net;
+class Library;
+class CellMapper;
+class LibertyPinMapper;
 
 /**
  * @class TimingGraph
@@ -31,10 +34,11 @@ public:
     /**
      * @brief Constructor
      * @param netlist Pointer to underlying physical netlist database (read-only)
+     * @param library Pointer to Liberty library for timing arc extraction (optional)
      * @warning TimingGraph knows about NetlistDB, but NetlistDB must NOT include TimingGraph headers,
      * ensuring purity of the underlying database
      */
-    explicit TimingGraph(NetlistDB* netlist);
+    explicit TimingGraph(NetlistDB* netlist, Library* library = nullptr);
 
     /**
      * @brief Destructor
@@ -255,6 +259,9 @@ private:
     // ============================================================================
 
     NetlistDB* netlist_;                                 ///< Read-only reference to underlying physical netlist database
+    Library* library_;                                   ///< Read-only reference to Liberty library (optional)
+    std::unique_ptr<CellMapper> cell_mapper_;            ///< Intelligent logical→physical cell type mapper
+    std::unique_ptr<LibertyPinMapper> pin_mapper_;       ///< Professional Liberty→Verilog pin name translator
     std::vector<std::unique_ptr<TimingNode>> nodes_;     ///< Owns all node memory
     std::vector<std::unique_ptr<TimingArc>> arcs_;       ///< Owns all arc memory
 
@@ -279,9 +286,10 @@ private:
      * @param type Arc type (CELL_ARC or NET_ARC)
      * @param from_node Source node
      * @param to_node Destination node
+     * @param lib_timing Pointer to Liberty timing data (for CELL_ARC)
      * @return Created TimingArc pointer
      */
-    TimingArc* createArc(TimingArcType type, TimingNode* from_node, TimingNode* to_node);
+    TimingArc* createArc(TimingArcType type, TimingNode* from_node, TimingNode* to_node, const LibTiming* lib_timing = nullptr);
 
     /**
      * @brief Build all CELL_ARC (traverse all Cell Input → Output)
@@ -305,6 +313,8 @@ private:
     void dfsTopologicalSort(TimingNode* node, std::vector<int>& visited,
                             const std::unordered_map<TimingNode*, int>& node_to_id,
                             std::vector<TimingNode*>& order) const;
+
+    
 
     /**
      * @brief Calculate node in-degrees (Kahn's algorithm helper)

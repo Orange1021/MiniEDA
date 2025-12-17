@@ -46,6 +46,20 @@ struct AppConfig {
     double clock_period = 10.0;                              ///< Clock period in nanoseconds (STA)
     double via_cost = 10.0;                                  ///< Via penalty cost multiplier (Routing)
     double wire_cost = 1.0;                                  ///< Wire cost per unit length (Routing)
+    double wire_cap_per_unit = 0.0002;                       ///< Wire capacitance per unit length (pF/μm, default: 0.2 fF/μm for 45nm)
+    double wire_resistance_per_unit = 0.005;                 ///< Wire resistance per unit length (kΩ/μm, default: 5 Ω/μm for 45nm)
+    
+    // ========================================================================
+    // [NEW] Industrial-Grade Timing Constraints
+    // ========================================================================
+    double clock_uncertainty = 0.05;                         ///< Clock uncertainty/jitter in nanoseconds
+    double default_input_delay = 0.0;                        ///< Default input delay for all PI ports (ns)
+    double default_output_delay = 0.0;                       ///< Default output delay for all PO ports (ns)
+    double max_transition = 0.5;                             ///< Maximum transition time constraint (ns)
+    std::vector<std::string> input_delay_ports;              ///< Specific ports with custom input delays
+    std::vector<double> input_delay_values;                  ///< Corresponding input delay values
+    std::vector<std::string> output_delay_ports;             ///< Specific ports with custom output delays  
+    std::vector<double> output_delay_values;                 ///< Corresponding output delay values
     
     // ========================================================================
     // Flow Control
@@ -62,6 +76,14 @@ struct AppConfig {
     double convergence_threshold = 1e-6;                     ///< Placement convergence threshold
     int max_placement_iterations = 100;                       ///< Maximum placement iterations
     double routing_grid_expansion = 1.2;                     ///< Routing grid expansion factor
+    
+    // ========================================================================
+    // Process-Based Default Values (Nangate 45nm)
+    // ========================================================================
+    double default_input_slew = 0.01 * 1e-9;                  ///< 10ps typical input slew
+    double default_cell_delay = 0.02 * 1e-9;                  ///< 20ps typical cell delay
+    double max_transition_time = 0.198535 * 1e-9;            ///< 198.5ps (from library)
+    double min_transition_time = 0.001 * 1e-9;               ///< 1ps minimum transition
     
     // ========================================================================
     // Application-Specific Flags

@@ -9,11 +9,14 @@
 
 #include "../../lib/include/liberty.h"
 #include "cell_mapper.h"
+#include "timing_path.h"
+#include <utility>
 
 namespace mini {
 
 // Forward declarations
 class Cell;
+class Pin;
 class Net;
 class Library;
 
@@ -56,6 +59,24 @@ public:
      * @return Calculated wire delay value
      */
     virtual double calculateWireDelay(Net* net) = 0;
+
+    /**
+     * @brief Calculate point-to-point interconnect delay and slew degradation
+     * @details Uses Elmore delay model: delay = R_wire * (C_load + 0.5 * C_wire)
+     * Slew degradation: out_slew = sqrt(in_slew^2 + (k * delay)^2)
+     * @param driver_pin Driver pin
+     * @param load_pin Load pin
+     * @param input_slew Input slew at driver
+     * @param wire_r_per_unit Wire resistance per unit length (kΩ/μm)
+     * @param wire_c_per_unit Wire capacitance per unit length (pF/μm)
+     * @return Pair of {delay, output_slew} in seconds
+     */
+    virtual std::pair<double, double> calculateInterconnectDelay(
+        Pin* driver_pin, 
+        Pin* load_pin,
+        double input_slew,
+        double wire_r_per_unit,
+        double wire_c_per_unit) = 0;
 };
 
 /**
@@ -108,6 +129,16 @@ public:
      */
     double calculateWireDelay(Net* net) override;
 
+    /**
+     * @brief Calculate point-to-point interconnect delay (simplified)
+     */
+    std::pair<double, double> calculateInterconnectDelay(
+        Pin* driver_pin, 
+        Pin* load_pin,
+        double input_slew,
+        double wire_r_per_unit,
+        double wire_c_per_unit) override;
+
 private:
     double intrinsic_delay_;        ///< Intrinsic delay constant (seconds)
     double load_coefficient_;       ///< Load coefficient (seconds/farad)
@@ -158,6 +189,52 @@ public:
      * @return Calculated wire delay
      */
     double calculateWireDelay(Net* net) override;
+
+    /**
+     * @brief [NEW] Calculate output slew with explicit signal edge from NLDM tables
+     * @param timing_arc Timing arc with Liberty data
+     * @param input_slew Input signal transition slew rate
+     * @param load_cap Output load capacitance
+     * @param edge Signal edge direction (RISE or FALL)
+     * @return Calculated output slew from appropriate NLDM table
+     */
+    double calculateOutputSlewWithEdge(const LibTiming* timing_arc,
+                                        double input_slew, 
+                                        double load_cap, 
+                                        SignalEdge edge) const;
+
+    /**
+     * @brief [NEW] Determine signal edge based on timing sense
+     * @param timing_sense Liberty timing sense ("positive_unate", "negative_unate", "non_unate")
+     * @param input_edge Input signal edge (assumed to be the direction causing this calculation)
+     * @return Output signal edge for NLDM table selection
+     */
+    SignalEdge determineOutputEdge(const std::string& timing_sense, SignalEdge input_edge) const;
+
+    /**
+     * @brief Get Liberty library pointer
+     * @return Pointer to Liberty library
+     */
+    const Library* getLibrary() const { return library_; }
+
+    /**
+     * @brief Get cell mapper pointer
+     * @return Pointer to CellMapper
+     */
+    const CellMapper* getCellMapper() const { return cell_mapper_.get(); }
+
+    /**
+     * @brief Calculate point-to-point interconnect delay using Elmore model
+     * @details Implements:
+     * - Elmore Delay: delay = R_wire * (C_load + 0.5 * C_wire)
+     * - Slew Degradation: out_slew = sqrt(in_slew^2 + (2.2 * delay)^2)
+     */
+    std::pair<double, double> calculateInterconnectDelay(
+        Pin* driver_pin, 
+        Pin* load_pin,
+        double input_slew,
+        double wire_r_per_unit,
+        double wire_c_per_unit) override;
 
 private:
     Library* library_;              ///< Pointer to Liberty library

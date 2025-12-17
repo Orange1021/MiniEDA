@@ -15,6 +15,7 @@ namespace mini {
 // Forward declarations
 class Pin;
 class TimingNode;
+struct LibTiming;
 
 /**
  * @brief Timing Arc Type Enumeration
@@ -23,6 +24,15 @@ class TimingNode;
 enum class TimingArcType {
     CELL_ARC,   ///< Cell delay arc (Input Pin -> Output Pin)
     NET_ARC     ///< Net delay arc (Driver Pin -> Load Pin)
+};
+
+/**
+ * @brief Signal Edge Enumeration
+ * @details Defines the signal transition direction for NLDM table selection
+ */
+enum class SignalEdge {
+    RISE,      ///< Rising edge (0→1 transition)
+    FALL       ///< Falling edge (1→0 transition)
 };
 
 /**
@@ -38,8 +48,9 @@ public:
      * @param from Source TimingNode
      * @param to Destination TimingNode
      * @param delay Initial delay value
+     * @param lib_timing Pointer to Liberty timing data (for CELL_ARC)
      */
-    TimingArc(TimingArcType type, TimingNode* from, TimingNode* to, double delay = 0.0);
+    TimingArc(TimingArcType type, TimingNode* from, TimingNode* to, double delay = 0.0, const LibTiming* lib_timing = nullptr);
 
     // ============ Basic Accessors ============
     TimingArcType getType() const { return type_; }
@@ -47,6 +58,8 @@ public:
     TimingNode* getToNode() const { return to_node_; }
     double getDelay() const { return delay_; }
     double getOutputSlew() const { return output_slew_; }
+    double getOutputSlewMin() const { return output_slew_min_; }
+    const LibTiming* getLibTiming() const { return lib_timing_; }
 
     // ============ Modifiers ============
     void setDelay(double delay) { delay_ = delay; }
@@ -73,7 +86,9 @@ private:
     TimingNode* from_node_;     ///< Source node
     TimingNode* to_node_;       ///< Destination node
     double delay_;              ///< Calculated delay value
-    double output_slew_;        ///< Output slew from this arc (for CELL_ARC)
+    double output_slew_;        ///< Output slew from this arc (for CELL_ARC) - legacy (max)
+    double output_slew_min_;    ///< Output slew for Hold analysis (min path)
+    const LibTiming* lib_timing_;  ///< Pointer to Liberty timing data (nullptr for NET_ARC)
 };
 
 /**
@@ -110,6 +125,14 @@ public:
     double getRequiredTimeMax() const { return rat_max_; }
     double getRequiredTimeMin() const { return rat_min_; }
 
+    // Slew values
+    double getSlewMax() const { return slew_max_; }
+    double getSlewMin() const { return slew_min_; }
+
+    // Pin capacitance
+    double getPinCapacitance() const { return pin_capacitance_; }
+    void setPinCapacitance(double cap) { pin_capacitance_ = cap; }
+
     // Slack timing checks
     double getSlackSetup() const { return slack_setup_; }
     double getSlackHold() const { return slack_hold_; }
@@ -131,7 +154,13 @@ public:
     void setRequiredTimeMin(double rat) { rat_min_ = rat; }
     void setSlackSetup(double slack) { slack_setup_ = slack; }
     void setSlackHold(double slack) { slack_hold_ = slack; }
-    void setSlew(double slew) { slew_ = slew; }
+    
+    // Legacy setter (sets max for backward compatibility)
+    void setSlew(double slew) { slew_max_ = slew; }
+    
+    // New Min/Max Slew setters
+    void setSlewMax(double slew) { slew_max_ = slew; }
+    void setSlewMin(double slew) { slew_min_ = slew; }
     void addIncomingArc(TimingArc* arc) { incoming_arcs_.push_back(arc); }
     void addOutgoingArc(TimingArc* arc) { outgoing_arcs_.push_back(arc); }
 
@@ -180,7 +209,10 @@ private:
     double rat_min_;                        ///< Required Time (Min): for Hold analysis
     double slack_setup_;                    ///< Setup slack: rat_max - at_max
     double slack_hold_;                     ///< Hold slack: at_min - rat_min (hold check)
+    double slew_max_;                       ///< Signal transition slew rate (Max path)
+    double slew_min_;                       ///< Signal transition slew rate (Min path)
     double slew_;                           ///< Signal transition slew rate
+    double pin_capacitance_;                ///< Pin capacitance from Liberty library
 
     std::vector<TimingArc*> incoming_arcs_; ///< Incoming edges (predecessors)
     std::vector<TimingArc*> outgoing_arcs_; ///< Outgoing edges (successors)

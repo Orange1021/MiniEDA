@@ -212,8 +212,8 @@ void runPostRoutingSTA(const AppConfig& config, std::shared_ptr<NetlistDB> netli
                   << " with " << library->getCellCount() << " cells" << std::endl;
     }
     
-    // Build timing graph
-    auto timing_graph = std::make_unique<TimingGraph>(netlist_db.get());
+    // Build timing graph with Liberty library for accurate arc extraction
+    auto timing_graph = std::make_unique<TimingGraph>(netlist_db.get(), library.get());
     timing_graph->buildFromNetlist();
     
     // Initialize delay model

@@ -9,7 +9,7 @@
 #include "../../lib/include/verilog_parser.h"
 #include "../../lib/include/liberty_parser.h"
 #include "../../lib/include/lef_parser.h"
-#include "../../lib/include/pin_mapper.h"
+#include "../../lib/include/lef_pin_mapper.h"
 #include "../../lib/include/visualizer.h"
 #include "../../lib/include/app_config.h"
 #include "../../lib/include/arg_parser.h"
@@ -150,7 +150,7 @@ std::unordered_map<std::string, Point> buildPinLocations(
     std::cout << "Building pin locations map..." << std::endl;
     
     // Create PinMapper for unified key generation
-    auto pin_mapper = std::make_unique<PinMapper>(lef_lib, macro_mapper);
+    auto pin_mapper = std::make_unique<LefPinMapper>(lef_lib, macro_mapper);
     std::unordered_map<std::string, Point> pin_locations;
     
     auto all_cells = placer_db.getAllCells();
@@ -389,7 +389,7 @@ int main(int argc, char* argv[]) {
         // ========================================================================
     // 7. Create PinMapper and MazeRouter
     // ========================================================================
-    PinMapper pin_mapper(*lef_lib, macro_mapper);
+    LefPinMapper pin_mapper(*lef_lib, macro_mapper);
     MazeRouter router(&routing_grid, &pin_mapper);
     router.setViaCost(config.via_cost);
     router.setWireCostPerUnit(config.wire_cost);

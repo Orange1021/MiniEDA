@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cmath>
 #include <stdexcept>
+#include <iostream>
 
 namespace mini {
 
@@ -111,10 +112,22 @@ double LookupTable::lookup(double x, double y) const {
 std::vector<std::string> Library::getCellNames() const {
     std::vector<std::string> names;
     names.reserve(cells_.size());
+    
     for (const auto& pair : cells_) {
         names.push_back(pair.first);
     }
+    
     return names;
+}
+
+void Library::printCellNames() const {
+    std::cout << "Library contains " << cells_.size() << " cells:" << std::endl;
+    int count = 0;
+    for (const auto& pair : cells_) {
+        std::cout << "  " << pair.first;
+        if (++count % 5 == 0) std::cout << std::endl;
+    }
+    if (count % 5 != 0) std::cout << std::endl;
 }
 
 } // namespace mini

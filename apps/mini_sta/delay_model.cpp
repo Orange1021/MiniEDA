@@ -11,6 +11,7 @@
 #include <iostream>
 #include <cmath>
 #include <memory>
+#include <utility>
 
 namespace mini {
 
@@ -69,6 +70,19 @@ double LinearDelayModel::calculateWireDelay(Net* net) {
     // return 0.5 * resistance * capacitance;
 
     return 0.0;  // Simplified: ignore wire delay for now
+}
+
+/**
+ * @brief Calculate point-to-point interconnect delay (simplified)
+ */
+std::pair<double, double> LinearDelayModel::calculateInterconnectDelay(
+    Pin* /* driver_pin */, 
+    Pin* /* load_pin */,
+    double input_slew,
+    double /* wire_r_per_unit */,
+    double /* wire_c_per_unit */) {
+    // Simplified: return zero delay and pass through slew
+    return {0.0, input_slew};
 }
 
 // ============================================================================
@@ -162,16 +176,106 @@ double TableDelayModel::calculateOutputSlew(Cell* cell, double input_slew, doubl
         return 0.05 * 1e-9;  // Default fallback
     }
 
-    // 3. For simplicity, use a fraction of the delay as slew
-    // In a real library, there would be separate slew tables
-    if (timing_arc->cell_delay.isValid()) {
+    // 3. [NEW] Use proper NLDM slew table lookup
+    // For now, we'll use rise_transition as default (will be enhanced with edge detection)
+    const LookupTable* slew_table = nullptr;
+    
+    // Priority: rise_transition > fall_transition > delay approximation
+    if (timing_arc->rise_transition.isValid()) {
+        slew_table = &timing_arc->rise_transition;
+    } else if (timing_arc->fall_transition.isValid()) {
+        slew_table = &timing_arc->fall_transition;
+    } else if (timing_arc->cell_delay.isValid()) {
+        // Fallback: use delay table as rough approximation (better than magic number)
         double delay = timing_arc->cell_delay.lookup(input_slew, load_cap);
-        // Approximate slew as 50% of delay (this is library-dependent)
-        return delay * 0.5 * 1e-9;  // Convert ns to s
+        return delay * 0.7 * 1e-9;  // Slightly better approximation: 70% of delay
     }
 
-    // Fallback
+    // 4. Perform NLDM lookup
+    if (slew_table && slew_table->isValid()) {
+        double output_slew = slew_table->lookup(input_slew, load_cap);
+        return output_slew * 1e-9;  // Convert from ns to s
+    }
+
+    // Final fallback
     return 0.05 * 1e-9;
+}
+
+/**
+ * @brief [NEW] Calculate output slew with explicit signal edge from NLDM tables
+ * @param timing_arc Timing arc with Liberty data
+ * @param input_slew Input signal transition slew rate
+ * @param load_cap Output load capacitance
+ * @param edge Signal edge direction (RISE or FALL)
+ * @return Calculated output slew from appropriate NLDM table
+ */
+double TableDelayModel::calculateOutputSlewWithEdge(const LibTiming* timing_arc,
+                                                     double input_slew, 
+                                                     double load_cap, 
+                                                     SignalEdge edge) const {
+    // 1. Safety checks
+    if (!timing_arc) {
+        return 0.001 * 1e-9;  // Fallback: 1ps (minimum realistic value)
+    }
+
+    // 2. Select correct lookup table based on signal edge
+    const LookupTable* slew_table = nullptr;
+    
+    if (edge == SignalEdge::RISE) {
+        slew_table = &timing_arc->rise_transition;
+    } else {  // FALL
+        slew_table = &timing_arc->fall_transition;
+    }
+
+    // 3. Verify table is valid
+    if (!slew_table || !slew_table->isValid()) {
+        // Fallback: try the other table
+        const LookupTable* fallback_table = (edge == SignalEdge::RISE) ? 
+            &timing_arc->fall_transition : &timing_arc->rise_transition;
+        
+        if (fallback_table && fallback_table->isValid()) {
+            slew_table = fallback_table;
+        } else {
+            // Final fallback: use delay approximation
+            if (timing_arc->cell_delay.isValid()) {
+                double delay = timing_arc->cell_delay.lookup(input_slew, load_cap);
+                return delay * 0.7 * 1e-9;  // 70% of delay as rough estimate
+            }
+            return 0.001 * 1e-9;  // 1ps fallback
+        }
+    }
+
+    // 4. Perform NLDM lookup
+    double output_slew = slew_table->lookup(input_slew, load_cap);
+    
+    // 5. Ensure reasonable bounds (prevent negative or extremely small slew)
+    if (output_slew <= 0.001) {  // Less than 1ps
+        output_slew = 0.001;  // Minimum 1ps
+    }
+    
+    return output_slew * 1e-9;  // Convert from ns to s
+}
+
+/**
+ * @brief [NEW] Determine signal edge based on timing sense
+ * @param timing_sense Liberty timing sense ("positive_unate", "negative_unate", "non_unate")
+ * @param input_edge Input signal edge (assumed to be the direction causing this calculation)
+ * @return Output signal edge for NLDM table selection
+ */
+SignalEdge TableDelayModel::determineOutputEdge(const std::string& timing_sense, SignalEdge input_edge) const {
+    // Handle unateness based on Liberty timing sense
+    if (timing_sense == "positive_unate") {
+        // Positive unate: output follows input direction
+        // Input Rise → Output Rise, Input Fall → Output Fall
+        return input_edge;
+    } else if (timing_sense == "negative_unate") {
+        // Negative unate: output inverts input direction
+        // Input Rise → Output Fall, Input Fall → Output Rise
+        return (input_edge == SignalEdge::RISE) ? SignalEdge::FALL : SignalEdge::RISE;
+    } else {
+        // Non_unate or unknown: default to positive unate
+        return input_edge;
+    }
 }
 
 /**
@@ -241,7 +345,6 @@ double TableDelayModel::calculateWireDelay(Net* net) {
             }
         }
         
-        double total_cap = wire_c + total_pin_cap;
         return wire_r * (wire_c/2.0 + total_pin_cap);  // kΩ * pF = ns
     }
     
@@ -273,7 +376,6 @@ double TableDelayModel::calculateWireDelay(Net* net) {
     }
     
     // 5. Elmore delay model: Delay = R_wire * (C_wire/2 + C_load)
-    double total_cap = wire_c + total_pin_cap;  // pF
     double delay = wire_r * (wire_c/2.0 + total_pin_cap);  // kΩ * pF = ns
     
     return delay;
@@ -301,6 +403,118 @@ const LibTiming* TableDelayModel::findTimingArc(const LibCell* lib_cell,
     }
 
     return nullptr;  // No matching timing arc found
+}
+
+/**
+ * @brief Calculate point-to-point interconnect delay using Elmore model
+ * @details Implements:
+ * 1. Calculate Manhattan distance between driver and load pins
+ * 2. Elmore Delay: delay = R_wire * (C_load + 0.5 * C_wire)
+ * 3. Slew Degradation: out_slew = sqrt(in_slew^2 + (k * delay)^2)
+ */
+std::pair<double, double> TableDelayModel::calculateInterconnectDelay(
+    Pin* driver_pin, 
+    Pin* load_pin,
+    double input_slew,
+    double wire_r_per_unit,
+    double wire_c_per_unit) {
+    
+    // Default fallback values
+    const double MIN_DELAY = 1e-15;  // 1fs minimum
+    const double SLEW_FACTOR = 2.2;  // Bakoglu metric coefficient
+    
+    // Safety checks
+    if (!driver_pin || !load_pin) {
+        return {MIN_DELAY, input_slew};
+    }
+    
+    Cell* driver_cell = driver_pin->getOwner();
+    Cell* load_cell = load_pin->getOwner();
+    if (!driver_cell || !load_cell) {
+        return {MIN_DELAY, input_slew};
+    }
+    
+    // ========================================================================
+    // 1. Calculate wire length (prioritize actual routing length)
+    // ========================================================================
+    double wire_length = 0.0;
+    
+    // Priority 1: Use actual routed wire length from Router (if available)
+    Net* net = driver_pin->getNet();
+    if (net && net->hasWireLength()) {
+        wire_length = net->getWireLength();  // ✅ Actual routing length
+    } else {
+        // Priority 2: Fallback to Manhattan distance estimate (pre-routing)
+        double driver_x = driver_cell->getX();
+        double driver_y = driver_cell->getY();
+        double load_x = load_cell->getX();
+        double load_y = load_cell->getY();
+        
+        wire_length = std::abs(load_x - driver_x) + std::abs(load_y - driver_y);  // μm
+    }
+    
+    // If cells are not placed or at same location, use minimal delay
+    if (wire_length < 0.01) {  // Less than 0.01 μm
+        return {MIN_DELAY, input_slew};
+    }
+    
+    // ========================================================================
+    // 2. Calculate wire R and C
+    // ========================================================================
+    double r_wire = wire_length * wire_r_per_unit;  // kΩ
+    double c_wire = wire_length * wire_c_per_unit;  // pF
+    
+    // ========================================================================
+    // 3. Get load pin capacitance from Liberty
+    // ========================================================================
+    double c_load = 0.002;  // Default 2fF
+    
+    if (library_ && cell_mapper_) {
+        std::string load_cell_type = load_cell->getTypeString();
+        const LibCell* lib_cell = cell_mapper_->mapType(load_cell_type);
+        
+        if (lib_cell) {
+            std::string load_pin_name = load_pin->getName();
+            const LibPin* lib_pin = lib_cell->getPin(load_pin_name);
+            
+            if (lib_pin && lib_pin->capacitance > 0.0) {
+                c_load = lib_pin->capacitance;  // pF
+            }
+        }
+    }
+    
+    // ========================================================================
+    // 4. Elmore Delay Model: delay = R_wire * (C_load + 0.5 * C_wire)
+    // ========================================================================
+    double elmore_delay = r_wire * (c_load + 0.5 * c_wire);  // kΩ * pF = ns
+    
+    // Ensure minimum delay
+    if (elmore_delay < MIN_DELAY * 1e9) {  // Convert fs to ns for comparison
+        elmore_delay = MIN_DELAY * 1e9;
+    }
+    
+    // ========================================================================
+    // 5. Slew Degradation (Bakoglu approximation)
+    // ========================================================================
+    // Wire contributes to slew degradation: slew_wire ≈ k * delay
+    // Total output slew uses RSS (Root Sum Square) combination:
+    // out_slew = sqrt(in_slew^2 + slew_wire^2)
+    
+    double slew_wire_contribution = SLEW_FACTOR * elmore_delay * 1e-9;  // Convert ns to s
+    double output_slew = std::sqrt(
+        std::pow(input_slew, 2) + 
+        std::pow(slew_wire_contribution, 2)
+    );
+    
+    // Ensure reasonable bounds
+    if (output_slew < input_slew) {
+        output_slew = input_slew;  // Slew can only degrade, not improve
+    }
+    
+    // ========================================================================
+    // 6. Return results
+    // ========================================================================
+    return {elmore_delay * 1e-9, output_slew};  // Convert delay from ns to s
 }
 
 } // namespace mini

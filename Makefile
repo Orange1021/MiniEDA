@@ -17,7 +17,7 @@ PLACER_DIR := apps/mini_placement
 ROUTER_DIR := apps/mini_router
 
 # Core library source files
-LIB_SRCS := $(wildcard $(LIB_SRC_DIR)/*.cpp)
+LIB_SRCS := $(wildcard $(LIB_SRC_DIR)/*.cpp) lib/src/liberty_pin_mapper.cpp lib/src/lef_pin_mapper.cpp
 LIB_OBJS := $(patsubst $(LIB_SRC_DIR)/%.cpp, $(BUILD_LIB_DIR)/%.o, $(LIB_SRCS))
 
 # Additional application source files (dependencies for lib)

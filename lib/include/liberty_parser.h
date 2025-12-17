@@ -53,6 +53,8 @@ private:
     void parseCellBody(LibCell* cell);
     void parsePinBody(LibPin* pin);
     void parseTimingBody(LibTiming* timing);
+    void parseConstraintBody(LibConstraint* constraint, const std::string& constraint_type);
+    void parseTimingBodyWithConstraints(LibPin* pin);
     
     // 3. Value parsing
     void parseValuesTable(LookupTable* table);

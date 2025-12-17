@@ -79,9 +79,27 @@ struct LibTiming {
 };
 
 /**
+ * @struct LibConstraint
+ * @brief Constraint timing data for setup/hold checks
+ * @details Contains lookup tables for constraint-based timing analysis
+ */
+struct LibConstraint {
+    std::string related_pin;                            ///< Related input pin name
+    std::string constraint_type;                        ///< "setup_rising", "hold_rising", "setup_falling", "hold_falling"
+    LookupTable constraint_table;                       ///< Constraint vs (input_slew, clock_slew)
+
+    /**
+     * @brief Check if constraint data is valid
+     */
+    bool isValid() const {
+        return !related_pin.empty() && !constraint_type.empty() && constraint_table.isValid();
+    }
+};
+
+/**
  * @struct LibPin
  * @brief Cell pin characterization data
- * @details Contains pin capacitance and timing arcs
+ * @details Contains pin capacitance, timing arcs, and constraint tables
  */
 struct LibPin {
     std::string name;                                   ///< Pin name
@@ -92,6 +110,7 @@ struct LibPin {
     double max_transition;                              ///< Maximum allowed transition time
 
     std::vector<LibTiming> timing_arcs;                 ///< Timing arcs from this pin (for output pins)
+    std::vector<LibConstraint> constraint_arcs;         ///< Constraint arcs for setup/hold checks
 
     /**
      * @brief Constructor
@@ -108,6 +127,20 @@ struct LibPin {
      * @brief Check if pin is output
      */
     bool isOutput() const { return direction == "output"; }
+
+    /**
+     * @brief Get constraint table by type
+     * @param constraint_type Constraint type (e.g., "setup_rising")
+     * @return Pointer to constraint table or nullptr if not found
+     */
+    const LibConstraint* getConstraint(const std::string& constraint_type) const {
+        for (const auto& constraint : constraint_arcs) {
+            if (constraint.constraint_type == constraint_type) {
+                return &constraint;
+            }
+        }
+        return nullptr;
+    }
 };
 
 /**
@@ -206,6 +239,11 @@ public:
      * @brief Get all cell names
      */
     std::vector<std::string> getCellNames() const;
+
+    /**
+     * @brief Print all cell names for debugging
+     */
+    void printCellNames() const;
 
     /**
      * @brief Get number of cells

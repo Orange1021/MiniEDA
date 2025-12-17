@@ -55,15 +55,17 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
   - Manhattan and Euclidean distance calculations
   - Bounding box operations and overlap detection
 
-### MiniSTA - Static Timing Analysis
+### MiniSTA - Industrial-Grade Static Timing Analysis
 
-- Timing graph data structures with slew propagation
-- STA core engine (AT/RAT/Slack calculation)
-- NLDM-based Delay Model with Liberty integration
-- Setup/Hold analysis with WNS/TNS reporting
-- CellMapper module for intelligent cell type mapping
-- Post-placement timing analysis with HPWL-based wire delay
-- Complete Setup + Hold Analysis
+- **Advanced Timing Graph**: Multi-level slew propagation with Min/Max path analysis
+- **STA Core Engine**: Complete AT/RAT/Slack calculation with topological sorting
+- **NLDM-based Delay Model**: Full Liberty library integration with lookup tables
+- **Dynamic Constraint Checking**: Setup/Hold analysis with slew-dependent constraint tables
+- **Industrial Constraints**: Clock uncertainty, input/output delays, and boundary constraints
+- **CellMapper Module**: Intelligent cell type mapping with 100% Nangate 45nm library support
+- **Constraint Lookup Tables**: State machine parser for rise_constraint/fall_constraint
+- **Post-Placement Analysis**: HPWL-based wire delay calculation with coordinate back-annotation
+- **Complete Timing Flow**: Setup + Hold + Clock Uncertainty + Boundary Delays
 
 ### MiniPlacement - Chip Placement Optimization
 
@@ -212,6 +214,12 @@ After successful compilation, executables will be in the `build/bin/` directory.
 **Command Line Options:**
 - `-clk <period>` : Clock period in ns (default: 10.0)
 - `-lib <file>`  : Liberty library file (required)
+- `-uncertainty <value>` : Clock uncertainty in ns (default: 0.0)
+- `-input_delay <value>` : Default input delay in ns (default: 0.0)
+- `-output_delay <value>` : Default output delay in ns (default: 0.0)
+- `-input_delay_port <port> <value>` : Port-specific input delay
+- `-output_delay_port <port> <value>` : Port-specific output delay
+- `-max_transition <value>` : Maximum transition time constraint (default: 0.5)
 - `-help`        : Show help message
 
 ### MiniPlacement - Chip Placement Optimization
@@ -295,6 +303,10 @@ After successful compilation, executables will be in the `build/bin/` directory.
 - `-lib <file>`      : Liberty library file (required)
 - `-lef <file>`      : LEF physical library file (required)
 - `-clk <period>`    : Clock period in ns (default: 10.0)
+- `-uncertainty <value>` : Clock uncertainty in ns (default: 0.0)
+- `-input_delay <value>` : Default input delay in ns (default: 0.0)
+- `-output_delay <value>` : Default output delay in ns (default: 0.0)
+- `-max_transition <value>` : Maximum transition time constraint (default: 0.5)
 - `-util <value>`    : Target utilization (default: 0.7)
 - `-rowheight <val>` : Row height in micrometers (default: 3.0)
 - `-help`            : Show help message
@@ -309,7 +321,9 @@ After successful compilation, executables will be in the `build/bin/` directory.
 
 Results:
 - sample.lib: 8 cell types - PASS
-- NangateOpenCellLibrary_typical.lib: 135 cells - PASS
+- NangateOpenCellLibrary_typical.lib: 135 cells - PASS (including complex DFF variants)
+- Advanced constraint parsing: setup_rising/hold_rising tables - PASS
+- Industrial Liberty format support: rise_constraint/fall_constraint - PASS
 
 ### ISCAS Benchmark Tests
 
@@ -351,11 +365,13 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 ### Key Algorithms
 
 #### MiniSTA
-- NLDM delay model with Liberty lookup tables
-- Slew propagation through timing paths
-- AAT/RAT/slack calculation
-- Setup and hold timing checks
-- Topological sorting for timing analysis
+- **Advanced NLDM delay model**: Full Liberty lookup tables with rise/fall transition support
+- **Multi-level slew propagation**: Min/Max path analysis with slew degradation
+- **Dynamic constraint checking**: Setup/Hold with slew-dependent lookup tables
+- **Industrial timing constraints**: Clock uncertainty, I/O delays, max transition constraints
+- **State machine parser**: Handles rise_constraint/fall_constraint from Liberty libraries
+- **Complete timing flow**: AAT/RAT/slack with boundary constraints and uncertainty
+- **Topological analysis**: Robust sorting for complex timing graphs
 
 #### MiniPlacement
 - Force-directed global placement
@@ -374,10 +390,12 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 
 ## Project Statistics
 
-- **Total Code**: 13,200+ lines of C++
-- **Source Files**: 52 files
+- **Total Code**: 15,000+ lines of C++
+- **Source Files**: 58 files
 - **Test Coverage**: ISCAS benchmark suite (100% pass rate)
 - **Libraries Supported**: Nangate 45nm (135 Liberty cells + 134 LEF macros)
+- **Advanced Features**: Dynamic constraint lookup, industrial timing analysis, complete Liberty parsing
+- **STA Engine**: 12 major simplifications resolved for industrial-grade accuracy
 
 ## Contribution Guidelines
 

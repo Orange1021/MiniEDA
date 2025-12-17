@@ -19,7 +19,7 @@
 namespace mini {
     class Net;
     class Pin;
-    class PinMapper;
+    class LefPinMapper;
 }
 
 namespace mini {
@@ -72,7 +72,7 @@ struct RoutingResult {
 class MazeRouter {
 private:
     RoutingGrid* grid_;
-    PinMapper* pin_mapper_;  ///< [Key] Unified Key generator
+    LefPinMapper* pin_mapper_;  ///< [Key] Unified Key generator
     
     // --- Cost Parameters ---
     double via_cost_ = 10.0;              ///< Via cost (expensive, minimize usage)
@@ -90,7 +90,7 @@ public:
      * @param grid Pointer to routing grid
      * @param pin_mapper Pointer to pin mapper for key generation
      */
-    MazeRouter(RoutingGrid* grid, PinMapper* pin_mapper);
+    MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper);
     
     /**
      * @brief Unified entry point for routing a net

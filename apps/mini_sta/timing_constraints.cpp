@@ -11,6 +11,16 @@
 namespace mini {
 
 // ============================================================================
+// Constructor
+// ============================================================================
+
+TimingConstraints::TimingConstraints() {
+    // Initialize with industrial-grade defaults
+    clock_uncertainty_ = 0.05;  // 50ps jitter/skew margin
+    max_transition_ = 0.5;      // 500ps max slew rate
+}
+
+// ============================================================================
 // Setters (SDC command interfaces)
 // ============================================================================
 
@@ -87,7 +97,7 @@ double TimingConstraints::getInputDelay(const std::string& port_name) const {
     if (it != input_delays_.end()) {
         return it->second;
     }
-    return 0.0; // Default: 0 ns if not set
+    return default_input_delay_; // Default: use default_input_delay_ if not set
 }
 
 double TimingConstraints::getOutputDelay(const std::string& port_name) const {
@@ -95,7 +105,7 @@ double TimingConstraints::getOutputDelay(const std::string& port_name) const {
     if (it != output_delays_.end()) {
         return it->second;
     }
-    return 0.0; // Default: 0 ns if not set
+    return default_output_delay_; // Default: use default_output_delay_ if not set
 }
 
 double TimingConstraints::getMainClockPeriod() const {

@@ -20,6 +20,7 @@ Net::Net(const std::string& name)
     , wire_capacitance_(0.0)
     , wire_delay_(0.0)
     , wire_resistance_(0.0)
+    , wire_length_(0.0)
     , is_clock_(false)
 {
 }

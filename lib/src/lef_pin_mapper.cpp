@@ -1,24 +1,24 @@
 /**
- * @file pin_mapper.cpp
- * @brief Pin Mapper Implementation
+ * @file lef_pin_mapper.cpp
+ * @brief LEF Pin Mapper Implementation
  */
 
-#include "pin_mapper.h"
+#include "lef_pin_mapper.h"
 #include <algorithm>
 #include <cctype>
 #include <iostream>
 
 namespace mini {
 
-PinMapper::PinMapper(const LefLibrary& lef_lib, const MacroMapper& macro_mapper)
+LefPinMapper::LefPinMapper(const LefLibrary& lef_lib, const MacroMapper& macro_mapper)
     : lef_lib_(const_cast<LefLibrary&>(lef_lib)), 
       macro_mapper_(const_cast<MacroMapper&>(macro_mapper)), 
       debug_enabled_(false),
       successful_mappings_(0), total_attempts_(0) {
 }
 
-std::string PinMapper::getPhysicalPinName(const std::string& cell_type, 
-                                         const std::string& logical_pin_name) {
+std::string LefPinMapper::getPhysicalPinName(const std::string& cell_type, 
+                                             const std::string& logical_pin_name) const {
     total_attempts_++;
     
     debugLog("Mapping pin: " + cell_type + ":" + logical_pin_name);
@@ -56,19 +56,19 @@ std::string PinMapper::getPhysicalPinName(const std::string& cell_type,
     return logical_pin_name; // Fallback to original name
 }
 
-std::string PinMapper::makeKey(const std::string& cell_name, 
+std::string LefPinMapper::makeKey(const std::string& cell_name, 
                               const std::string& physical_pin_name) {
     return cell_name + ":" + physical_pin_name;
 }
 
-std::string PinMapper::getKeyFromLogicalPin(const std::string& cell_name,
+std::string LefPinMapper::getKeyFromLogicalPin(const std::string& cell_name,
                                             const std::string& cell_type,
                                             const std::string& logical_pin_name) {
     std::string physical_pin = getPhysicalPinName(cell_type, logical_pin_name);
     return makeKey(cell_name, physical_pin);
 }
 
-const LefPort* PinMapper::tryDirectMatch(const LefMacro* macro, const std::string& pin_name) const {
+const LefPort* LefPinMapper::tryDirectMatch(const LefMacro* macro, const std::string& pin_name) const {
     if (!macro) return nullptr;
     
     const LefPort* port = macro->getPin(pin_name);
@@ -79,7 +79,7 @@ const LefPort* PinMapper::tryDirectMatch(const LefMacro* macro, const std::strin
     return port;
 }
 
-const LefPort* PinMapper::tryHeuristicMapping(const LefMacro* macro, const std::string& netlist_pin_name) const {
+const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const std::string& netlist_pin_name) const {
     if (!macro) return nullptr;
     
     debugLog("    Trying heuristic mapping for pin: " + netlist_pin_name);
@@ -228,7 +228,7 @@ const LefPort* PinMapper::tryHeuristicMapping(const LefMacro* macro, const std::
     return nullptr;
 }
 
-std::string PinMapper::getPinKey(Cell* cell, Pin* pin) const {
+std::string LefPinMapper::getPinKey(Cell* cell, Pin* pin) const {
     if (!cell) return "";
 
     // 1. Unified handling of I/O ports (core fix for VDD:Z issue)
@@ -241,7 +241,7 @@ std::string PinMapper::getPinKey(Cell* cell, Pin* pin) const {
     if (!pin) return "";
     
     // Get physical pin name (Y -> ZN)
-    std::string phys_pin = const_cast<PinMapper*>(this)->getPhysicalPinName(cell->getTypeString(), pin->getName());
+    std::string phys_pin = getPhysicalPinName(cell->getTypeString(), pin->getName());
     
     // Combine Key (U1:ZN)
     std::string key = cell->getName() + ":" + phys_pin;
@@ -249,7 +249,8 @@ std::string PinMapper::getPinKey(Cell* cell, Pin* pin) const {
     return key;
 }
 
-void PinMapper::debugLog(const std::string& message) const {
+void LefPinMapper::debugLog(const std::string& message) const {
+    (void)message; // Suppress unused parameter warning
     
 }
 

@@ -5,7 +5,7 @@
 
 #include "maze_router.h"
 #include "../../lib/include/netlist_db.h"
-#include "../../lib/include/pin_mapper.h"
+#include "../../lib/include/lef_pin_mapper.h"
 #include "../../lib/include/cell.h"
 #include <iostream>
 #include <algorithm>
@@ -17,13 +17,13 @@ namespace mini {
 // Constructor
 // ============================================================================
 
-MazeRouter::MazeRouter(RoutingGrid* grid, PinMapper* pin_mapper)
+MazeRouter::MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper)
     : grid_(grid), pin_mapper_(pin_mapper) {
     if (!grid_) {
         throw std::invalid_argument("RoutingGrid cannot be null");
     }
     if (!pin_mapper_) {
-        throw std::invalid_argument("PinMapper cannot be null");
+        throw std::invalid_argument("LefPinMapper cannot be null");
     }
 }
 
@@ -90,7 +90,7 @@ RoutingResult MazeRouter::routeNet(Net* net,
     }
     
     for (Pin* load : loads) {
-        // Get load pin coordinates using PinMapper (critical: never manually construct keys)
+        // Get load pin coordinates using LefPinMapper (critical: never manually construct keys)
         std::string load_key = pin_mapper_->getPinKey(load->getOwner(), load);
 
         auto load_it = pin_locations.find(load_key);
@@ -167,6 +167,11 @@ RoutingResult MazeRouter::routeNet(Net* net,
         // **FIXED**: Only add result.total_* once at the net level, not at segment level
         total_wirelength_ += result.total_wirelength;
         total_vias_ += result.total_vias;
+
+        // 6. Back-annotate wire length to Net for timing analysis
+        // Convert grid units to physical units (micrometers)
+        double wire_length_um = result.total_wirelength * grid_->getPitchX();
+        net->setWireLength(wire_length_um);
     } else {
         failed_nets_++;
     }

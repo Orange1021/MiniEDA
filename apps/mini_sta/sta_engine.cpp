@@ -12,6 +12,7 @@
 #include "timing_checks.h"
 #include "../../lib/include/cell.h"
 #include "../../lib/include/net.h"
+#include "../../lib/include/liberty.h"
 #include <iostream>
 #include <limits>
 #include <algorithm>
@@ -104,16 +105,40 @@ void STAEngine::updateArcDelays() {
         double delay = 0.0;
 
         if (arc->getType() == TimingArcType::NET_ARC) {
-            // NET_ARC: Calculate wire delay
+            // NET_ARC: Calculate point-to-point interconnect delay with Slew degradation
+            TimingNode* from_node = arc->getFromNode();
             TimingNode* to_node = arc->getToNode();
-            if (to_node) {
-                Pin* to_pin = to_node->getPin();
-                if (to_pin) {
-                    Net* net = to_pin->getNet();
-                    if (net) {
-                        delay = delay_model_->calculateWireDelay(net);
-                        net_arc_count++;
-                    }
+            
+            if (from_node && to_node) {
+                Pin* driver_pin = from_node->getPin();
+                Pin* load_pin = to_node->getPin();
+                
+                if (driver_pin && load_pin) {
+                    // Get input slew from driver (both min and max)
+                    double input_slew_max = from_node->getSlewMax();
+                    double input_slew_min = from_node->getSlewMin();
+                    if (input_slew_max <= 0.0) input_slew_max = 0.05 * 1e-9;  // Default: 50ps
+                    if (input_slew_min <= 0.0) input_slew_min = 0.01 * 1e-9;  // Default: 10ps
+                    
+                    // Physical parameters (from config or defaults)
+                    double wire_r_per_unit = 0.005;  // 5 Ω/μm = 0.005 kΩ/μm
+                    double wire_c_per_unit = 0.0002; // 0.2 fF/μm = 0.0002 pF/μm
+                    
+                    // Calculate Elmore delay and slew degradation for max path
+                    auto [interconnect_delay_max, output_slew_max] = delay_model_->calculateInterconnectDelay(
+                        driver_pin, load_pin, input_slew_max, wire_r_per_unit, wire_c_per_unit);
+                    
+                    // Calculate Elmore delay and slew degradation for min path
+                    auto [interconnect_delay_min, output_slew_min] = delay_model_->calculateInterconnectDelay(
+                        driver_pin, load_pin, input_slew_min, wire_r_per_unit, wire_c_per_unit);
+                    
+                    // For now, use max delay (both paths share same physical delay)
+                    delay = interconnect_delay_max;
+                    
+                    // Store both slew values in the arc (we need to extend TimingArc to support this)
+                    arc->setOutputSlew(output_slew_max);  // Legacy: store max slew
+                    // TODO: Add setOutputSlewMin() to TimingArc
+                    net_arc_count++;
                 }
             }
         } else if (arc->getType() == TimingArcType::CELL_ARC) {
@@ -132,33 +157,54 @@ void STAEngine::updateArcDelays() {
                             input_slew = 0.05 * 1e-9;  // Default: 50ps if not set
                         }
 
-                        // Calculate load capacitance
-                        double load_cap = 0.0;
-                        
-                        // Sum capacitance of all fanout pins connected to this output
-                        for (TimingArc* fanout_arc : to_node->getOutgoingArcs()) {
-                            TimingNode* fanout_node = fanout_arc->getToNode();
-                            if (fanout_node && fanout_node->getPin()) {
-                                Pin* fanout_pin = fanout_node->getPin();
-                                // Add pin capacitance (for now, use a simplified estimate)
-                                // In a real implementation, this would come from Liberty library
-                                load_cap += 0.002 * 1e-12;  // 2fF per pin (typical)
-                            }
-                        }
-                        
-                        // Add wire capacitance (simplified)
-                        load_cap += 0.001 * 1e-12;  // 1fF wire capacitance
-                        
-                        // Ensure minimum load capacitance
-                        if (load_cap < 0.001 * 1e-12) {
-                            load_cap = 0.001 * 1e-12;  // 1fF minimum
-                        }
+                        // Calculate realistic load capacitance (Pin Cap + Wire Cap)
+                        // Uses Liberty library for pin capacitance and physical wire length
+                        double wire_cap_per_unit = 0.0002;  // 0.2 fF/μm (Nangate 45nm default)
+                        double load_cap = calculateNetLoadCapacitance(to_node, wire_cap_per_unit);
 
-                        // Calculate delay using NLDM lookup
-                        delay = delay_model_->calculateCellDelay(cell, input_slew, load_cap);
+                        // [FIXED] Calculate delay using correct timing arc from the graph
+                        double output_slew = 0.01 * 1e-9;  // Default fallback (Nangate 45nm typical)
                         
-                        // Calculate output slew (this is crucial for next stage!)
-                        double output_slew = delay_model_->calculateOutputSlew(cell, input_slew, load_cap);
+                        if (arc->getLibTiming()) {
+                            // Use the pre-bound LibTiming pointer - O(1) access!
+                            const LibTiming* lib_timing = arc->getLibTiming();
+                            
+                            // Determine input edge direction (simplified: assume positive for now)
+                            SignalEdge input_edge = SignalEdge::RISE;
+                            
+                            // Determine output edge based on timing sense
+                            TableDelayModel* table_model = dynamic_cast<TableDelayModel*>(delay_model_.get());
+                            if (table_model) {
+                                SignalEdge output_edge = table_model->determineOutputEdge(
+                                    lib_timing->timing_sense, input_edge);
+                                
+                                // Select correct delay table based on output edge
+                                const LookupTable* delay_table = nullptr;
+                                if (output_edge == SignalEdge::RISE) {
+                                    delay_table = &lib_timing->cell_delay;  // Legacy: use cell_delay for rise
+                                } else {
+                                    // For fall edge, we need cell_fall table (if available)
+                                    // Note: Some libraries only provide cell_delay, use it as fallback
+                                    delay_table = &lib_timing->cell_delay;  // Fallback to cell_delay
+                                }
+                                
+                                if (delay_table && delay_table->isValid()) {
+                                    delay = delay_table->lookup(input_slew, load_cap) * 1e-9;
+                                } else {
+                                    delay = 0.01 * 1e-9;  // Default: 10ps
+                                }
+                                
+                                // Calculate output slew using the correct NLDM table
+                                output_slew = table_model->calculateOutputSlewWithEdge(
+                                    lib_timing, input_slew, load_cap, output_edge);
+                            } else {
+                                delay = 0.01 * 1e-9;  // Default: 10ps
+                            }
+                        } else {
+                            // Fallback for NET_ARC or missing Liberty data
+                            delay = delay_model_->calculateCellDelay(cell, input_slew, load_cap);
+                            output_slew = delay_model_->calculateOutputSlew(cell, input_slew, load_cap);
+                        }
                         
                         // Store the output slew in the arc for later use
                         arc->setOutputSlew(output_slew);
@@ -211,6 +257,13 @@ void STAEngine::updateArrivalTimes() {
                 // For input ports, use input delay constraint
                 std::string port_name = owner->getName();
                 double input_delay = constraints_->getInputDelay(port_name);
+                
+                // If no specific delay for this port, use default (from AppConfig)
+                if (input_delay == 0.0) {
+                    // Get default from constraints (will be extended to store default values)
+                    // For now, we use 0.0 as default - this can be enhanced later
+                }
+                
                 at_value = input_delay;
 
                 if (input_delay > 0.0) {
@@ -281,7 +334,8 @@ void STAEngine::updateArrivalTimes() {
 
         // Set AT if we found valid paths
         bool updated = false;
-        double best_slew = 0.0;  // Slew from the best (critical) path
+        double best_slew_max = 0.0;  // Slew from critical (slowest) path
+        double best_slew_min = 0.0;  // Slew from fastest path
 
         // ==================== Setup (Max) ====================
         if (max_arrival > -std::numeric_limits<double>::infinity() / 2) {
@@ -297,12 +351,12 @@ void STAEngine::updateArrivalTimes() {
                 if (prev_at_max > -TimingNode::UNINITIALIZED / 2) {
                     double path_delay = prev_at_max + arc->getDelay();
                     if (std::abs(path_delay - max_arrival) < 1e-15) {  // Found the critical path
-                        best_slew = arc->getOutputSlew();
-                        if (best_slew <= 0.0) {
-                            // Fallback: use previous node's slew
-                            best_slew = prev_node->getSlew();
-                            if (best_slew <= 0.0) {
-                                best_slew = 0.05 * 1e-9;  // Default: 50ps
+                        best_slew_max = arc->getOutputSlew();
+                        if (best_slew_max <= 0.0) {
+                            // Fallback: use previous node's max slew
+                            best_slew_max = prev_node->getSlewMax();
+                            if (best_slew_max <= 0.0) {
+                                best_slew_max = 0.01 * 1e-9;  // Default: 10ps (Nangate 45nm typical)
                             }
                         }
                         break;
@@ -315,18 +369,41 @@ void STAEngine::updateArrivalTimes() {
         if (min_arrival < std::numeric_limits<double>::infinity() / 2) {
             current_node->setArrivalTimeMin(min_arrival);
             updated = true;
+            
+            // Find the arc that gave us the min arrival (fastest path)
+            for (TimingArc* arc : incoming_arcs) {
+                TimingNode* prev_node = arc->getFromNode();
+                if (!prev_node) continue;
+                
+                double prev_at_min = prev_node->getArrivalTimeMin();
+                if (prev_at_min < TimingNode::UNINITIALIZED / 2) {
+                    double path_delay = prev_at_min + arc->getDelay();
+                    if (std::abs(path_delay - min_arrival) < 1e-15) {  // Found the fastest path
+                        best_slew_min = arc->getOutputSlew();
+                        if (best_slew_min <= 0.0) {
+                            // Fallback: use previous node's min slew
+                            best_slew_min = prev_node->getSlewMin();
+                            if (best_slew_min <= 0.0) {
+                                                        best_slew_min = 0.005 * 1e-9; // Default: 5ps (faster than setup)
+                                                    }                        }
+                        break;
+                    }
+                }
+            }
         }
 
         // Propagate slew if we found valid paths
         if (updated) {
-            current_node->setSlew(best_slew);
+            current_node->setSlewMax(best_slew_max);
+            current_node->setSlewMin(best_slew_min);
             updated_count++;
 
             // Debug print first few nodes
             if (updated_count <= 5) {
                 std::cout << "    Propagated AT of " << current_node->getName()
-                         << " [Setup=" << max_arrival << "ns, Hold=" << min_arrival << "ns, Slew=" 
-                         << (best_slew * 1e9) << "ps]" << std::endl;
+                         << " [Setup=" << max_arrival << "ns, Hold=" << min_arrival << "ns"
+                         << ", SlewMax=" << (best_slew_max * 1e9) << "ps"
+                         << ", SlewMin=" << (best_slew_min * 1e9) << "ps]" << std::endl;
             }
         }
     }
@@ -388,6 +465,11 @@ void STAEngine::updateRequiredTimes() {
         if (rat_value == clock_period) {
             std::cout << "    Set RAT of " << end->getName() << " = " << rat_value << " ns" << std::endl;
         }
+    }
+
+    // [NEW] Apply dynamic Setup/Hold constraints for DFF endpoints
+    if (constraints_) {
+        checkSetupHoldConstraints(sorted_nodes);
     }
 
     // Propagate RAT backward (reverse topological order)
@@ -577,6 +659,93 @@ void STAEngine::reportSummary() const {
 }
 
 /**
+ * @brief Calculate realistic load capacitance for a timing node
+ * @details Computes: C_load = Sum(C_pin) + C_wire
+ * Strategy:
+ * 1. Pin Capacitance: Query Liberty library for each fanout pin
+ * 2. Wire Capacitance: wire_length * wire_cap_per_unit
+ * @param node Timing node (output pin)
+ * @param wire_cap_per_unit Unit wire capacitance (pF/μm)
+ * @return Total load capacitance in farads
+ */
+double STAEngine::calculateNetLoadCapacitance(TimingNode* node, double wire_cap_per_unit) const {
+    if (!node || !node->getPin()) {
+        return 1e-15;  // 1fF minimum fallback
+    }
+
+    Pin* output_pin = node->getPin();
+    Net* net = output_pin->getNet();
+    
+    double total_cap = 0.0;
+
+    // ========================================================================
+    // 1. Calculate Pin Capacitance (from Liberty library)
+    // ========================================================================
+    for (TimingArc* fanout_arc : node->getOutgoingArcs()) {
+        TimingNode* fanout_node = fanout_arc->getToNode();
+        if (!fanout_node || !fanout_node->getPin()) continue;
+
+        Pin* fanout_pin = fanout_node->getPin();
+        Cell* fanout_cell = fanout_pin->getOwner();
+        if (!fanout_cell) continue;
+
+        // Get Liberty cell data through delay model
+        TableDelayModel* table_model = dynamic_cast<TableDelayModel*>(delay_model_.get());
+        if (!table_model) {
+            total_cap += 0.002 * 1e-12;  // Fallback: 2fF per pin
+            continue;
+        }
+
+        // Map cell type to Liberty cell
+        std::string cell_type = fanout_cell->getTypeString();
+        const Library* lib = table_model->getLibrary();
+        if (!lib) {
+            total_cap += 0.002 * 1e-12;  // Fallback
+            continue;
+        }
+
+        const LibCell* lib_cell = lib->getCell(cell_type);
+        if (!lib_cell) {
+            total_cap += 0.002 * 1e-12;  // Fallback
+            continue;
+        }
+
+        // Get pin capacitance from Liberty
+        std::string pin_name = fanout_pin->getName();
+        const LibPin* lib_pin = lib_cell->getPin(pin_name);
+        if (lib_pin && lib_pin->capacitance > 0.0) {
+            total_cap += lib_pin->capacitance * 1e-12;  // Convert pF to F
+        } else {
+            total_cap += 0.002 * 1e-12;  // Fallback: 2fF
+        }
+    }
+
+    // ========================================================================
+    // 2. Calculate Wire Capacitance (from physical routing)
+    // ========================================================================
+    if (net && net->hasWireLength()) {
+        // Use actual routed wire length
+        double wire_length = net->getWireLength();  // in μm
+        double wire_cap = wire_length * wire_cap_per_unit;  // in pF
+        total_cap += wire_cap * 1e-12;  // Convert pF to F
+    } else if (net) {
+        // Fallback: estimate from HPWL if placement exists
+        // For now, use a conservative estimate
+        double estimated_wire_cap = 0.001;  // 1fF default
+        total_cap += estimated_wire_cap * 1e-12;
+    }
+
+    // ========================================================================
+    // 3. Ensure minimum load capacitance
+    // ========================================================================
+    if (total_cap < 1e-15) {  // Less than 1fF
+        total_cap = 1e-15;  // 1fF minimum
+    }
+
+    return total_cap;
+}
+
+/**
  * @brief Dump complete graph delay information (for debug)
  */
 void STAEngine::dumpGraph() const {
@@ -604,6 +773,183 @@ void STAEngine::dumpGraph() const {
     }
 
     std::cout << "=================================" << std::endl;
+}
+
+// ============================================================================
+// [NEW] Setup/Hold Constraint Checking with Liberty Lookup Tables
+// ============================================================================
+
+/**
+ * @brief [NEW] Check Setup/Hold constraints using Liberty lookup tables
+ * @details This is the key function that bridges theoretical STA to industrial reality:
+ * 
+ * Traditional STA: Required_Time = Clock_Period - Fixed_Setup_Time
+ * Industrial STA:  Required_Time = Clock_Edge - Setup_Table(data_slew, clk_slew) - Uncertainty
+ * 
+ * The Setup/Hold times are NOT constants! They depend on:
+ * 1. Data signal slew (slower data = more setup time needed)
+ * 2. Clock signal slew (slower clock = more setup time needed) 
+ * 3. Process/voltage/temperature conditions (embedded in Liberty tables)
+ */
+void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted_nodes) {
+    std::cout << "\n[Step 3.5] Checking Setup/Hold Constraints with Liberty Lookup Tables..." << std::endl;
+    
+    // Get library from delay model for constraint lookup
+    auto* table_delay_model = dynamic_cast<TableDelayModel*>(delay_model_.get());
+    if (!table_delay_model) {
+        std::cout << "  Warning: No TableDelayModel available, skipping constraint lookup" << std::endl;
+        return;
+    }
+    
+    const Library* library = table_delay_model->getLibrary();
+    if (!library) {
+        std::cout << "  Warning: No Liberty library available, skipping constraint lookup" << std::endl;
+        return;
+    }
+    
+    double clock_period = constraints_->getMainClockPeriod();
+    double clock_uncertainty = constraints_->getClockUncertainty();
+    size_t constraint_checks = 0;
+    size_t setup_violations = 0;
+    size_t hold_violations = 0;
+    
+    // Iterate through all nodes to find DFF data pins for constraint checking
+    for (TimingNode* node : sorted_nodes) {
+        if (!node || !node->getPin()) continue;
+        
+        Pin* pin = node->getPin();
+        Cell* cell = pin->getOwner();
+        if (!cell || cell->getType() != CellType::DFF) continue;
+        
+        // We're interested in DFF data pins (D input) for setup/hold checks
+        if (pin->getName() != "D") continue;
+        
+        // Find corresponding clock pin (CK) of the same DFF
+        TimingNode* clk_node = nullptr;
+        for (TimingNode* other_node : sorted_nodes) {
+            if (!other_node || !other_node->getPin()) continue;
+            
+            Pin* other_pin = other_node->getPin();
+            Cell* other_cell = other_pin->getOwner();
+            if (other_cell == cell && other_pin->getName() == "CK") {
+                clk_node = other_node;
+                break;
+            }
+        }
+        
+        if (!clk_node) {
+            std::cout << "  Warning: No clock node found for DFF " << cell->getName() << std::endl;
+            continue;
+        }
+        
+        // Get Liberty cell for constraint tables using CellMapper
+        const CellMapper* cell_mapper = table_delay_model->getCellMapper();
+        if (!cell_mapper) {
+            std::cout << "  Warning: No CellMapper available in delay model" << std::endl;
+            continue;
+        }
+        
+        const LibCell* lib_cell = cell_mapper->mapType(cell->getTypeString());
+        if (!lib_cell) {
+            std::cout << "  Warning: No Liberty cell found for DFF " << cell->getTypeString() << std::endl;
+            std::cout << "    Available cells in library: " << library->getCellCount() << " total" << std::endl;
+            if (constraint_checks == 0) { // Only print once
+                library->printCellNames();
+            }
+            continue;
+        }
+        
+        // Get data pin (D) for constraint lookup
+        const LibPin* data_pin = lib_cell->getPin("D");
+        if (!data_pin) {
+            std::cout << "  Warning: No D pin found in Liberty cell " << lib_cell->name << std::endl;
+            continue;
+        }
+        
+        // Get clock pin (CK) for constraint lookup  
+        const LibPin* clk_pin = lib_cell->getPin("CK");
+        if (!clk_pin) {
+            std::cout << "  Warning: No CK pin found in Liberty cell " << lib_cell->name << std::endl;
+            continue;
+        }
+        
+        // Prepare slew values for lookup (convert from seconds to nanoseconds for Liberty tables)
+        double data_slew_ns = node->getSlewMax() * 1e9;  // Data slew in ns
+        double clk_slew_ns = clk_node->getSlewMax() * 1e9;   // Clock slew in ns
+        
+        // Clamp to reasonable ranges to avoid lookup errors
+        data_slew_ns = std::max(0.001, std::min(2.0, data_slew_ns));
+        clk_slew_ns = std::max(0.001, std::min(2.0, clk_slew_ns));
+        
+        // ==================== Setup Constraint Check ====================
+        const LibConstraint* setup_constraint = data_pin->getConstraint("setup_rising");
+        double lib_setup_time = 0.1; // Default fallback (100ps)
+        
+        if (setup_constraint && setup_constraint->constraint_table.isValid()) {
+            lib_setup_time = setup_constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
+        } else {
+            std::cout << "  Warning: No setup_rising table found for " << lib_cell->name 
+                      << ", using default " << lib_setup_time << " ns" << std::endl;
+        }
+        
+        // Calculate Setup Required Time
+        // Formula: Required_Time = Clock_Capture_Edge - Setup_Time - Uncertainty
+        double clk_arrival = clk_node->getArrivalTimeMax() * 1e9; // Convert to ns
+        double setup_required = clk_arrival + clock_period - lib_setup_time - clock_uncertainty;
+        
+        // Calculate Setup Slack
+        double data_arrival = node->getArrivalTimeMax() * 1e9; // Convert to ns
+        double setup_slack = setup_required - data_arrival;
+        
+        // Update node's setup slack
+        node->setSlackSetup(setup_slack * 1e-9); // Convert back to seconds
+        
+        if (setup_slack < 0) setup_violations++;
+        
+        // ==================== Hold Constraint Check ====================
+        const LibConstraint* hold_constraint = data_pin->getConstraint("hold_rising");
+        double lib_hold_time = 0.05; // Default fallback (50ps)
+        
+        if (hold_constraint && hold_constraint->constraint_table.isValid()) {
+            lib_hold_time = hold_constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
+        } else {
+            std::cout << "  Warning: No hold_rising table found for " << lib_cell->name 
+                      << ", using default " << lib_hold_time << " ns" << std::endl;
+        }
+        
+        // Calculate Hold Required Time  
+        // Formula: Required_Time = Clock_Launch_Edge + Hold_Time + Uncertainty
+        double hold_required = clk_arrival + lib_hold_time + clock_uncertainty;
+        
+        // Calculate Hold Slack
+        double data_arrival_min = node->getArrivalTimeMin() * 1e9; // Convert to ns
+        double hold_slack = data_arrival_min - hold_required;
+        
+        // Update node's hold slack
+        node->setSlackHold(hold_slack * 1e-9); // Convert back to seconds
+        
+        if (hold_slack < 0) hold_violations++;
+        
+        // Report constraint check details for first few DFFs
+        if (constraint_checks < 3) {
+            std::cout << "  DFF " << cell->getName() << " constraints:" << std::endl;
+            std::cout << "    Data slew: " << data_slew_ns << " ns, Clock slew: " << clk_slew_ns << " ns" << std::endl;
+            std::cout << "    Setup time: " << lib_setup_time << " ns (from lookup)" << std::endl;
+            std::cout << "    Hold time: " << lib_hold_time << " ns (from lookup)" << std::endl;
+            std::cout << "    Setup slack: " << setup_slack << " ns" << (setup_slack < 0 ? " [VIOLATION]" : "") << std::endl;
+            std::cout << "    Hold slack: " << hold_slack << " ns" << (hold_slack < 0 ? " [VIOLATION]" : "") << std::endl;
+        }
+        
+        constraint_checks++;
+    }
+    
+    std::cout << "  Checked " << constraint_checks << " DFF constraints" << std::endl;
+    std::cout << "  Setup violations: " << setup_violations << std::endl;
+    std::cout << "  Hold violations: " << hold_violations << std::endl;
+    
+    if (constraint_checks == 0) {
+        std::cout << "  Note: No DFF endpoints found for constraint checking" << std::endl;
+    }
 }
 
 } // namespace mini

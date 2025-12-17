@@ -82,6 +82,28 @@ public:
                     config.wire_cost = std::stod(argv[++i]);
                 }
                 
+                // [NEW] Industrial-grade timing constraints
+                else if (arg == "-uncertainty" && i + 1 < argc) {
+                    config.clock_uncertainty = std::stod(argv[++i]);
+                }
+                else if (arg == "-input_delay" && i + 1 < argc) {
+                    config.default_input_delay = std::stod(argv[++i]);
+                }
+                else if (arg == "-output_delay" && i + 1 < argc) {
+                    config.default_output_delay = std::stod(argv[++i]);
+                }
+                else if (arg == "-max_transition" && i + 1 < argc) {
+                    config.max_transition = std::stod(argv[++i]);
+                }
+                else if (arg == "-input_delay_port" && i + 2 < argc) {
+                    config.input_delay_ports.push_back(argv[++i]);
+                    config.input_delay_values.push_back(std::stod(argv[++i]));
+                }
+                else if (arg == "-output_delay_port" && i + 2 < argc) {
+                    config.output_delay_ports.push_back(argv[++i]);
+                    config.output_delay_values.push_back(std::stod(argv[++i]));
+                }
+                
                 // Flow control
                 else if (arg == "-verbose") {
                     config.verbose = true;
@@ -193,6 +215,14 @@ Algorithm Parameters:
   -clk <period>          Clock period in nanoseconds (default: 10.0)
   -via_cost <value>      Via penalty cost multiplier (default: 10.0)
   -wire_cost <value>     Wire cost per unit length (default: 1.0)
+
+Industrial-Grade Timing Constraints:
+  -uncertainty <value>   Clock uncertainty/jitter in nanoseconds (default: 0.05)
+  -input_delay <value>   Default input delay for all PI ports in nanoseconds (default: 0.0)
+  -output_delay <value>  Default output delay for all PO ports in nanoseconds (default: 0.0)
+  -max_transition <val>  Maximum transition time constraint in nanoseconds (default: 0.5)
+  -input_delay_port <p> <v>  Set input delay for specific port p to value v
+  -output_delay_port <p> <v> Set output delay for specific port p to value v
 
 Flow Control:
   -verbose               Enable verbose output

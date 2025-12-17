@@ -105,6 +105,27 @@ private:
      * - Slack < 0: Timing violation
      */
     void updateSlacks();
+
+    /**
+     * @brief Calculate realistic load capacitance for a timing node
+     * @details Computes: C_load = Sum(C_pin) + C_wire
+     * - Pin capacitance: from Liberty library
+     * - Wire capacitance: wire_length * wire_cap_per_unit
+     * @param node Timing node (output pin)
+     * @param wire_cap_per_unit Unit wire capacitance (pF/μm)
+     * @return Total load capacitance in farads
+     */
+    double calculateNetLoadCapacitance(TimingNode* node, double wire_cap_per_unit) const;
+
+    /**
+     * @brief [NEW] Check Setup/Hold constraints using Liberty lookup tables
+     * @details Implements dynamic Setup/Hold time calculation based on signal slew:
+     * - For DFF endpoints: lookup setup_rising/hold_rising tables from Liberty
+     * - Calculate: Required_Time = Clock_Edge ± Constraint(data_slew, clk_slew) ± Uncertainty
+     * - Replaces static clock_period subtraction with physics-based constraints
+     * @param sorted_nodes Topologically sorted timing nodes
+     */
+    void checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted_nodes);
 };
 
 } // namespace mini

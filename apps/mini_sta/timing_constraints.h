@@ -37,14 +37,14 @@ struct Clock {
 
 /**
  * @class TimingConstraints
- * @brief Manages timing constraints for the design (SDC-style)
+ * @brief Manages timing constraints for the design (SDC-style with industrial features)
  */
 class TimingConstraints {
 public:
     /**
      * @brief Constructor
      */
-    TimingConstraints() = default;
+    TimingConstraints();
 
     /**
      * @brief Destructor
@@ -94,8 +94,20 @@ public:
     const Clock* getClock(const std::string& name) const;
 
     /**
+     * @brief Set default input delay for all primary inputs
+     * @param delay Default input delay value (ns)
+     */
+    void setDefaultInputDelay(double delay) { default_input_delay_ = delay; }
+
+    /**
+     * @brief Set default output delay for all primary outputs
+     * @param delay Default output delay value (ns)
+     */
+    void setDefaultOutputDelay(double delay) { default_output_delay_ = delay; }
+
+    /**
      * @brief Get input delay for a port
-     * @details Returns 0.0 if not set
+     * @details Returns default_input_delay_ if not set for specific port
      * @param port_name Port name
      * @return Input delay value (ns)
      */
@@ -103,11 +115,23 @@ public:
 
     /**
      * @brief Get output delay for a port
-     * @details Returns 0.0 if not set
+     * @details Returns default_output_delay_ if not set for specific port
      * @param port_name Port name
      * @return Output delay value (ns)
      */
     double getOutputDelay(const std::string& port_name) const;
+
+    /**
+     * @brief Get default input delay
+     * @return Default input delay value (ns)
+     */
+    double getDefaultInputDelay() const { return default_input_delay_; }
+
+    /**
+     * @brief Get default output delay
+     * @return Default output delay value (ns)
+     */
+    double getDefaultOutputDelay() const { return default_output_delay_; }
 
     /**
      * @brief Get main clock period
@@ -128,10 +152,44 @@ public:
      */
     size_t getClockCount() const { return clocks_.size(); }
 
+    // ============ Industrial-grade Constraints ============
+
+    /**
+     * @brief Set clock uncertainty (jitter + skew margin)
+     * @details Setup check subtracts this, Hold check adds this
+     * @param uncertainty Clock uncertainty value (ns)
+     */
+    void setClockUncertainty(double uncertainty) { clock_uncertainty_ = uncertainty; }
+
+    /**
+     * @brief Get clock uncertainty
+     * @return Clock uncertainty value (ns)
+     */
+    double getClockUncertainty() const { return clock_uncertainty_; }
+
+    /**
+     * @brief Set maximum transition time (DRC constraint)
+     * @details SDC command: set_max_transition <value> [get_ports <port>]
+     * @param max_trans Maximum transition time (ns)
+     */
+    void setMaxTransition(double max_trans) { max_transition_ = max_trans; }
+
+    /**
+     * @brief Get maximum transition time
+     * @return Maximum transition time (ns)
+     */
+    double getMaxTransition() const { return max_transition_; }
+
 private:
     std::vector<std::unique_ptr<Clock>> clocks_;  ///< Clock storage
     std::unordered_map<std::string, double> input_delays_;   ///< Port name -> Input delay
     std::unordered_map<std::string, double> output_delays_;  ///< Port name -> Output delay
+    
+    // Industrial-grade timing constraints
+    double clock_uncertainty_ = 0.05;     ///< Clock uncertainty (jitter + skew margin) in ns
+    double max_transition_ = 0.5;         ///< Maximum transition time constraint in ns
+    double default_input_delay_ = 0.0;    ///< Default input delay for all PI ports in ns
+    double default_output_delay_ = 0.0;   ///< Default output delay for all PO ports in ns
 };
 
 } // namespace mini
