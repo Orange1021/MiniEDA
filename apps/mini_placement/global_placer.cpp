@@ -48,9 +48,6 @@ bool GlobalPlacer::initialize(int grid_size, double target_density) {
     double core_h = core_area.height();
     
     // Force exact grid_size × grid_size bins for Poisson solver compatibility
-    double bin_w = core_w / grid_size_;
-    double bin_h = core_h / grid_size_;
-    
     // Create density grid with exact grid dimensions
     density_grid_ = std::make_unique<DensityGrid>();
     if (!density_grid_->init(grid_size_, grid_size_, core_w, core_h, core_area.x_min, core_area.y_min)) {
@@ -60,6 +57,11 @@ bool GlobalPlacer::initialize(int grid_size, double target_density) {
     
     // Initialize Poisson solver
     poisson_solver_ = std::make_unique<PoissonSolver>();
+    
+    // Set actual bin dimensions for accurate force calculation
+    double bin_w = core_w / grid_size_;
+    double bin_h = core_h / grid_size_;
+    poisson_solver_->setBinSize(bin_w, bin_h);
     
     // Collect all movable cells
     cells_ = placer_db_->getAllCells();
@@ -135,6 +137,19 @@ void GlobalPlacer::runPlacement() {
     density_grid_->updateDensity(cells_, placer_db_);
     std::vector<Bin> density_input = density_grid_->getBins();
     poisson_solver_->solve(density_input, grid_size_, grid_size_);
+    
+    // Sync updated forces back to density_grid_
+    for (int y = 0; y < grid_size_; ++y) {
+        for (int x = 0; x < grid_size_; ++x) {
+            int idx = y * grid_size_ + x;
+            Bin& grid_bin = density_grid_->getBin(x, y);
+            const Bin& solved_bin = density_input[idx];
+            grid_bin.electro_force_x = solved_bin.electro_force_x;
+            grid_bin.electro_force_y = solved_bin.electro_force_y;
+            grid_bin.electro_potential = solved_bin.electro_potential;
+        }
+    }
+    
     calculateWirelengthGradients();
     
     // Calculate average force magnitudes
@@ -155,24 +170,24 @@ void GlobalPlacer::runPlacement() {
         active_cells++;
     }
     
-    // [冷启动策略] Zero-Start Lambda: 极小值启动，慢爬升
-    // 这能防止"炸膛"，让单元先理顺拓扑关系，再慢慢膨胀
+    // [动态Lambda策略] 根据力平衡自动计算初始值
     if (sum_dens_force > 1e-6 && active_cells > 0) {
-        // 1. 冷启动：几乎为 0 的 Lambda，优先优化线长
-        current_lambda_ = 1e-6;  // 几乎为 0，让线长力主导
+        // 1. 根据力平衡计算合理的初始Lambda
+        double ratio = (sum_wire_force / sum_dens_force);
+        // 让密度力和线长力在同一个量级
+        current_lambda_ = sum_wire_force / sum_dens_force;
         
         // 2. 设定 Lambda 上限，防止后期斥力无限大
-        double ratio = (sum_wire_force / sum_dens_force);
         double max_lambda = 0.5 * (sum_wire_force / sum_dens_force);
         
         // 3. 保存上限值供后续增长使用
         max_lambda_ = max_lambda;
         
-        debugLog(">>> COLD-START Lambda Strategy:");
-        debugLog("    Initial Lambda: " + std::to_string(current_lambda_) + " (near-zero)");
+        debugLog(">>> DYNAMIC Lambda Strategy:");
+        debugLog("    Initial Lambda: " + std::to_string(current_lambda_) + " (auto-calculated)");
         debugLog("    Max Lambda: " + std::to_string(max_lambda_) + " (safety limit)");
         debugLog("    Force ratio: " + std::to_string(ratio));
-        debugLog("    Expected: Phase 1 (wire optimization) -> Phase 2 (gentle inflation)");
+        debugLog("    Expected: Balanced forces from start");
     } else {
         debugLog(">>> Using fallback Initial Lambda: " + std::to_string(current_lambda_));
     }
@@ -245,6 +260,19 @@ void GlobalPlacer::runPlacement() {
             continue;
         }
         
+        // Step 2.5: Sync updated forces back to density_grid_
+        // PoissonSolver updates density_input, but we need the forces in density_grid_
+        for (int y = 0; y < grid_size_; ++y) {
+            for (int x = 0; x < grid_size_; ++x) {
+                int idx = y * grid_size_ + x;
+                Bin& grid_bin = density_grid_->getBin(x, y);
+                const Bin& solved_bin = density_input[idx];
+                grid_bin.electro_force_x = solved_bin.electro_force_x;
+                grid_bin.electro_force_y = solved_bin.electro_force_y;
+                grid_bin.electro_potential = solved_bin.electro_potential;
+            }
+        }
+        
         // Step 3: Calculate wirelength gradients with IO weighting
         calculateWirelengthGradients(progress);
         
@@ -308,16 +336,16 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
     std::fill(wire_gradients_.begin(), wire_gradients_.end(), Point{0.0, 0.0});
     
     // [IO 权重调度] 动态计算 IO 权重
-    // 初期 (progress < 0.3): 权重极低 (0.1)，几乎忽略 IO
-    // 中期 (0.3 <= progress <= 0.6): 线性过渡 0.1 -> 1.0
+    // 初期 (progress < 0.3): 权重适中 (0.5)，适度考虑 IO
+    // 中期 (0.3 <= progress <= 0.6): 线性过渡 0.5 -> 1.0
     // 后期 (progress > 0.6): 权重恢复 (1.0)
-    double io_weight = 0.1;  
+    double io_weight = 0.5;  
     
     if (progress_ratio > 0.6) {
         io_weight = 1.0;
     } else if (progress_ratio > 0.3) {
-        // 线性过渡: 0.1 -> 1.0
-        io_weight = 0.1 + (progress_ratio - 0.3) * 3.0;  
+        // 线性过渡: 0.5 -> 1.0
+        io_weight = 0.5 + (progress_ratio - 0.3) * 1.67;  
     }
     
     debugLog("IO Weight Schedule: progress=" + std::to_string(progress_ratio) + 

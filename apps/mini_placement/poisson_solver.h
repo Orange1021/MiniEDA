@@ -51,6 +51,13 @@ public:
     PoissonSolver& operator=(PoissonSolver&&) = default;
 
     /**
+     * @brief Set bin dimensions for accurate force calculation
+     * @param bin_width Physical width of each bin
+     * @param bin_height Physical height of each bin
+     */
+    void setBinSize(double bin_width, double bin_height);
+    
+    /**
      * @brief Core function: Solve Poisson equation and calculate forces
      * @param bins Density grid bins (input: density, output: potential + forces)
      * @param grid_width Grid width (must be power of 2)
@@ -118,6 +125,10 @@ private:
     double max_force_magnitude_ = 0.0;
     double avg_force_magnitude_ = 0.0;
     bool solve_successful_ = false;
+    
+    // Physical dimensions
+    double bin_width_ = 0.0;
+    double bin_height_ = 0.0;
 
     // ========================================================================
     // Core FFT Algorithms (Hardcore Mode - No External Dependencies!)

@@ -15,8 +15,14 @@ namespace mini {
 // Constructor and Public Interface
 // ============================================================================
 
-PoissonSolver::PoissonSolver() {
+PoissonSolver::PoissonSolver() : bin_width_(0.0), bin_height_(0.0) {
     debugLog("PoissonSolver initialized - ready to solve electrostatic equations!");
+}
+
+void PoissonSolver::setBinSize(double bin_width, double bin_height) {
+    bin_width_ = bin_width;
+    bin_height_ = bin_height;
+    debugLog("Bin dimensions set: " + std::to_string(bin_width_) + "x" + std::to_string(bin_height_));
 }
 
 bool PoissonSolver::solve(std::vector<Bin>& bins, int grid_width, int grid_height) {
@@ -334,16 +340,37 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
     double total_force_magnitude = 0.0;
     int count = 0;
     
-    // Calculate bin dimensions from bins data (assuming uniform bins)
-    double bin_width = 1.0;  // Default fallback
-    double bin_height = 1.0;
+    // Use provided bin dimensions or calculate from bins if not set
     
-    if (!bins.empty()) {
-        // Try to get actual bin dimensions from first bin
-        // This is a simplified approach - in practice, we'd pass these as parameters
-        bin_width = 0.1;  // Typical bin width in micrometers
-        bin_height = 0.1;
-    }
+        double bin_width = bin_width_;
+    
+        double bin_height = bin_height_;
+    
+        
+    
+        // If bin dimensions not set, calculate from bins (fallback)
+    
+        if (bin_width_ < 1e-9 && bins.size() >= 2 && width > 1) {
+    
+            // Calculate bin_width from adjacent bins in same row
+    
+            bin_width = bins[1].x - bins[0].x;
+    
+            if (bin_width < 1e-9) bin_width = 1.0;
+    
+        }
+    
+        
+    
+        if (bin_height_ < 1e-9 && bins.size() > width) {
+    
+            // Calculate bin_height from first bin of next row
+    
+            bin_height = bins[width].y - bins[0].y;
+    
+            if (bin_height < 1e-9) bin_height = 1.0;
+    
+        }
     
     double dx = 2.0 * bin_width;   // Central difference: 2 * bin_width
     double dy = 2.0 * bin_height;  // Central difference: 2 * bin_height
@@ -357,20 +384,48 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
             bins[idx].electro_potential = phi;
             max_potential_ = std::max(max_potential_, std::abs(phi));
             
-            // Calculate X gradient: ∂Φ/∂x using central difference
-            int left_idx = y * width + ((x - 1 + width) % width);
-            int right_idx = y * width + ((x + 1) % width);
-            double grad_x = (potential[right_idx].real() - potential[left_idx].real()) / dx;
+            
+            
+            // Calculate X gradient: ∂Φ/∂x
+            double grad_x;
+            if (x == 0) {
+                // Left boundary: forward difference
+                int right_idx = y * width + (x + 1);
+                grad_x = (potential[right_idx].real() - potential[idx].real()) / bin_width;
+            } else if (x == width - 1) {
+                // Right boundary: backward difference
+                int left_idx = y * width + (x - 1);
+                grad_x = (potential[idx].real() - potential[left_idx].real()) / bin_width;
+            } else {
+                // Interior: central difference
+                int left_idx = y * width + (x - 1);
+                int right_idx = y * width + (x + 1);
+                grad_x = (potential[right_idx].real() - potential[left_idx].real()) / dx;
+            }
             bins[idx].electro_force_x = -grad_x;  // F_x = -∂Φ/∂x
             
-            // Calculate Y gradient: ∂Φ/∂y using central difference
-            int up_idx = ((y - 1 + height) % height) * width + x;
-            int down_idx = ((y + 1) % height) * width + x;
-            double grad_y = (potential[down_idx].real() - potential[up_idx].real()) / dy;
+            // Calculate Y gradient: ∂Φ/∂y
+            double grad_y;
+            if (y == 0) {
+                // Top boundary: forward difference
+                int down_idx = (y + 1) * width + x;
+                grad_y = (potential[down_idx].real() - potential[idx].real()) / bin_height;
+            } else if (y == height - 1) {
+                // Bottom boundary: backward difference
+                int up_idx = (y - 1) * width + x;
+                grad_y = (potential[idx].real() - potential[up_idx].real()) / bin_height;
+            } else {
+                // Interior: central difference
+                int up_idx = (y - 1) * width + x;
+                int down_idx = (y + 1) * width + x;
+                grad_y = (potential[down_idx].real() - potential[up_idx].real()) / dy;
+            }
             bins[idx].electro_force_y = -grad_y;  // F_y = -∂Φ/∂y
             
             // Update force statistics
             double force_mag = std::sqrt(grad_x * grad_x + grad_y * grad_y);
+            
+            
             max_force_magnitude_ = std::max(max_force_magnitude_, force_mag);
             total_force_magnitude += force_mag;
             count++;
