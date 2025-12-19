@@ -169,18 +169,24 @@ void LibertyParser::parseLibraryBody(Library* lib) {
             // Create and parse cell
             LibCell cell;
             cell.name = cell_name;
+            if (verbose_) {
             std::cout << "    [DEBUG] Parsing cell #" << (lib->getCellCount() + 1) 
                       << ": " << cell_name << " at line " << state_.line_number << std::endl;
+        }
             
             parseCellBody(&cell);
             
             lib->addCell(cell_name, cell);
+            if (verbose_) {
             std::cout << "    [DEBUG] Completed cell: " << cell_name 
                       << " (total: " << lib->getCellCount() << ")" << std::endl;
         }
+        }
         else if (keyword == "lu_table_template") {
                     // Skip lu_table_template for now
-                    std::cout << "    [DEBUG] Skipping lu_table_template at line " << state_.line_number << std::endl;
+                    if (verbose_) {
+            std::cout << "    [DEBUG] Skipping lu_table_template at line " << state_.line_number << std::endl;
+        }
                     skipGroup();
                 }
                 else {
@@ -188,8 +194,10 @@ void LibertyParser::parseLibraryBody(Library* lib) {
                     skipWhitespace();
                     if (peek() == '(') {
                         // This is a group we don't recognize
-                        std::cout << "    [DEBUG] Skipping unknown group: " << keyword 
+                        if (verbose_) {
+                std::cout << "    [DEBUG] Skipping unknown group: " << keyword 
                                   << " at line " << state_.line_number << std::endl;
+            }
                         skipGroup();
                     }
             else if (peek() == ':') {
@@ -337,9 +345,10 @@ void LibertyParser::parseCellBody(LibCell* cell) {
         else if (keyword == "internal_power" || keyword == "leakage_power" || keyword == "statetable" || 
                  keyword == "clock_gating_integrated_cell") {
             // Skip complex power-related constructs with proper depth tracking
-            std::cout << "    [DEBUG] Skipping complex cell attribute: " << keyword 
-                      << " at line " << state_.line_number << std::endl;
-            skipWhitespace();
+            if (verbose_) {
+                            std::cout << "    [DEBUG] Skipping complex cell attribute: " << keyword 
+                                              << " at line " << state_.line_number << std::endl;
+                        }            skipWhitespace();
             if (peek() == '(') {
                 consume(); // Skip arguments
                 skipUntil(')');
@@ -364,9 +373,10 @@ void LibertyParser::parseCellBody(LibCell* cell) {
         }
         else {
             // Skip other unknown cell-level constructs
-            std::cout << "    [DEBUG] Skipping unknown cell attribute: " << keyword 
-                      << " at line " << state_.line_number << std::endl;
-            skipWhitespace();
+            if (verbose_) {
+                            std::cout << "    [DEBUG] Skipping unknown cell attribute: " << keyword 
+                                              << " at line " << state_.line_number << std::endl;
+                        }            skipWhitespace();
             if (peek() == ':') {
                 skipAttribute();
             } else {
@@ -425,12 +435,16 @@ void LibertyParser::parsePinBody(LibPin* pin) {
             }
             consume();
 
-            // Parse timing body with constraint state tracking
+            // Parse timing body with unified parser
             if (verbose_) {
-                std::cout << "        Parsing timing group" << std::endl;
+                std::cout << "        [DEBUG] Parsing timing block for pin " << pin->name << std::endl;
             }
             
-            parseTimingBodyWithConstraints(pin);
+            parseTimingBody(pin);
+            
+            if (verbose_) {
+                std::cout << "        [DEBUG] Finished parsing timing block" << std::endl;
+            }
         }
         else if (keyword == "constraint" || keyword == "setup" || keyword == "hold") {
             // Parse constraint definition (setup/hold)
@@ -1064,12 +1078,14 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
     // State machine variables
     std::string current_timing_type = "";
     std::string related_pin = "";
+    std::string current_when_condition = "";  // [NEW] Store when condition
     
     while (!eof()) {
         skipWhitespace();
         
         if (peek() == '}') {
             consume(); // End of timing group
+            std::cout << "          [DEBUG] End of timing group (found })" << std::endl;
             return;
         }
 
@@ -1085,11 +1101,11 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
             if (peek() == ':') consume();
             skipWhitespace();
             current_timing_type = readIdentifier();
+            current_when_condition = "";  // [NEW] Reset when condition for new timing type
             skipUntil(';');
             
-            if (verbose_) {
-                std::cout << "          Timing type: " << current_timing_type << std::endl;
-            }
+            // Always show timing_type (important for debugging)
+            std::cout << "          [DEBUG] Timing type: " << current_timing_type << std::endl;
         }
         else if (keyword == "related_pin") {
             skipWhitespace();
@@ -1097,6 +1113,20 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
             skipWhitespace();
             related_pin = readString();
             skipUntil(';');
+            
+            // Always show related_pin (important for debugging)
+            std::cout << "          [DEBUG] Related pin: " << related_pin << std::endl;
+        }
+        else if (keyword == "when") {
+            // [NEW] Parse when condition
+            skipWhitespace();
+            if (peek() == ':') consume();
+            skipWhitespace();
+            current_when_condition = readString();
+            skipUntil(';');
+            
+            // Always show when condition (important for debugging)
+            std::cout << "          Found when condition: " << current_when_condition << std::endl;
         }
         else if (keyword == "rise_constraint" || keyword == "fall_constraint") {
             // Step 2: Parse constraint based on current timing_type
@@ -1108,11 +1138,9 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
                 std::string template_name = readString();
                 skipUntil(')');
                 
-                if (verbose_) {
-                    std::cout << "          Parsing " << constraint_edge << "(" << template_name << ")" 
-                              << " for timing_type: " << current_timing_type << std::endl;
-                }
-                
+                // Always show constraint parsing (important for debugging)
+                            std::cout << "          Parsing " << constraint_edge << "(" << template_name << ")" 
+                                      << " for timing_type: " << current_timing_type << std::endl;                
                 skipWhitespace();
                 if (peek() != '{') {
                     error("Expected '{' to start constraint body");
@@ -1123,23 +1151,26 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
                 // Step 3: Create constraint with proper type mapping
                 LibConstraint constraint;
                 constraint.related_pin = related_pin;
+                constraint.when_condition = current_when_condition;  // [NEW] Store when condition
                 
                 // Map timing_type + edge to constraint_type
-                if (current_timing_type == "setup_rising") {
-                    if (constraint_edge == "rise_constraint") {
-                        constraint.constraint_type = "setup_rising";
-                    } else if (constraint_edge == "fall_constraint") {
-                        constraint.constraint_type = "setup_falling";
-                    }
-                }
-                else if (current_timing_type == "hold_rising") {
-                    if (constraint_edge == "rise_constraint") {
-                        constraint.constraint_type = "hold_rising";
-                    } else if (constraint_edge == "fall_constraint") {
-                        constraint.constraint_type = "hold_falling";
-                    }
-                }
-                else if (current_timing_type == "setup_falling") {
+                            // Note: timing_type defines the clock edge, constraint_edge defines data transition
+                            if (current_timing_type == "setup_rising") {
+                                // Setup check for rising clock edge
+                                constraint.constraint_type = "setup_rising";
+                            }
+                            else if (current_timing_type == "hold_rising") {
+                                // Hold check for rising clock edge  
+                                constraint.constraint_type = "hold_rising";
+                            }
+                            else if (current_timing_type == "setup_falling") {
+                                // Setup check for falling clock edge
+                                constraint.constraint_type = "setup_falling";
+                            }
+                            else if (current_timing_type == "hold_falling") {
+                                // Hold check for falling clock edge
+                                constraint.constraint_type = "hold_falling";
+                            }                else if (current_timing_type == "setup_falling") {
                     if (constraint_edge == "rise_constraint") {
                         constraint.constraint_type = "setup_rising_falling";
                     } else if (constraint_edge == "fall_constraint") {
@@ -1160,11 +1191,10 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
                 // Add to pin's constraint arcs if valid
                 if (constraint.isValid()) {
                     pin->constraint_arcs.push_back(constraint);
-                    if (verbose_) {
-                        std::cout << "            Added constraint: " << constraint.constraint_type 
-                                  << " with " << constraint.constraint_table.getDim1Size() 
-                                  << "x" << constraint.constraint_table.getDim2Size() << " table" << std::endl;
-                    }
+                    // Always show constraint addition (important for debugging)
+                    std::cout << "            Added constraint: " << constraint.constraint_type 
+                              << " with " << constraint.constraint_table.getDim1Size() 
+                              << "x" << constraint.constraint_table.getDim2Size() << " table" << std::endl;
                 }
             }
         }
@@ -1178,6 +1208,206 @@ void LibertyParser::parseTimingBodyWithConstraints(LibPin* pin) {
             }
         }
     }
+}
+
+/**
+ * @brief [NEW] Unified Timing Parser
+ * @details Handles BOTH standard delays (cell_rise) and constraints (setup_rising)
+ * @param pin Pin to store timing arcs and constraint arcs
+ */
+void LibertyParser::parseTimingBody(LibPin* pin) {
+    LibTiming timing_arc;      // For delay arcs (combinational logic)
+    
+    // State tracking
+    bool is_constraint = false;
+    std::string current_timing_type = "";
+    std::string current_when = "";
+    std::string current_related_pin = "";
+    
+    while (!eof()) {
+        skipWhitespace();
+        
+        char next_char = peek();
+        if (next_char == '}') {
+            consume(); // End of timing group
+            
+            // End of group: decide where to save
+            if (!is_constraint) {
+                // It's a delay arc (combinational)
+                timing_arc.related_pin = current_related_pin;
+                timing_arc.timing_sense = current_timing_type;
+                
+                // Only add if it has valid data
+                if (timing_arc.cell_delay.isValid() || 
+                    timing_arc.rise_transition.isValid() || 
+                    timing_arc.fall_transition.isValid()) {
+                    pin->timing_arcs.push_back(timing_arc);
+                }
+            }
+            
+            return;
+        }
+        
+        std::string keyword = readIdentifier();
+        if (keyword.empty()) { 
+            if (!eof()) consume(); 
+            continue; 
+        }
+        
+        // --- Common Attributes ---
+        if (keyword == "related_pin") {
+            skipWhitespace(); 
+            if (peek() == ':') consume();
+            current_related_pin = readValue();
+            skipUntil(';');
+            
+            if (verbose_) {
+                std::cout << "          [DEBUG] Related pin: " << current_related_pin << std::endl;
+            }
+        }
+        else if (keyword == "timing_type") {
+            skipWhitespace(); 
+            if (peek() == ':') consume();
+            current_timing_type = readValue();
+            skipUntil(';');
+            
+            // Detect if this is a constraint block
+            if (current_timing_type.find("setup") != std::string::npos || 
+                current_timing_type.find("hold") != std::string::npos ||
+                current_timing_type.find("recovery") != std::string::npos ||
+                current_timing_type.find("removal") != std::string::npos) {
+                is_constraint = true;
+            }
+            
+            if (verbose_) {
+                std::cout << "          [DEBUG] Timing type: " << current_timing_type 
+                          << (is_constraint ? " (constraint)" : " (delay)") << std::endl;
+            }
+        }
+        else if (keyword == "when") {
+            skipWhitespace(); 
+            if (peek() == ':') consume();
+            std::string condition;
+            while (!eof() && peek() != ';') { 
+                condition += peek(); 
+                consume(); 
+            }
+            current_when = condition;
+            if (peek() == ';') consume();
+            
+            if (verbose_) {
+                std::cout << "          [DEBUG] When condition: " << current_when << std::endl;
+            }
+        }
+        else if (keyword == "timing_sense") {
+            skipWhitespace(); 
+            if (peek() == ':') consume();
+            timing_arc.timing_sense = readValue();
+            skipUntil(';');
+        }
+        
+        // --- Standard Delay Tables (Combinational) ---
+        else if (keyword == "cell_rise" || keyword == "cell_fall") {
+            skipWhitespace(); 
+            if (peek() == '(') { 
+                consume(); 
+                skipUntil(')'); 
+            }
+            
+            skipWhitespace();
+            if (peek() == '{') {
+                // Don't consume { here - parseValuesTable will handle it
+                parseValuesTable(&timing_arc.cell_delay);
+            } else {
+                // Skip this table if format is unexpected
+                skipGroup();
+            }
+        }
+        else if (keyword == "rise_transition" || keyword == "fall_transition") {
+            skipWhitespace(); 
+            if (peek() == '(') { 
+                consume(); 
+                skipUntil(')'); 
+            }
+            
+            skipWhitespace();
+            if (peek() == '{') {
+                // Don't consume { here - parseValuesTable will handle it
+                if (keyword == "rise_transition") {
+                    parseValuesTable(&timing_arc.rise_transition);
+                } else {
+                    parseValuesTable(&timing_arc.fall_transition);
+                }
+            } else {
+                // Skip this table if format is unexpected
+                skipGroup();
+            }
+        }
+        
+        // --- Constraint Tables (Setup/Hold) ---
+        else if (keyword == "rise_constraint" || keyword == "fall_constraint") {
+            is_constraint = true;
+            
+            skipWhitespace(); 
+            if (peek() == '(') { 
+                consume(); 
+                skipUntil(')'); 
+            }
+            
+            skipWhitespace();
+            if (peek() == '{') { 
+                // Don't consume { here - parseValuesTable will handle it
+                
+                // Create a specific constraint entry
+                LibConstraint new_const;
+                new_const.related_pin = current_related_pin;
+                new_const.when_condition = current_when;
+                new_const.constraint_type = current_timing_type;
+                
+                parseValuesTable(&new_const.constraint_table);
+                
+                if (new_const.isValid()) {
+                
+                                pin->constraint_arcs.push_back(new_const);
+                
+                                if (verbose_) {
+                
+                                    std::cout << "            [DEBUG] Added constraint: " << new_const.constraint_type 
+                
+                                              << " with " << new_const.constraint_table.getDim1Size() 
+                
+                                              << "x" << new_const.constraint_table.getDim2Size() << " table" << std::endl;
+                
+                                }
+                
+                            }            } else {
+                // Skip this constraint if format is unexpected
+                skipGroup();
+            }
+        }
+        else {
+            // Skip other timing-level attributes
+            skipWhitespace();
+            if (peek() == ':') {
+                skipAttribute();
+            } else {
+                skipGroup();
+            }
+        }
+    }
+}
+
+/**
+ * @brief [NEW] Read a value that might be quoted or unquoted
+ * @details Solves the issue where timing_type : setup_rising; (unquoted) fails with readString()
+ * @return The value as a string
+ */
+std::string LibertyParser::readValue() {
+    skipWhitespace();
+    if (peek() == '"' || peek() == '\'') {
+        return readString();
+    }
+    return readIdentifier();
 }
 
 } // namespace mini

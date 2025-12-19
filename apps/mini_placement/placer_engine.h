@@ -12,12 +12,14 @@
 
 namespace mini {
 
-// Forward declaration
+// Forward declarations
 class Visualizer;
+class GlobalPlacer;
 
 /**
  * @class PlacerEngine
  * @brief Main placement engine with HPWL calculation and optimization
+ * @details Supports multiple placement algorithms via Strategy Pattern
  */
 class PlacerEngine {
 public:
@@ -28,6 +30,11 @@ public:
     explicit PlacerEngine(PlacerDB* db);
 
     /**
+     * @brief Destructor
+     */
+    ~PlacerEngine();
+
+    /**
      * @brief Calculate Half-Perimeter Wire Length (HPWL)
      * @return Total HPWL for all nets
      * @details HPWL = Sum((max_x - min_x) + (max_y - min_y)) for all nets
@@ -35,10 +42,17 @@ public:
     double calculateHPWL() const;
 
     /**
-     * @brief Run complete global placement
+     * @brief Run complete global placement (default: basic force-directed)
      * @details Force-directed algorithm with iterative optimization
      */
     void runGlobalPlacement();
+
+    /**
+     * @brief Run global placement with specified algorithm
+     * @param algorithm Algorithm selection: "basic", "nesterov", "hybrid"
+     * @details Strategy Pattern implementation for algorithm switching
+     */
+    void runGlobalPlacementWithAlgorithm(const std::string& algorithm);
 
     /**
      * @brief Run legalization to align cells to rows
@@ -75,12 +89,35 @@ private:
     Visualizer* viz_;                 // Visualizer for debugging
     double current_hpwl_;             // Current HPWL value
     std::string run_id_;              // Run ID for file naming
+    GlobalPlacer* global_placer_;     // Pointer to advanced global placer
 
     /**
      * @brief Single iteration of force-directed algorithm
      * @param iter Current iteration number
      */
     void solveForceDirectedIteration(int iter);
+
+    // ========================================================================
+    // Strategy Pattern: Placement Algorithms
+    // ========================================================================
+
+    /**
+     * @brief Strategy A: Basic Force-Directed Placement (Baseline)
+     * @details Traditional spring-force model with quadratic wirelength
+     */
+    void runBasicStrategy();
+
+    /**
+     * @brief Strategy B: Electrostatic Field Placement (Nesterov)
+     * @details Advanced electrostatic placement with density control
+     */
+    void runElectrostaticStrategy();
+
+    /**
+     * @brief Strategy C: Hybrid Cascade Placement (Best Practice)
+     * @details Two-phase approach: warm-up with basic + refinement with electrostatic
+     */
+    void runHybridStrategy();
 
     /**
      * @brief Calculate net bounding box

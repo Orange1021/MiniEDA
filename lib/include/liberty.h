@@ -86,13 +86,17 @@ struct LibTiming {
 struct LibConstraint {
     std::string related_pin;                            ///< Related input pin name
     std::string constraint_type;                        ///< "setup_rising", "hold_rising", "setup_falling", "hold_falling"
+    std::string when_condition;                         ///< Conditional constraint (e.g., "SE", "!SE", "A & B")
     LookupTable constraint_table;                       ///< Constraint vs (input_slew, clock_slew)
 
     /**
      * @brief Check if constraint data is valid
+     * @details For setup/hold constraints, related_pin can be empty (will be inferred as clock pin)
      */
     bool isValid() const {
-        return !related_pin.empty() && !constraint_type.empty() && constraint_table.isValid();
+        // Note: related_pin can be empty for DFF setup/hold constraints
+        // It will be inferred from the cell's clock pin during STA
+        return !constraint_type.empty() && constraint_table.isValid();
     }
 };
 
@@ -129,7 +133,7 @@ struct LibPin {
     bool isOutput() const { return direction == "output"; }
 
     /**
-     * @brief Get constraint table by type
+     * @brief Get constraint table by type (legacy method - returns first match)
      * @param constraint_type Constraint type (e.g., "setup_rising")
      * @return Pointer to constraint table or nullptr if not found
      */
@@ -140,6 +144,43 @@ struct LibPin {
             }
         }
         return nullptr;
+    }
+
+    /**
+     * @brief [NEW] Get best constraint table by type with intelligent filtering
+     * @param constraint_type Constraint type (e.g., "setup_rising")
+     * @return Pointer to best constraint table or nullptr if not found
+     * @details Selection strategy:
+     * 1. Prefer constraints with empty when_condition (unconditional)
+     * 2. Avoid constraints containing "SE", "SCAN", "TEST" (test mode)
+     * 3. Fallback to first available if no good match found
+     */
+    const LibConstraint* getBestConstraint(const std::string& constraint_type) const {
+        const LibConstraint* best_candidate = nullptr;
+        const LibConstraint* fallback_candidate = nullptr;
+
+        for (const auto& constraint : constraint_arcs) {
+            // Match constraint type
+            if (constraint.constraint_type != constraint_type) continue;
+            
+            // Priority 1: Unconditional constraints (empty when_condition)
+            if (constraint.when_condition.empty()) {
+                return &constraint; // Perfect match!
+            }
+            
+            // Priority 2: Functional mode constraints (avoid test/scan)
+            bool is_test_mode = (constraint.when_condition.find("SE") != std::string::npos) ||
+                              (constraint.when_condition.find("SCAN") != std::string::npos) ||
+                              (constraint.when_condition.find("TEST") != std::string::npos);
+            
+            if (!is_test_mode) {
+                best_candidate = &constraint; // This looks like functional mode
+            } else {
+                if (!fallback_candidate) fallback_candidate = &constraint; // Last resort
+            }
+        }
+
+        return best_candidate ? best_candidate : fallback_candidate;
     }
 };
 

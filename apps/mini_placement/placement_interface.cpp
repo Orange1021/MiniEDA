@@ -173,6 +173,26 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     placer_db->setCoreArea(core_area);
     placer_db->setRowHeight(config.row_height);
     
+    // [利用率诊断] 计算并打印关键设计信息
+    double core_area_size = core_area.width() * core_area.height();
+    double actual_utilization = total_cell_area / core_area_size;
+    
+    std::cout << "\n>>> DESIGN INFO (UTILIZATION DIAGNOSIS) <<<" << std::endl;
+    std::cout << "Total Cell Area: " << total_cell_area << " μm²" << std::endl;
+    std::cout << "Core Area: " << core_area_size << " μm²" << std::endl;
+    std::cout << "Actual Utilization: " << actual_utilization << " (" << actual_utilization * 100 << "%)" << std::endl;
+    std::cout << "Target Utilization: " << config.utilization << " (" << config.utilization * 100 << "%)" << std::endl;
+    
+    if (actual_utilization < 0.3) {
+        std::cout << "⚠️  WARNING: Very low utilization! This may cause 'corner explosion'." << std::endl;
+        std::cout << "   Recommendation: Use 'cold-start' Lambda strategy." << std::endl;
+    } else if (actual_utilization < 0.5) {
+        std::cout << "📊 INFO: Low utilization. Consider conservative density targets." << std::endl;
+    } else {
+        std::cout << "✅ GOOD: Reasonable utilization for standard placement." << std::endl;
+    }
+    std::cout << "==========================================\n" << std::endl;
+    
     if (config.verbose) {
         std::cout << "  Total cell area: " << total_cell_area << " square micrometers" << std::endl;
         std::cout << "  Target utilization: " << (config.utilization * 100) << "%" << std::endl;
@@ -214,9 +234,19 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     engine.setRunId(config.run_id);
     
     if (config.verbose) {
-        std::cout << "\n=== Running Global Placement ===" << std::endl;
+        if (config.placement_algo == "basic") {
+            std::cout << "\n=== Running Basic Force-Directed Placement ===" << std::endl;
+        } else if (config.placement_algo == "nesterov") {
+            std::cout << "\n=== Running Nesterov Electrostatic Placement ===" << std::endl;
+        } else if (config.placement_algo == "hybrid") {
+            std::cout << "\n=== Running Hybrid Cascade Placement ===" << std::endl;
+        } else {
+            std::cout << "\n=== Running Placement Algorithm: " << config.placement_algo << " ===" << std::endl;
+        }
     }
-    engine.runGlobalPlacement();
+    
+    // Run placement using strategy pattern
+    engine.runGlobalPlacementWithAlgorithm(config.placement_algo);
     
     if (config.verbose) {
         std::cout << "\n=== Running Legalization ===" << std::endl;

@@ -23,6 +23,7 @@
 
 // Placement modules
 #include "../apps/mini_placement/placement_interface.h"
+#include "../apps/mini_placement/placer_engine.h"
 #include "../lib/include/placer_db.h"
 
 // Routing modules
@@ -132,11 +133,24 @@ std::unique_ptr<PlacerDB> runPlacement(const AppConfig& config, std::shared_ptr<
     // Detect actual row height from LEF (override config if available)
     double actual_row_height = detectRowHeight(config);
     
+    // Determine placement algorithm from environment variable
+    std::string placement_algo = "hybrid";  // default to hybrid (best practice)
+    const char* env_algo = std::getenv("MINIEDA_PLACEMENT_ALGO");
+    if (env_algo) {
+        placement_algo = std::string(env_algo);
+    }
+    
+    std::cout << "  Using Placement Algorithm: " << placement_algo << std::endl;
+    
     // Convert to placement configuration
     PlacementConfig placement_config = toPlacementConfig(config);
     placement_config.row_height = actual_row_height;  // Use detected height
+    placement_config.placement_algo = placement_algo;  // Set algorithm
     
-    // Run placement
+    // Use algorithm-specific folder for comparison (避免覆盖)
+    placement_config.run_id = config.run_id + "_" + placement_algo;
+    
+    // Run placement using unified interface
     auto placer_db = PlacementInterface::runPlacementWithVisualization(
         placement_config, netlist_db, nullptr);
     
@@ -144,6 +158,13 @@ std::unique_ptr<PlacerDB> runPlacement(const AppConfig& config, std::shared_ptr<
         std::cout << "  Placement completed successfully" << std::endl;
         std::cout << "  Final utilization: " << placement_config.utilization << std::endl;
         std::cout << "  Row height used: " << actual_row_height << " um" << std::endl;
+        if (placement_config.placement_algo == "hybrid") {
+            std::cout << "  Placement mode: Hybrid (Warm-up + Electrostatic)" << std::endl;
+        } else if (placement_config.placement_algo == "nesterov") {
+            std::cout << "  Placement mode: Electrostatic Field (Nesterov)" << std::endl;
+        } else {
+            std::cout << "  Placement mode: Basic Force-Directed" << std::endl;
+        }
     }
     
     return placer_db;

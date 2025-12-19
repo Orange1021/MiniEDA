@@ -24,7 +24,7 @@ LIB_OBJS := $(patsubst $(LIB_SRC_DIR)/%.cpp, $(BUILD_LIB_DIR)/%.o, $(LIB_SRCS))
 APP_LIB_SRCS := $(STA_DIR)/cell_mapper.cpp $(STA_DIR)/delay_model.cpp $(STA_DIR)/sta_engine.cpp \
                $(STA_DIR)/timing_checks.cpp $(STA_DIR)/timing_constraints.cpp $(STA_DIR)/timing_graph.cpp \
                $(STA_DIR)/timing_path.cpp $(STA_DIR)/timing_report.cpp \
-               $(PLACER_DIR)/placer_engine.cpp $(PLACER_DIR)/macro_mapper.cpp \
+               $(PLACER_DIR)/placer_engine.cpp $(PLACER_DIR)/macro_mapper.cpp $(PLACER_DIR)/poisson_solver.cpp $(PLACER_DIR)/global_placer.cpp \
                $(ROUTER_DIR)/routing_grid.cpp $(ROUTER_DIR)/maze_router.cpp
 
 # Additional dependencies for STA (needs MacroMapper)
@@ -104,6 +104,11 @@ $(BUILD_LIB_DIR)/placer_%.o: $(PLACER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Compile DensityGrid object files (special case for density_grid.cpp)
+$(BUILD_LIB_DIR)/density_grid.o: $(PLACER_DIR)/density_grid.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # Compile MiniRouter object files
 $(BUILD_LIB_DIR)/router_%.o: $(ROUTER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
@@ -115,7 +120,7 @@ $(BUILD_BIN_DIR)/mini_sta: $(BUILD_LIB_DIR)/sta_main_sta.o $(STA_OBJS) $(STA_DEP
 	@echo "MiniSTA compilation completed: $@"
 
 # Link MiniPlacement executable
-$(BUILD_BIN_DIR)/mini_placement: $(BUILD_LIB_DIR)/lib_main_placer.o $(LIB_OBJS) $(APP_LIB_OBJS) | $(BUILD_BIN_DIR)
+$(BUILD_BIN_DIR)/mini_placement: $(BUILD_LIB_DIR)/lib_main_placer.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o | $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
 	@echo "MiniPlacement compilation completed: $@"
 
@@ -130,9 +135,8 @@ $(BUILD_LIB_DIR)/flow_%.o: apps/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Link Integrated Flow executable
-$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/placer_placement_interface.o $(BUILD_LIB_DIR)/router_routing_interface.o | $(BUILD_BIN_DIR)
+$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/placer_placement_interface.o $(BUILD_LIB_DIR)/router_routing_interface.o $(BUILD_LIB_DIR)/density_grid.o | $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
-	@echo "MiniFlow compilation completed: $@"
 	@echo "MiniFlow compilation completed: $@"
 
 # Build MiniSTA only
@@ -147,9 +151,41 @@ placement: $(PLACER_BIN)
 .PHONY: router
 router: $(ROUTER_BIN)
 
-# Build Integrated Flow only
+# Build MiniFlow only
 .PHONY: flow
 flow: $(FLOW_BIN)
+
+# Build density grid test
+.PHONY: test-density
+test-density: $(BUILD_BIN_DIR)/test_density_grid
+
+$(BUILD_BIN_DIR)/test_density_grid: test/test_density_grid.cpp $(LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/lib_macro_mapper.o | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $< $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "Density grid test compilation completed: $@"
+
+# Build poisson solver test
+.PHONY: test-poisson
+test-poisson: $(BUILD_BIN_DIR)/test_poisson_solver
+
+$(BUILD_BIN_DIR)/test_poisson_solver: test/test_poisson_solver.cpp $(LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/lib_poisson_solver.o $(BUILD_LIB_DIR)/lib_macro_mapper.o | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $< $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "Poisson solver test compilation completed: $@"
+
+# Build global placer test
+.PHONY: test-global-placer
+test-global-placer: $(BUILD_BIN_DIR)/test_global_placer
+
+$(BUILD_BIN_DIR)/test_global_placer: test/test_global_placer.cpp $(LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/lib_poisson_solver.o $(BUILD_LIB_DIR)/lib_global_placer.o $(BUILD_LIB_DIR)/lib_macro_mapper.o | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $< $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "Global placer test compilation completed: $@"
+
+# Build hybrid placement test
+.PHONY: test-hybrid-placement
+test-hybrid-placement: $(BUILD_BIN_DIR)/test_hybrid_placement
+
+$(BUILD_BIN_DIR)/test_hybrid_placement: test/test_hybrid_placement.cpp $(LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/lib_poisson_solver.o $(BUILD_LIB_DIR)/lib_global_placer.o $(BUILD_LIB_DIR)/lib_placer_engine.o $(BUILD_LIB_DIR)/lib_macro_mapper.o | $(BUILD_BIN_DIR)
+	$(CXX) $(CXXFLAGS) $< $(filter %.o,$^) -o $@ $(LDFLAGS)
+	@echo "Hybrid placement test compilation completed: $@"
 
 # Clean build artifacts
 .PHONY: clean

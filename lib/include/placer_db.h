@@ -117,6 +117,13 @@ public:
     const CellInfo& getCellInfo(Cell* cell) const;
 
     /**
+     * @brief [New] Commit placement coordinates from PlacerDB to Cell objects
+     * @details Synchronizes internal CellInfo positions with actual Cell objects
+     *          Essential for algorithm handoff (e.g., Phase 1 → Phase 2)
+     */
+    void commitPlacement();
+
+    /**
      * @brief Get cell information (mutable)
      * @param cell Pointer to the cell
      * @return Reference to cell info

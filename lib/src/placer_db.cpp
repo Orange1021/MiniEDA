@@ -54,6 +54,9 @@ void PlacerDB::placeCell(Cell* cell, double x, double y) {
     if (it != cell_infos_.end()) {
         it->second.x = x;
         it->second.y = y;
+        
+        // Also update the Cell object's position to maintain consistency
+        cell->setPosition(x, y);
     }
 }
 
@@ -64,6 +67,22 @@ Point PlacerDB::getCellCenter(Cell* cell) const {
         return Point(info.x + info.width / 2.0, info.y + info.height / 2.0);
     }
     return Point(0.0, 0.0);  // Default if not found
+}
+
+void PlacerDB::commitPlacement() {
+    size_t synced_count = 0;
+    
+    for (auto& entry : cell_infos_) {
+        Cell* cell = entry.first;
+        const CellInfo& info = entry.second;
+        
+        // Synchronize CellInfo (DB) coordinates to Cell (Netlist)
+        // Note: GlobalPlacer reads from cell->getX(), cell->getY()
+        cell->setPosition(info.x, info.y);
+        synced_count++;
+    }
+    
+    std::cout << "  [PlacerDB] Synced " << synced_count << " cell positions to Netlist." << std::endl;
 }
 
 const PlacerDB::CellInfo& PlacerDB::getCellInfo(Cell* cell) const {

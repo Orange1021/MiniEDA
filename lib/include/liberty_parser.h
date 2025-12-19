@@ -88,6 +88,12 @@ private:
     void parseCell(Library* lib);
     void parsePin(LibCell* cell);
     void parseTiming(LibPin* pin);
+    
+    // [NEW] Unified timing parser
+    void parseTimingBody(LibPin* pin);
+    
+    // [NEW] Helper to read values that might be quoted or unquoted
+    std::string readValue();
 };
 
 } // namespace mini

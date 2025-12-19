@@ -4,18 +4,25 @@
  */
 
 #include "placer_engine.h"
-#include "visualizer.h"
+#include "global_placer.h"
+#include "../../lib/include/visualizer.h"
 #include <iostream>
 #include <algorithm>
 #include <cmath>
 #include <unordered_map>
 #include <limits>
 #include <map>
+#include <chrono>
+#include <iomanip>
 
 namespace mini {
 
 PlacerEngine::PlacerEngine(PlacerDB* db) 
-    : db_(db), viz_(nullptr), current_hpwl_(0.0) {
+    : db_(db), viz_(nullptr), current_hpwl_(0.0), global_placer_(nullptr) {
+}
+
+PlacerEngine::~PlacerEngine() {
+    delete global_placer_;
 }
 
 double PlacerEngine::calculateHPWL() const {
@@ -40,6 +47,35 @@ double PlacerEngine::calculateHPWL() const {
     }
     
     return total_hpwl;
+}
+
+void PlacerEngine::runGlobalPlacementWithAlgorithm(const std::string& algorithm) {
+    if (!db_) return;
+    
+    std::cout << "\n=== Starting Global Placement ===" << std::endl;
+    std::cout << "Algorithm: " << algorithm << std::endl;
+    
+    auto start_time = std::chrono::high_resolution_clock::now();
+    
+    if (algorithm == "basic") {
+        std::cout << "Mode: Basic Force-Directed (Baseline)" << std::endl;
+        runBasicStrategy();
+    } else if (algorithm == "nesterov") {
+        std::cout << "Mode: Electrostatic Field (Nesterov)" << std::endl;
+        runElectrostaticStrategy();
+    } else if (algorithm == "hybrid") {
+        std::cout << "Mode: Hybrid Cascade (Warmup + Nesterov)" << std::endl;
+        runHybridStrategy();
+    } else {
+        std::cerr << "Warning: Unknown algorithm '" << algorithm << "', falling back to basic" << std::endl;
+        runBasicStrategy();
+    }
+    
+    auto end_time = std::chrono::high_resolution_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
+    
+    std::cout << "Global Placement completed in " << duration.count() << " ms" << std::endl;
+    std::cout << "Final HPWL: " << current_hpwl_ << std::endl;
 }
 
 void PlacerEngine::runGlobalPlacement() {
@@ -557,6 +593,151 @@ double PlacerEngine::calculateTotalOverlap() const {
     }
     
     return total_overlap;
+}
+
+void PlacerEngine::runBasicStrategy() {
+    std::cout << "  Running Basic Force-Directed Algorithm..." << std::endl;
+    
+    current_hpwl_ = calculateHPWL();
+    std::cout << "  Initial HPWL: " << current_hpwl_ << std::endl;
+    
+    const int max_iterations = 50;
+    
+    for (int iter = 0; iter < max_iterations; ++iter) {
+        solveForceDirectedIteration(iter);
+        
+        double new_hpwl = calculateHPWL();
+        
+        if (iter % 5 == 0) {
+            std::cout << "  Iteration " << iter << ": HPWL = " << new_hpwl << std::endl;
+            
+            if (viz_) {
+                std::string filename = "quadratic_iter_" + std::to_string(iter);
+                viz_->drawPlacementWithRunId(filename, run_id_);
+            }
+        }
+        
+        double improvement = current_hpwl_ - new_hpwl;
+        if (std::abs(improvement) < current_hpwl_ * 0.0001) {
+            std::cout << "  Converged at iteration " << iter << std::endl;
+            break;
+        }
+        
+        current_hpwl_ = new_hpwl;
+    }
+    
+    std::cout << "  Basic strategy completed. Final HPWL: " << current_hpwl_ << std::endl;
+}
+
+void PlacerEngine::runElectrostaticStrategy() {
+    std::cout << "  Running Electrostatic Field Algorithm (Nesterov)..." << std::endl;
+    
+    if (!global_placer_) {
+        global_placer_ = new GlobalPlacer(db_, db_->getNetlistDB());
+        
+        const int grid_size = 64;
+        const double target_density = 0.7;
+        
+        if (!global_placer_->initialize(grid_size, target_density)) {
+            std::cerr << "  Error: Failed to initialize GlobalPlacer" << std::endl;
+            return;
+        }
+        
+        global_placer_->setMaxIterations(200);
+        global_placer_->setInitialLambda(0.0001);
+        global_placer_->setLambdaGrowthRate(1.05);
+        global_placer_->setLearningRate(0.1);
+        global_placer_->setMomentum(0.9);
+        global_placer_->setVerbose(true);
+        
+        if (viz_) {
+            global_placer_->setVisualizer(viz_);
+            global_placer_->setRunId(run_id_);
+        }
+    }
+    
+    global_placer_->runPlacement();
+    
+    current_hpwl_ = calculateHPWL();
+    std::cout << "  Electrostatic strategy completed. Final HPWL: " << current_hpwl_ << std::endl;
+}
+
+void PlacerEngine::runHybridStrategy() {
+    std::cout << "  Running Hybrid Cascade Algorithm..." << std::endl;
+    
+    std::cout << "\n  === Phase 1: Warm-up (Basic Force-Directed) ===" << std::endl;
+    const int max_warmup_iterations = 15;  // 减少最大迭代次数
+    const double stop_hpwl_ratio = 0.3;   // 当HPWL降到初始值的30%时停止
+    
+    current_hpwl_ = calculateHPWL();
+    double initial_hpwl = current_hpwl_;
+    std::cout << "  Initial HPWL: " << current_hpwl_ << std::endl;
+    
+    for (int iter = 0; iter < max_warmup_iterations; ++iter) {
+        solveForceDirectedIteration(iter);
+        
+        double new_hpwl = calculateHPWL();
+        double current_ratio = new_hpwl / initial_hpwl;
+        
+        if (iter % 5 == 0 || iter == max_warmup_iterations - 1) {
+            std::cout << "  Warmup iteration " << iter << ": HPWL = " << new_hpwl 
+                      << " (ratio: " << std::fixed << std::setprecision(3) << current_ratio << ")" << std::endl;
+            
+            if (viz_) {
+                std::string filename = "warmup_iter_" + std::to_string(iter);
+                viz_->drawPlacementWithRunId(filename, run_id_);
+            }
+        }
+        
+        current_hpwl_ = new_hpwl;
+        
+        // [安全阀 #2] 温和停止条件：避免压得太实
+        if (current_ratio <= stop_hpwl_ratio) {
+            std::cout << "  Warm-up stopped early: HPWL ratio reached " << current_ratio << std::endl;
+            break;
+        }
+    }
+    
+    std::cout << "  Warm-up completed. Cells are initially spread." << std::endl;
+    std::cout << "  HPWL after warm-up: " << current_hpwl_ << std::endl;
+    
+    // =========================================================
+    // 【关键修复】显式同步：将 Warm-up 结果提交给 Cell 对象
+    // =========================================================
+    db_->commitPlacement();
+    std::cout << "  >> Synchronization: Warm-up results committed to Netlist." << std::endl;
+    
+    std::cout << "\n  === Phase 2: Refinement (Electrostatic Nesterov) ===" << std::endl;
+    
+    if (!global_placer_) {
+        global_placer_ = new GlobalPlacer(db_, db_->getNetlistDB());
+        
+        const int grid_size = 64;
+        const double target_density = 0.7;
+        
+        if (!global_placer_->initialize(grid_size, target_density)) {
+            std::cerr << "  Error: Failed to initialize GlobalPlacer" << std::endl;
+            return;
+        }
+        
+        global_placer_->setMaxIterations(200);
+        global_placer_->setVerbose(true);
+        
+        // === 应用温和参数 (气体扩散模式) ===
+        global_placer_->setAggressiveParameters();
+        
+        if (viz_) {
+            global_placer_->setVisualizer(viz_);
+            global_placer_->setRunId(run_id_);
+            // 设置warm-up模式标志，启用保守的Lambda调优
+            global_placer_->setWarmupMode(true);
+        }
+    }
+    
+    global_placer_->runPlacement();
+    
+    current_hpwl_ = calculateHPWL();
+    std::cout << "  Hybrid strategy completed. Final HPWL: " << current_hpwl_ << std::endl;
 }
 
 } // namespace mini

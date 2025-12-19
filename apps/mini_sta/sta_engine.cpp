@@ -882,11 +882,15 @@ void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted
         clk_slew_ns = std::max(0.001, std::min(2.0, clk_slew_ns));
         
         // ==================== Setup Constraint Check ====================
-        const LibConstraint* setup_constraint = data_pin->getConstraint("setup_rising");
+        const LibConstraint* setup_constraint = data_pin->getBestConstraint("setup_rising");
         double lib_setup_time = 0.1; // Default fallback (100ps)
         
         if (setup_constraint && setup_constraint->constraint_table.isValid()) {
             lib_setup_time = setup_constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
+            // [NEW] Debug: Show which constraint was selected
+            if (!setup_constraint->when_condition.empty()) {
+                std::cout << "    Using setup constraint with when: " << setup_constraint->when_condition << std::endl;
+            }
         } else {
             std::cout << "  Warning: No setup_rising table found for " << lib_cell->name 
                       << ", using default " << lib_setup_time << " ns" << std::endl;
@@ -907,11 +911,15 @@ void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted
         if (setup_slack < 0) setup_violations++;
         
         // ==================== Hold Constraint Check ====================
-        const LibConstraint* hold_constraint = data_pin->getConstraint("hold_rising");
+        const LibConstraint* hold_constraint = data_pin->getBestConstraint("hold_rising");
         double lib_hold_time = 0.05; // Default fallback (50ps)
         
         if (hold_constraint && hold_constraint->constraint_table.isValid()) {
             lib_hold_time = hold_constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
+            // [NEW] Debug: Show which constraint was selected
+            if (!hold_constraint->when_condition.empty()) {
+                std::cout << "    Using hold constraint with when: " << hold_constraint->when_condition << std::endl;
+            }
         } else {
             std::cout << "  Warning: No hold_rising table found for " << lib_cell->name 
                       << ", using default " << lib_hold_time << " ns" << std::endl;

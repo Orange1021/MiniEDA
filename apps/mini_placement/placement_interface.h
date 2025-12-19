@@ -27,6 +27,7 @@ struct PlacementConfig {
     double row_height = 3.0;        // Standard cell row height (micrometers)
     bool verbose = false;           // Enable verbose output
     std::string run_id = "placement"; // Run identifier for output files
+    std::string placement_algo = "basic"; // Algorithm selection: "basic" or "nesterov"
 };
 
 /**
