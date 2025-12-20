@@ -282,6 +282,62 @@ void GlobalPlacer::runPlacement() {
         // Step 5: Update lambda (increase density penalty)
         updateLambda();
         
+        // [动态Lambda平衡] 每10次迭代重新评估力平衡
+        if (iter % 10 == 0 && iter > 0) {
+            // 计算当前帧的平均力
+            double avg_wire_force = 0.0;
+            double avg_density_force_raw = 0.0;
+            int active_cells = 0;
+            
+            for (size_t i = 0; i < cells_.size(); ++i) {
+                if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
+                
+                // 线长力模长
+                double wire_force_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
+                                                 wire_gradients_[i].y * wire_gradients_[i].y);
+                avg_wire_force += wire_force_mag;
+                
+                // 原始密度力模长
+                Point density_grad = getDensityGradient(cells_[i]);
+                double density_force_raw_mag = std::sqrt(density_grad.x * density_grad.x + 
+                                                        density_grad.y * density_grad.y);
+                avg_density_force_raw += density_force_raw_mag;
+                
+                active_cells++;
+            }
+            
+            if (active_cells > 0) {
+                avg_wire_force /= active_cells;
+                avg_density_force_raw /= active_cells;
+                
+                // 目标：Lambda * avg_density_force_raw ≈ avg_wire_force
+                // 即 target_lambda ≈ avg_wire_force / avg_density_force_raw
+                double target_balance_lambda = (avg_density_force_raw > 1e-9) ? 
+                    (avg_wire_force / avg_density_force_raw) : current_lambda_;
+                
+                // 动态调整策略
+                double current_ratio = (current_lambda_ * avg_density_force_raw) / avg_wire_force;
+                
+                if (current_ratio < 0.5) {
+                    // 有效密度力太小，加速增长Lambda
+                    current_lambda_ *= 1.2;  // 20%增长
+                    debugLog("Lambda accelerated: " + std::to_string(current_lambda_) + 
+                              " (ratio=" + std::to_string(current_ratio) + ")");
+                } else if (current_ratio > 2.0) {
+                    // 有效密度力太大，减缓增长
+                    current_lambda_ *= 1.01; // 1%增长
+                    debugLog("Lambda decelerated: " + std::to_string(current_lambda_) + 
+                              " (ratio=" + std::to_string(current_ratio) + ")");
+                } else {
+                    // 接近平衡，正常增长
+                    current_lambda_ *= 1.05; // 5%增长
+                }
+                
+                // 动态更新max_lambda_，允许突破初始限制
+                max_lambda_ = std::max(max_lambda_, target_balance_lambda * 2.0);
+            }
+        }
+        
         // Step 6: Calculate timing and statistics
         auto iter_end = std::chrono::high_resolution_clock::now();
         auto iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(iter_end - iter_start);
@@ -509,6 +565,57 @@ double GlobalPlacer::nesterovUpdate(int iteration) {
     
     // Calculate total gradients
     calculateTotalGradients();
+    
+    // [一锤定音实验] 第50次迭代时打印关键力数据
+    if (iteration == 50) {
+        double avg_wire_force = 0.0;
+        double avg_density_force_raw = 0.0;
+        int active_cells = 0;
+        
+        for (size_t i = 0; i < cells_.size(); ++i) {
+            if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
+            
+            // 计算线长力模长
+            double wire_force_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
+                                             wire_gradients_[i].y * wire_gradients_[i].y);
+            avg_wire_force += wire_force_mag;
+            
+            // 计算原始密度力模长（Solver输出的原始值）
+            Point density_grad = getDensityGradient(cells_[i]);
+            double density_force_raw_mag = std::sqrt(density_grad.x * density_grad.x + 
+                                                    density_grad.y * density_grad.y);
+            avg_density_force_raw += density_force_raw_mag;
+            
+            active_cells++;
+        }
+        
+        if (active_cells > 0) {
+            avg_wire_force /= active_cells;
+            avg_density_force_raw /= active_cells;
+            
+            double effective_density_force = current_lambda_ * avg_density_force_raw;
+            double force_ratio = (avg_density_force_raw > 1e-9) ? (avg_wire_force / avg_density_force_raw) : 0.0;
+            double effective_ratio = (effective_density_force > 1e-9) ? (avg_wire_force / effective_density_force) : 0.0;
+            
+            std::cout << "\n========== [一锤定音] 第50次迭代力平衡诊断 ==========" << std::endl;
+            std::cout << "平均线长力模长 (Avg |F_wire|):     " << std::fixed << std::setprecision(6) << avg_wire_force << std::endl;
+            std::cout << "平均原始密度力模长 (Avg |F_dens_raw|): " << std::fixed << std::setprecision(6) << avg_density_force_raw << std::endl;
+            std::cout << "当前 Lambda (current_lambda):        " << std::scientific << std::setprecision(3) << current_lambda_ << std::endl;
+            std::cout << "有效密度力 (Lambda * F_dens_raw):    " << std::fixed << std::setprecision(6) << effective_density_force << std::endl;
+            std::cout << "原始力比 (F_wire / F_dens_raw):      " << std::fixed << std::setprecision(3) << force_ratio << std::endl;
+            std::cout << "有效力比 (F_wire / Lambda*F_dens):   " << std::fixed << std::setprecision(3) << effective_ratio << std::endl;
+            
+            // 判定标准
+            if (effective_ratio < 0.1) {
+                std::cout << "⚠️  警告: 有效密度力是线长力的10倍以上！单元可能炸飞到四角！" << std::endl;
+            } else if (effective_ratio > 10.0) {
+                std::cout << "⚠️  警告: 线长力是有效密度力的10倍以上！单元可能过度聚集！" << std::endl;
+            } else {
+                std::cout << "✅ 理想状态: 力平衡良好 (1:1左右)，预期温和扩散。" << std::endl;
+            }
+            std::cout << "====================================================\n" << std::endl;
+        }
+    }
     
     for (size_t i = 0; i < cells_.size(); ++i) {
         Cell* cell = cells_[i];
