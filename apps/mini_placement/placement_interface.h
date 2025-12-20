@@ -10,6 +10,7 @@
 #include <memory>
 #include <string>
 #include "../../lib/include/netlist_db.h"
+#include "legalizer.h"
 
 namespace mini {
 
@@ -28,6 +29,7 @@ struct PlacementConfig {
     bool verbose = false;           // Enable verbose output
     std::string run_id = "placement"; // Run identifier for output files
     std::string placement_algo = "basic"; // Algorithm selection: "basic" or "nesterov"
+    LegalizationAlgorithm leg_algo = LegalizationAlgorithm::ABACUS; // Legalization algorithm selection
 };
 
 /**

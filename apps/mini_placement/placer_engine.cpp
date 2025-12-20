@@ -5,9 +5,13 @@
 
 #include "placer_engine.h"
 #include "global_placer.h"
+#include "abacus_legalizer.h"
+#include "greedy_legalizer.h"
+#include "legalizer.h"
 #include "../../lib/include/visualizer.h"
 #include <iostream>
 #include <algorithm>
+#include <memory>
 #include <cmath>
 #include <unordered_map>
 #include <limits>
@@ -17,10 +21,9 @@
 
 namespace mini {
 
-PlacerEngine::PlacerEngine(PlacerDB* db) 
-    : db_(db), viz_(nullptr), current_hpwl_(0.0), global_placer_(nullptr) {
+PlacerEngine::PlacerEngine(PlacerDB* db)
+    : db_(db), viz_(nullptr), current_hpwl_(0.0), global_placer_(nullptr), leg_algo_(LegalizationAlgorithm::ABACUS) {
 }
-
 PlacerEngine::~PlacerEngine() {
     delete global_placer_;
 }
@@ -125,98 +128,39 @@ void PlacerEngine::runGlobalPlacement() {
 void PlacerEngine::runLegalization() {
     if (!db_) return;
     
-    std::cout << "Starting Legalization (Linear Packing Algorithm)..." << std::endl;
+    std::cout << ">>> Starting Legalization..." << std::endl;
     
-    // 1. Get core area and row parameters
-    const Rect& core_area = db_->getCoreArea();
-    double row_height = db_->getRowHeight();
+    std::unique_ptr<Legalizer> legalizer;
     
-    // Calculate maximum number of rows that fit in core
-    int max_rows = static_cast<int>(std::floor(core_area.height() / row_height));
-    std::cout << "  Core can accommodate " << max_rows << " rows" << std::endl;
-    
-    // 2. Collect all movable cells
-    std::vector<Cell*> movable_cells;
-    for (Cell* cell : db_->getAllCells()) {
-        const auto& info = db_->getCellInfo(cell);
-        if (!info.fixed) {  // Only process movable cells
-            movable_cells.push_back(cell);
-        }
-    }
-    
-    // 3. Sort cells: primarily by Y coordinate, secondarily by X coordinate
-    // This preserves the relative order from Global Placement
-    std::sort(movable_cells.begin(), movable_cells.end(), 
-             [this](Cell* a, Cell* b) {
-                 const auto& info_a = db_->getCellInfo(a);
-                 const auto& info_b = db_->getCellInfo(b);
-                 
-                 // Primary sort: Y coordinate (center of cell)
-                 double y_a = info_a.y + info_a.height / 2.0;
-                 double y_b = info_b.y + info_b.height / 2.0;
-                 if (std::abs(y_a - y_b) > 1e-9) {
-                     return y_a < y_b;
-                 }
-                 
-                 // Secondary sort: X coordinate
-                 return info_a.x < info_b.x;
-             });
-    
-    std::cout << "  Collected and sorted " << movable_cells.size() << " movable cells" << std::endl;
-    
-    // 4. Linear Packing: Fill rows from bottom-left to top-right
-    int current_row = 0;
-    double current_x = core_area.x_min;
-    int total_cells_placed = 0;
-    
-    for (Cell* cell : movable_cells) {
-        const auto& info = db_->getCellInfo(cell);
-        double cell_width = info.width;
-        
-        // Check if current cell fits in current row
-        if (current_x + cell_width > core_area.x_max) {
-            // Need to move to next row
-            current_row++;
-            current_x = core_area.x_min;
+    switch (leg_algo_) {
+        case LegalizationAlgorithm::GREEDY_TETRIS:
+            std::cout << "Algorithm: Greedy (Tetris)" << std::endl;
+            legalizer = std::make_unique<GreedyLegalizer>(db_);
+            break;
             
-            // Safety check: ensure we don't exceed core boundary
-            if (current_row >= max_rows) {
-                std::cerr << "  ERROR: Core area too small! Cannot place all cells." << std::endl;
-                std::cerr << "  Maximum rows: " << max_rows << ", trying to place in row " << current_row << std::endl;
-                break;
-            }
-        }
-        
-        // Calculate Y coordinate for current row
-        double new_y = core_area.y_min + current_row * row_height;
-        
-        // Place the cell
-        db_->placeCell(cell, current_x, new_y);
-        
-        // Update cursor for next cell
-        current_x += cell_width;
-        total_cells_placed++;
+        case LegalizationAlgorithm::ABACUS:
+            std::cout << "Algorithm: Abacus (Optimization-based)" << std::endl;
+            legalizer = std::make_unique<AbacusLegalizer>(db_);
+            break;
     }
     
-    std::cout << "  Successfully legalized " << total_cells_placed << " cells" << std::endl;
-    std::cout << "  Used " << (current_row + 1) << " rows out of " << max_rows << " available" << std::endl;
+    if (legalizer) {
+        legalizer->setVerbose(true);  // Enable verbose for debugging
+        legalizer->run();
+    }
     
-    // 5. Calculate and report new HPWL
-    double new_hpwl = calculateHPWL();
-    std::cout << "  HPWL after legalization: " << new_hpwl << std::endl;
+    // Calculate and report final HPWL
+    double final_hpwl = calculateHPWL();
+    std::cout << "  Final HPWL: " << final_hpwl << std::endl;
     
     // Update cached HPWL to maintain consistency
-    current_hpwl_ = new_hpwl;
+    current_hpwl_ = final_hpwl;
     
-    // 6. Verify no overlaps
+    // Verify no overlaps
     bool has_overlaps = hasOverlaps();
-    double total_overlap = calculateTotalOverlap();
     std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
-    if (has_overlaps) {
-        std::cout << "  Total overlap area: " << total_overlap << std::endl;
-    }
     
-    // 7. Visualize the result
+    // Visualize the result
     if (viz_) {
         viz_->drawPlacementWithRunId("legalized", run_id_);
     }

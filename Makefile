@@ -104,6 +104,21 @@ $(BUILD_LIB_DIR)/placer_%.o: $(PLACER_DIR)/%.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+# Compile Legalizer base class object files
+$(BUILD_LIB_DIR)/legalizer.o: $(PLACER_DIR)/legalizer.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile GreedyLegalizer object files
+$(BUILD_LIB_DIR)/greedy_legalizer.o: $(PLACER_DIR)/greedy_legalizer.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
+# Compile AbacusLegalizer object files
+$(BUILD_LIB_DIR)/abacus_legalizer.o: $(PLACER_DIR)/abacus_legalizer.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # Compile DensityGrid object files (special case for density_grid.cpp)
 $(BUILD_LIB_DIR)/density_grid.o: $(PLACER_DIR)/density_grid.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
@@ -120,7 +135,7 @@ $(BUILD_BIN_DIR)/mini_sta: $(BUILD_LIB_DIR)/sta_main_sta.o $(STA_OBJS) $(STA_DEP
 	@echo "MiniSTA compilation completed: $@"
 
 # Link MiniPlacement executable
-$(BUILD_BIN_DIR)/mini_placement: $(BUILD_LIB_DIR)/lib_main_placer.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o | $(BUILD_BIN_DIR)
+$(BUILD_BIN_DIR)/mini_placement: $(BUILD_LIB_DIR)/lib_main_placer.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/legalizer.o $(BUILD_LIB_DIR)/greedy_legalizer.o $(BUILD_LIB_DIR)/abacus_legalizer.o | $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
 	@echo "MiniPlacement compilation completed: $@"
 
@@ -135,7 +150,7 @@ $(BUILD_LIB_DIR)/flow_%.o: apps/%.cpp
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
 # Link Integrated Flow executable
-$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/placer_placement_interface.o $(BUILD_LIB_DIR)/router_routing_interface.o $(BUILD_LIB_DIR)/density_grid.o | $(BUILD_BIN_DIR)
+$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(LIB_OBJS) $(APP_LIB_OBJS) $(BUILD_LIB_DIR)/placer_placement_interface.o $(BUILD_LIB_DIR)/router_routing_interface.o $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/legalizer.o $(BUILD_LIB_DIR)/greedy_legalizer.o $(BUILD_LIB_DIR)/abacus_legalizer.o | $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
 	@echo "MiniFlow compilation completed: $@"
 

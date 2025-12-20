@@ -72,11 +72,16 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - LEF Parser Integration for industrial-grade physical library support
 - MacroMapper module for intelligent cell type mapping (100% mapping rate)
 - Real physical dimensions from LEF instead of area estimation
-- Three-stage placement pipeline:
-  - Force-directed global placement for wirelength optimization
-  - Tetris-like legalization for overlap removal
-  - Detailed placement for local optimization
-- Python matplotlib-based visualization
+- Advanced global placement algorithms:
+  - Basic force-directed placement
+  - Nesterov electrostatic placement with density control
+  - Hybrid cascade placement (warm-up + refinement)
+- Strategy Pattern legalization with algorithm selection:
+  - Greedy (Tetris) legalization: fast but aggressive HPWL reduction
+  - Abacus optimization-based legalization: preserves GP quality with quadratic programming
+  - Cluster merging with mathematical optimization (x = q/e)
+- Detailed placement for local optimization
+- Python matplotlib-based visualization with algorithm comparison
 - Multi-strategy cell mapping with drive strength variants support
 
 ### MiniRouter - A* Maze Routing
@@ -113,7 +118,9 @@ MiniEDA/
 │   │   ├── lef_parser.h           # LEF physical library parser
 │   │   ├── geometry.h             # Core geometry library
 │   │   ├── visualizer.h           # Python visualization bridge
-│   │   └── pin_mapper.h           # Pin mapping utilities
+│   │   ├── pin_mapper.h           # Pin mapping utilities
+│   │   ├── placer_db.h            # Physical placement database
+│   │   └── app_config.h           # Unified application configuration
 │   └── src/                       # Implementation files
 │       ├── cell.cpp               # Cell implementation
 │       ├── net.cpp                # Net implementation
@@ -124,7 +131,10 @@ MiniEDA/
 │       ├── lef_parser.cpp         # LEF parsing
 │       ├── geometry.cpp           # 2D geometric operations
 │       ├── visualizer.cpp         # Visualization
-│       └── pin_mapper.cpp         # Pin mapping
+│       ├── pin_mapper.cpp         # Pin mapping
+│       ├── placer_db.cpp          # Physical placement database
+│       ├── app_config.cpp         # Unified configuration management
+│       └── arg_parser.cpp         # Command line argument parsing
 ├── apps/                          # Applications
 │   ├── mini_sta/                  # Static timing analysis
 │   │   ├── sta_engine.h/.cpp      # STA core engine
@@ -142,6 +152,12 @@ MiniEDA/
 │   │   ├── visualizer.h/.cpp      # Visualization
 │   │   ├── macro_mapper.h/.cpp    # Macro mapping
 │   │   ├── placement_interface.h/.cpp # High-level interface
+│   │   ├── legalizer.h/.cpp       # Abstract legalization base class
+│   │   ├── greedy_legalizer.h/.cpp # Greedy (Tetris) legalization
+│   │   ├── abacus_legalizer.h/.cpp # Abacus optimization-based legalization
+│   │   ├── global_placer.h/.cpp   # Advanced global placement
+│   │   ├── density_grid.h/.cpp    # Density grid for electrostatic placement
+│   │   ├── poisson_solver.h/.cpp  # Poisson equation solver
 │   │   └── main_placer.cpp        # Main program
 │   ├── mini_router/               # A* maze routing
 │   │   ├── maze_router.h/.cpp     # A* routing engine
@@ -164,6 +180,11 @@ MiniEDA/
 ├── build/                         # Build output
 │   ├── bin/                       # Executables
 │   └── lib/                       # Object files
+├── visualizations/                # Generated visualizations
+│   ├── s27_hybrid/                # s27 circuit with hybrid placement
+│   ├── s344_hybrid/               # s344 circuit with hybrid placement
+│   ├── legalizer/                 # Legalization algorithm comparisons
+│   └── abacus_projection/         # Abacus Phase 1 projection results
 └── Makefile                       # Build configuration
 ```
 
@@ -390,12 +411,17 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 
 ## Project Statistics
 
-- **Total Code**: 15,000+ lines of C++
-- **Source Files**: 58 files
+- **Total Code**: 20,000+ lines of C++
+- **Source Files**: 75+ files
 - **Test Coverage**: ISCAS benchmark suite (100% pass rate)
 - **Libraries Supported**: Nangate 45nm (135 Liberty cells + 134 LEF macros)
-- **Advanced Features**: Dynamic constraint lookup, industrial timing analysis, complete Liberty parsing
+- **Advanced Features**: 
+  - Dynamic constraint lookup, industrial timing analysis, complete Liberty parsing
+  - Strategy Pattern legalization with algorithm selection
+  - Abacus quadratic optimization for placement preservation
+  - Advanced global placement with electrostatic modeling
 - **STA Engine**: 12 major simplifications resolved for industrial-grade accuracy
+- **Placement Algorithms**: 3 global placement + 2 legalization strategies
 
 ## Contribution Guidelines
 

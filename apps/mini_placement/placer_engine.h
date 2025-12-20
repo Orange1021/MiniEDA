@@ -9,12 +9,14 @@
 
 #include "../../lib/include/visualizer.h"
 #include "../../lib/include/placer_db.h"
+#include "placement_interface.h"
 
 namespace mini {
 
 // Forward declarations
 class Visualizer;
 class GlobalPlacer;
+class AbacusLegalizer;
 
 /**
  * @class PlacerEngine
@@ -79,6 +81,12 @@ public:
     void setRunId(const std::string& run_id) { run_id_ = run_id; }
 
     /**
+     * @brief Set legalization algorithm
+     * @param algo Legalization algorithm selection
+     */
+    void setLegalizationAlgorithm(LegalizationAlgorithm algo) { leg_algo_ = algo; }
+
+    /**
      * @brief Get current HPWL value
      * @return Current HPWL
      */
@@ -90,6 +98,7 @@ private:
     double current_hpwl_;             // Current HPWL value
     std::string run_id_;              // Run ID for file naming
     GlobalPlacer* global_placer_;     // Pointer to advanced global placer
+    LegalizationAlgorithm leg_algo_;  // Legalization algorithm selection
 
     /**
      * @brief Single iteration of force-directed algorithm
