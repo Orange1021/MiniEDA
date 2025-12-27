@@ -58,8 +58,8 @@ bool DensityGrid::init(double core_w, double core_h, double core_x_min, double c
             // Initialize other fields
             bin.density = 0.0;
             bin.electro_potential = 0.0;
-            bin.electro_force_x = 0.0;
-            bin.electro_force_y = 0.0;
+            bin.electro_gradient_x = 0.0;
+            bin.electro_gradient_y = 0.0;
         }
     }
 

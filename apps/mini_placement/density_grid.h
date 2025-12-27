@@ -28,8 +28,8 @@ struct Bin {
     double x, y;                    ///< Bin center coordinates
     double density = 0.0;           ///< Current density (Cell Area / Bin Area)
     double electro_potential = 0.0; ///< Electrostatic potential (for Poisson equation)
-    double electro_force_x = 0.0;   ///< Electric field force X component
-    double electro_force_y = 0.0;   ///< Electric field force Y component
+    double electro_gradient_x = 0.0;   ///< Electric field force X component
+    double electro_gradient_y = 0.0;   ///< Electric field force Y component
     
     /**
      * @brief Check if this bin is overcrowded

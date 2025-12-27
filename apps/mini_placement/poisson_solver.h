@@ -105,9 +105,9 @@ public:
      * @param grid_height Grid height
      * @param filename Output filename
      */
-    static void exportForceField(const std::vector<Bin>& bins,
-                                int grid_width, int grid_height,
-                                const std::string& filename);
+    static void exportGradientField(const std::vector<Bin>& bins,
+                                 int grid_width, int grid_height,
+                                 const std::string& filename);
 
     /**
      * @brief Print solver statistics
@@ -116,14 +116,14 @@ public:
 
     // Accessors
     double getMaxPotential() const { return max_potential_; }
-    double getMaxForceMagnitude() const { return max_force_magnitude_; }
-    double getAverageForceMagnitude() const { return avg_force_magnitude_; }
+    double getMaxForceMagnitude() const { return max_gradient_magnitude_; }
+    double getAverageForceMagnitude() const { return avg_gradient_magnitude_; }
 
 private:
     // Statistics
     double max_potential_ = 0.0;
-    double max_force_magnitude_ = 0.0;
-    double avg_force_magnitude_ = 0.0;
+    double max_gradient_magnitude_ = 0.0;
+    double avg_gradient_magnitude_ = 0.0;
     bool solve_successful_ = false;
     
     // Physical dimensions
@@ -219,7 +219,7 @@ private:
 
     /**
      * @brief Calculate gradient forces using central differences
-     * @param bins Bin array (output: electro_force_x, electro_force_y)
+     * @param bins Bin array (output: electro_gradient_x, electro_gradient_y)
      * @param potential Potential values from IFFT
      * @param width Grid width
      * @param height Grid height

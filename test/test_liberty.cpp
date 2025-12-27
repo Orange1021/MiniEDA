@@ -70,7 +70,7 @@ void testLookupTable() {
     std::cout << "  lookup(5.0, 0.5) = " << val6 << " (expected 0.18)" << std::endl;
     assert(std::abs(val6 - 0.18) < 0.001);
 
-    std::cout << "\n✅ All LookupTable tests passed!" << std::endl;
+    std::cout << "\n[PASS] All LookupTable tests passed!" << std::endl;
 }
 
 void testLibrary() {
@@ -152,7 +152,7 @@ void testLibrary() {
     double delay = pinYret->timing_arcs[0].cell_delay.lookup(0.02, 0.01);
     std::cout << "  delay(0.02ns slew, 0.01pF cap) = " << delay << " ns" << std::endl;
 
-    std::cout << "\n✅ All Library structure tests passed!" << std::endl;
+    std::cout << "\n[PASS] All Library structure tests passed!" << std::endl;
 }
 
 int main() {
@@ -167,7 +167,7 @@ int main() {
 
         std::cout << "\n";
         std::cout << "╔════════════════════════════════════╗" << std::endl;
-        std::cout << "║  ✅ All Tests Passed!              ║" << std::endl;
+        std::cout << "║  [PASS] All Tests Passed!              ║" << std::endl;
         std::cout << "╚════════════════════════════════════╝" << std::endl;
         std::cout << "\n";
 

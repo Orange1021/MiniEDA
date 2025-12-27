@@ -8,6 +8,7 @@
 #include "abacus_legalizer.h"
 #include "greedy_legalizer.h"
 #include "legalizer.h"
+#include "../../lib/include/hpwl_calculator.h"
 #include "../../lib/include/visualizer.h"
 #include <iostream>
 #include <algorithm>
@@ -31,25 +32,10 @@ PlacerEngine::~PlacerEngine() {
 double PlacerEngine::calculateHPWL() const {
     if (!db_) return 0.0;
 
-    double total_hpwl = 0.0;
-    
-    // Get netlist database
     NetlistDB* netlist_db = db_->getNetlistDB();
     if (!netlist_db) return 0.0;
     
-    // Iterate over all nets
-    for (const auto& net_ptr : netlist_db->getNets()) {
-        const Net* net = net_ptr.get();
-        if (!net) continue;
-        
-        double min_x, max_x, min_y, max_y;
-        calculateNetBoundingBox(net, min_x, max_x, min_y, max_y);
-        
-        // Add HPWL for this net
-        total_hpwl += (max_x - min_x) + (max_y - min_y);
-    }
-    
-    return total_hpwl;
+    return HPWLCalculator::calculateHPWL(netlist_db, db_);
 }
 
 void PlacerEngine::runGlobalPlacementWithAlgorithm(const std::string& algorithm) {
@@ -610,8 +596,8 @@ void PlacerEngine::runHybridStrategy() {
     std::cout << "  Running Hybrid Cascade Algorithm..." << std::endl;
     
     std::cout << "\n  === Phase 1: Warm-up (Basic Force-Directed) ===" << std::endl;
-    const int max_warmup_iterations = 15;  // 减少最大迭代次数
-    const double stop_hpwl_ratio = 0.3;   // 当HPWL降到初始值的30%时停止
+    const int max_warmup_iterations = 15;  // Reduce maximum iterations
+    const double stop_hpwl_ratio = 0.3;   // Stop when HPWL drops to 30% of initial value
     
     current_hpwl_ = calculateHPWL();
     double initial_hpwl = current_hpwl_;
@@ -635,7 +621,7 @@ void PlacerEngine::runHybridStrategy() {
         
         current_hpwl_ = new_hpwl;
         
-        // [安全阀 #2] 温和停止条件：避免压得太实
+        // [Safety Valve #2] Gentle stop condition: avoid over-compression
         if (current_ratio <= stop_hpwl_ratio) {
             std::cout << "  Warm-up stopped early: HPWL ratio reached " << current_ratio << std::endl;
             break;
@@ -646,7 +632,7 @@ void PlacerEngine::runHybridStrategy() {
     std::cout << "  HPWL after warm-up: " << current_hpwl_ << std::endl;
     
     // =========================================================
-    // 【关键修复】显式同步：将 Warm-up 结果提交给 Cell 对象
+    // [Key Fix] Explicit synchronization: commit warm-up results to Cell objects
     // =========================================================
     db_->commitPlacement();
     std::cout << "  >> Synchronization: Warm-up results committed to Netlist." << std::endl;
@@ -667,13 +653,13 @@ void PlacerEngine::runHybridStrategy() {
         global_placer_->setMaxIterations(200);
         global_placer_->setVerbose(true);
         
-        // === 应用温和参数 (气体扩散模式) ===
+        // === Apply gentle parameters (gas diffusion mode) ===
         global_placer_->setAggressiveParameters();
         
         if (viz_) {
             global_placer_->setVisualizer(viz_);
             global_placer_->setRunId(run_id_);
-            // 设置warm-up模式标志，启用保守的Lambda调优
+            // Set warm-up mode flag, enable conservative Lambda tuning
             global_placer_->setWarmupMode(true);
         }
     }

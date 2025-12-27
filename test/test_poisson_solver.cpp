@@ -120,10 +120,10 @@ int main() {
     std::cout << "  Density: " << std::fixed << std::setprecision(3) << center_bin.density << std::endl;
     std::cout << "  Potential: " << std::fixed << std::setprecision(6) << center_bin.electro_potential << std::endl;
     std::cout << "  Force: (" << std::fixed << std::setprecision(6) 
-              << center_bin.electro_force_x << ", " << center_bin.electro_force_y << ")" << std::endl;
+              << center_bin.electro_gradient_x << ", " << center_bin.electro_gradient_y << ")" << std::endl;
     std::cout << "  Force magnitude: " << std::fixed << std::setprecision(6) 
-              << std::sqrt(center_bin.electro_force_x * center_bin.electro_force_x + 
-                          center_bin.electro_force_y * center_bin.electro_force_y) << std::endl;
+              << std::sqrt(center_bin.electro_gradient_x * center_bin.electro_gradient_x + 
+                          center_bin.electro_gradient_y * center_bin.electro_gradient_y) << std::endl;
     
     // Check corner region (should have weaker/inward forces)
     int corner_x = 5;
@@ -135,10 +135,10 @@ int main() {
     std::cout << "  Density: " << std::fixed << std::setprecision(3) << corner_bin.density << std::endl;
     std::cout << "  Potential: " << std::fixed << std::setprecision(6) << corner_bin.electro_potential << std::endl;
     std::cout << "  Force: (" << std::fixed << std::setprecision(6) 
-              << corner_bin.electro_force_x << ", " << corner_bin.electro_force_y << ")" << std::endl;
+              << corner_bin.electro_gradient_x << ", " << corner_bin.electro_gradient_y << ")" << std::endl;
     std::cout << "  Force magnitude: " << std::fixed << std::setprecision(6) 
-              << std::sqrt(corner_bin.electro_force_x * corner_bin.electro_force_x + 
-                          corner_bin.electro_force_y * corner_bin.electro_force_y) << std::endl;
+              << std::sqrt(corner_bin.electro_gradient_x * corner_bin.electro_gradient_x + 
+                          corner_bin.electro_gradient_y * corner_bin.electro_gradient_y) << std::endl;
     
     // Verify physics: high density should produce outward forces
     bool physics_correct = true;
@@ -160,7 +160,7 @@ int main() {
     
     grid.exportDensityMap("test_poisson_density.csv");
     PoissonSolver::exportPotentialMap(bins, GRID_SIZE, GRID_SIZE, "test_poisson_potential.csv");
-    PoissonSolver::exportForceField(bins, GRID_SIZE, GRID_SIZE, "test_poisson_forces.csv");
+    PoissonSolver::exportForceField(bins, GRID_SIZE, GRID_SIZE, "test_poisson_gradients.csv");
     
     std::cout << "Results exported to CSV files for visualization" << std::endl;
     
@@ -175,18 +175,18 @@ int main() {
     
     bool uniform_success = solver.solve(uniform_bins, GRID_SIZE, GRID_SIZE);
     if (uniform_success) {
-        double max_uniform_force = 0.0;
+        double max_uniform_gradient = 0.0;
         for (const auto& bin : uniform_bins) {
-            double force_mag = std::sqrt(bin.electro_force_x * bin.electro_force_x + 
-                                       bin.electro_force_y * bin.electro_force_y);
-            max_uniform_force = std::max(max_uniform_force, force_mag);
+            double force_mag = std::sqrt(bin.electro_gradient_x * bin.electro_gradient_x + 
+                                       bin.electro_gradient_y * bin.electro_gradient_y);
+            max_uniform_gradient = std::max(max_uniform_gradient, force_mag);
         }
         
         std::cout << "Uniform density test:" << std::endl;
-        std::cout << "  Max force magnitude: " << std::fixed << std::setprecision(9) << max_uniform_force << std::endl;
+        std::cout << "  Max force magnitude: " << std::fixed << std::setprecision(9) << max_uniform_gradient << std::endl;
         std::cout << "  Expected: ~0.0 (no forces in uniform density)" << std::endl;
         
-        if (max_uniform_force > 1e-10) {
+        if (max_uniform_gradient > 1e-10) {
             std::cout << "Warning: Uniform density should produce minimal forces" << std::endl;
         }
     }

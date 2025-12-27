@@ -38,8 +38,8 @@ struct OptimizationStats {
 
 /**
  * @class GlobalPlacer
- * @brief Global placement engine using Nesterov accelerated gradient
- * @details Combines wirelength forces and electrostatic density forces
+ * @brief Global placement engine using Momentum gradient descent
+ * @details Combines wirelength and density gradients
  *          to optimize cell positions while maintaining connectivity
  */
 class GlobalPlacer {
@@ -142,7 +142,7 @@ private:
     double initial_lambda_ = 0.0001;         ///< Initial density penalty factor
     double lambda_growth_rate_ = 1.05;       ///< Lambda growth rate per iteration
     double learning_rate_ = 0.1;            ///< Learning rate (step size)
-    double momentum_ = 0.9;                  ///< Nesterov momentum factor
+    double momentum_ = 0.9;                  ///< Momentum factor
     double convergence_threshold_ = 0.001;   ///< Convergence threshold (much smaller for better convergence)
     bool verbose_ = true;                    ///< Verbose output
 
@@ -184,11 +184,11 @@ private:
     void calculateTotalGradients();
 
     /**
-     * @brief Nesterov accelerated gradient update
+     * @brief Momentum gradient update
      * @param iteration Current iteration number
      * @return Total movement in this iteration
      */
-    double nesterovUpdate(int iteration);
+    double momentumUpdate(int iteration);
 
     /**
      * @brief Clamp cell positions to core area

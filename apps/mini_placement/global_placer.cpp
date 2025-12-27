@@ -1,13 +1,14 @@
 /**
  * @file global_placer.cpp
- * @brief Global Placer Implementation with Nesterov Optimization
- * @details The heart of electrostatic placement - combines wirelength and density forces
+ * @brief Global Placer Implementation with Momentum Optimization
+ * @details The heart of electrostatic placement - combines wirelength and density gradients
  */
 
 #include "global_placer.h"
 #include <iomanip>
 #include <algorithm>
 #include <chrono>
+#include "../../lib/include/hpwl_calculator.h"
 #include "../../lib/include/visualizer.h"
 
 namespace mini {
@@ -58,7 +59,7 @@ bool GlobalPlacer::initialize(int grid_size, double target_density) {
     // Initialize Poisson solver
     poisson_solver_ = std::make_unique<PoissonSolver>();
     
-    // Set actual bin dimensions for accurate force calculation
+    // Set actual bin dimensions for accurate gradient calculation
     double bin_w = core_w / grid_size_;
     double bin_h = core_h / grid_size_;
     poisson_solver_->setBinSize(bin_w, bin_h);
@@ -130,87 +131,86 @@ void GlobalPlacer::runPlacement() {
         return;
     }
     
-    debugLog("Starting global placement optimization...");
+    debugLog("Starting momentum-based global placement optimization...");
     
     // === Auto-Normalize Initial Lambda ===
-    // Run one iteration to measure force magnitudes
+    // Run one iteration to measure gradient magnitudes
     density_grid_->updateDensity(cells_, placer_db_);
     std::vector<Bin> density_input = density_grid_->getBins();
     poisson_solver_->solve(density_input, grid_size_, grid_size_);
     
-    // Sync updated forces back to density_grid_
+    // Sync updated gradients back to density_grid_
     for (int y = 0; y < grid_size_; ++y) {
         for (int x = 0; x < grid_size_; ++x) {
             int idx = y * grid_size_ + x;
             Bin& grid_bin = density_grid_->getBin(x, y);
             const Bin& solved_bin = density_input[idx];
-            grid_bin.electro_force_x = solved_bin.electro_force_x;
-            grid_bin.electro_force_y = solved_bin.electro_force_y;
+            grid_bin.electro_gradient_x = solved_bin.electro_gradient_x;
+            grid_bin.electro_gradient_y = solved_bin.electro_gradient_y;
             grid_bin.electro_potential = solved_bin.electro_potential;
         }
     }
     
     calculateWirelengthGradients();
     
-    // Calculate average force magnitudes
-    double sum_wire_force = 0.0;
-    double sum_dens_force = 0.0;
+    // Calculate average gradient magnitudes
+    double sum_wire_gradient = 0.0;
+    double sum_dens_gradient = 0.0;
     int active_cells = 0;
     
     for (int i = 0; i < cells_.size(); ++i) {
         if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
         
         // Wire Force
-        sum_wire_force += std::abs(wire_gradients_[i].x) + std::abs(wire_gradients_[i].y);
+        sum_wire_gradient += std::abs(wire_gradients_[i].x) + std::abs(wire_gradients_[i].y);
         
         // Density Force
         auto bin_idx = density_grid_->getBinIndex(cells_[i]->getX(), cells_[i]->getY());
         const Bin& bin = density_grid_->getBin(bin_idx.first, bin_idx.second);
-        sum_dens_force += std::abs(bin.electro_force_x) + std::abs(bin.electro_force_y);
+        sum_dens_gradient += std::abs(bin.electro_gradient_x) + std::abs(bin.electro_gradient_y);
         active_cells++;
     }
     
-    // [动态Lambda策略] 根据力平衡自动计算初始值
-    if (sum_dens_force > 1e-6 && active_cells > 0) {
-        // 1. 根据力平衡计算合理的初始Lambda
-        double ratio = (sum_wire_force / sum_dens_force);
-        // 让密度力和线长力在同一个量级
-        current_lambda_ = sum_wire_force / sum_dens_force;
+    // [Dynamic Lambda Strategy] Auto-calculate initial value based on force balance
+    if (sum_dens_gradient > 1e-6 && active_cells > 0) {
+        // 1. Calculate reasonable initial Lambda based on force balance
+        double ratio = (sum_wire_gradient / sum_dens_gradient);
+        // Make density force and wire force on the same scale
+        current_lambda_ = sum_wire_gradient / sum_dens_gradient;
         
-        // 2. 设定 Lambda 上限，防止后期斥力无限大
-        double max_lambda = 0.5 * (sum_wire_force / sum_dens_force);
+        // 2. Set Lambda upper limit to prevent infinite repulsion later
+        double max_lambda = 0.5 * (sum_wire_gradient / sum_dens_gradient);
         
-        // 3. 保存上限值供后续增长使用
+        // 3. Save upper limit for subsequent growth
         max_lambda_ = max_lambda;
         
         debugLog(">>> DYNAMIC Lambda Strategy:");
         debugLog("    Initial Lambda: " + std::to_string(current_lambda_) + " (auto-calculated)");
         debugLog("    Max Lambda: " + std::to_string(max_lambda_) + " (safety limit)");
         debugLog("    Force ratio: " + std::to_string(ratio));
-        debugLog("    Expected: Balanced forces from start");
+        debugLog("    Expected: Balanced gradients from start");
     } else {
         debugLog(">>> Using fallback Initial Lambda: " + std::to_string(current_lambda_));
     }
     
     // === Force Magnitude Balance Diagnosis ===
     if (active_cells > 0) {
-        double avg_wire_force = sum_wire_force / active_cells;
-        double avg_dens_force = sum_dens_force / active_cells;
-        double ratio = avg_dens_force > 1e-9 ? avg_wire_force / avg_dens_force : 0.0;
+        double avg_wire_gradient = sum_wire_gradient / active_cells;
+        double avg_dens_gradient = sum_dens_gradient / active_cells;
+        double ratio = avg_dens_gradient > 1e-9 ? avg_wire_gradient / avg_dens_gradient : 0.0;
         
-        debugLog("Force Balance Analysis (GAS DIFFUSION MODE):");
-        debugLog("  Average Wire Force: " + std::to_string(avg_wire_force));
-        debugLog("  Average Density Force: " + std::to_string(avg_dens_force));
-        debugLog("  Force Ratio (Wire/Density): " + std::to_string(ratio));
-        
+        debugLog("Gradient Balance Analysis (GAS DIFFUSION MODE):");
+          debugLog("  Average Wire Gradient: " + std::to_string(avg_wire_gradient));
+          debugLog("  Average Density Gradient: " + std::to_string(avg_dens_gradient));
+          debugLog("  Gradient Ratio (Wire/Density): " + std::to_string(ratio));        
         if (ratio > 2.0) {
-            debugLog("  ⚠️  WARNING: Wire Force dominates! Cells may cluster excessively.");
+            debugLog("  [WARNING] Wire Gradient dominates! Cells may cluster excessively.");
         } else if (ratio < 0.5) {
-            debugLog("  ⚠️  WARNING: Density Force dominates! Cells may explode to corners.");
+            debugLog("  [WARNING] Density Gradient dominates! Cells may explode to corners.");
         } else {
-            debugLog("  ✅ PERFECT: Forces are balanced - expect gentle gas diffusion.");
+            debugLog("  [PERFECT] Gradients are balanced - expect gentle gas diffusion.");
         }
-        debugLog("  🎯 EXPECTED: Gentle spreading like ink in water, uniform density distribution.");
+        debugLog("  [EXPECTED] Gentle spreading like ink in water, uniform density distribution.");
     }
     
     debugLog("----------------------------");
@@ -220,14 +220,14 @@ void GlobalPlacer::runPlacement() {
     for (int iter = 0; iter < max_iterations_; ++iter) {
         auto iter_start = std::chrono::high_resolution_clock::now();
         
-        // [IO 权重调度] 计算进度 (0.0 ~ 1.0)
+        // [IO Weight Schedule] Calculate progress (0.0 ~ 1.0)
         double progress = (double)iter / max_iterations_;
         
         // Step 1: Update density distribution
         density_grid_->updateDensity(cells_, placer_db_);
         
-        // [单向阀修复] 准备"Overflow Only"密度分布
-        // 计算目标密度（利用率 + 余量）
+        // [One-way Valve Fix] Prepare "Overflow Only" density distribution
+        // Calculate target density (utilization + margin)
         const Rect& core_area = placer_db_->getCoreArea();
         double total_cell_area = 0.0;
         for (const auto& cell : cells_) {
@@ -236,23 +236,23 @@ void GlobalPlacer::runPlacement() {
         }
         double total_core_area = core_area.width() * core_area.height();
         double utilization = total_cell_area / total_core_area;
-        double target_density = utilization + 0.1;  // 稍微给点余量
+        double target_density = utilization + 0.1;  // Give some margin
         if (target_density > 1.0) target_density = 1.0;
         
         debugLog(">>> OVERFLOW-ONLY MODE: target_density=" + std::to_string(target_density) + 
                   ", utilization=" + std::to_string(utilization));
         
-        // 准备泊松求解器的输入：只处理超标密度
-        density_input = density_grid_->getBins();  // 拷贝一份
+        // Prepare Poisson solver input: only handle excess density
+        density_input = density_grid_->getBins();  // Make a copy
         for (auto& bin : density_input) {
-            // [关键修复] 只关注"超标"部分，空旷区域不产生吸力
+            // [Key Fix] Only focus on "excess" parts, empty areas don't generate attraction
             double rho = bin.density;
             double overflow = rho - target_density;
-            if (overflow < 0) overflow = 0;  // 截断负值，消除"黑洞"
-            bin.density = overflow;  // 只传递正电荷到泊松求解器
+            if (overflow < 0) overflow = 0;  // Truncate negative values, eliminate "black holes"
+            bin.density = overflow;  // Only pass positive charge to Poisson solver
         }
         
-        // Step 2: Solve Poisson equation for electrostatic forces
+        // Step 2: Solve Poisson equation for electrostatic gradients
         bool solve_success = poisson_solver_->solve(density_input, grid_size_, grid_size_);
         
         if (!solve_success) {
@@ -260,15 +260,15 @@ void GlobalPlacer::runPlacement() {
             continue;
         }
         
-        // Step 2.5: Sync updated forces back to density_grid_
-        // PoissonSolver updates density_input, but we need the forces in density_grid_
+        // Step 2.5: Sync updated gradients back to density_grid_
+        // PoissonSolver updates density_input, but we need the gradients in density_grid_
         for (int y = 0; y < grid_size_; ++y) {
             for (int x = 0; x < grid_size_; ++x) {
                 int idx = y * grid_size_ + x;
                 Bin& grid_bin = density_grid_->getBin(x, y);
                 const Bin& solved_bin = density_input[idx];
-                grid_bin.electro_force_x = solved_bin.electro_force_x;
-                grid_bin.electro_force_y = solved_bin.electro_force_y;
+                grid_bin.electro_gradient_x = solved_bin.electro_gradient_x;
+                grid_bin.electro_gradient_y = solved_bin.electro_gradient_y;
                 grid_bin.electro_potential = solved_bin.electro_potential;
             }
         }
@@ -276,64 +276,64 @@ void GlobalPlacer::runPlacement() {
         // Step 3: Calculate wirelength gradients with IO weighting
         calculateWirelengthGradients(progress);
         
-        // Step 4: Nesterov update
-        double total_movement = nesterovUpdate(iter);
+        // Step 4: Momentum update
+        double total_movement = momentumUpdate(iter);
         
         // Step 5: Update lambda (increase density penalty)
         updateLambda();
         
-        // [动态Lambda平衡] 每10次迭代重新评估力平衡
+        // [Dynamic Lambda Balance] Re-evaluate force balance every 10 iterations
         if (iter % 10 == 0 && iter > 0) {
-            // 计算当前帧的平均力
-            double avg_wire_force = 0.0;
-            double avg_density_force_raw = 0.0;
+            // Calculate average force for current frame
+            double avg_wire_gradient = 0.0;
+            double avg_density_gradient_raw = 0.0;
             int active_cells = 0;
             
             for (size_t i = 0; i < cells_.size(); ++i) {
                 if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
                 
-                // 线长力模长
-                double wire_force_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
-                                                 wire_gradients_[i].y * wire_gradients_[i].y);
-                avg_wire_force += wire_force_mag;
+                // Calculate wire force magnitude
+                double wire_gradient_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
+                                             wire_gradients_[i].y * wire_gradients_[i].y);
+                avg_wire_gradient += wire_gradient_mag;
                 
-                // 原始密度力模长
+                // Calculate raw density force magnitude (raw value from Solver output)
                 Point density_grad = getDensityGradient(cells_[i]);
-                double density_force_raw_mag = std::sqrt(density_grad.x * density_grad.x + 
+                double density_gradient_raw_mag = std::sqrt(density_grad.x * density_grad.x + 
                                                         density_grad.y * density_grad.y);
-                avg_density_force_raw += density_force_raw_mag;
+                avg_density_gradient_raw += density_gradient_raw_mag;
                 
                 active_cells++;
             }
             
             if (active_cells > 0) {
-                avg_wire_force /= active_cells;
-                avg_density_force_raw /= active_cells;
+                avg_wire_gradient /= active_cells;
+                avg_density_gradient_raw /= active_cells;
                 
-                // 目标：Lambda * avg_density_force_raw ≈ avg_wire_force
-                // 即 target_lambda ≈ avg_wire_force / avg_density_force_raw
-                double target_balance_lambda = (avg_density_force_raw > 1e-9) ? 
-                    (avg_wire_force / avg_density_force_raw) : current_lambda_;
+                // Target: Lambda * avg_density_gradient_raw ≈ avg_wire_gradient
+                // i.e., target_lambda ≈ avg_wire_gradient / avg_density_gradient_raw
+                double target_balance_lambda = (avg_density_gradient_raw > 1e-9) ?
+                    (avg_wire_gradient / avg_density_gradient_raw) : current_lambda_;
                 
-                // 动态调整策略
-                double current_ratio = (current_lambda_ * avg_density_force_raw) / avg_wire_force;
+                // Dynamic adjustment strategy
+                double effective_density_gradient = current_lambda_ * avg_density_gradient_raw;
+                double current_ratio = (effective_density_gradient > 1e-9) ? 
+                    (avg_wire_gradient / effective_density_gradient) : 0.0;
                 
-                if (current_ratio < 0.5) {
-                    // 有效密度力太小，加速增长Lambda
-                    current_lambda_ *= 1.2;  // 20%增长
-                    debugLog("Lambda accelerated: " + std::to_string(current_lambda_) + 
-                              " (ratio=" + std::to_string(current_ratio) + ")");
-                } else if (current_ratio > 2.0) {
-                    // 有效密度力太大，减缓增长
-                    current_lambda_ *= 1.01; // 1%增长
-                    debugLog("Lambda decelerated: " + std::to_string(current_lambda_) + 
-                              " (ratio=" + std::to_string(current_ratio) + ")");
-                } else {
-                    // 接近平衡，正常增长
-                    current_lambda_ *= 1.05; // 5%增长
+                // Effective density force too small, accelerate Lambda growth
+                if (current_ratio > 10.0) {
+                    current_lambda_ *= 1.2;  // 20% growth
+                }
+                // Effective density force too large, slow down growth
+                else if (current_ratio < 0.1) {
+                    current_lambda_ *= 1.01; // 1% growth
+                }
+                // Near balance, normal growth
+                else {
+                    current_lambda_ *= 1.05; // 5% growth
                 }
                 
-                // 动态更新max_lambda_，允许突破初始限制
+                // Dynamically update max_lambda_, allow breaking initial limit
                 max_lambda_ = std::max(max_lambda_, target_balance_lambda * 2.0);
             }
         }
@@ -391,16 +391,16 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
     // Clear gradients
     std::fill(wire_gradients_.begin(), wire_gradients_.end(), Point{0.0, 0.0});
     
-    // [IO 权重调度] 动态计算 IO 权重
-    // 初期 (progress < 0.3): 权重适中 (0.5)，适度考虑 IO
-    // 中期 (0.3 <= progress <= 0.6): 线性过渡 0.5 -> 1.0
-    // 后期 (progress > 0.6): 权重恢复 (1.0)
+    // [IO Weight Schedule] Dynamically calculate IO weight
+    // Early stage (progress < 0.3): moderate weight (0.5),适度考虑 IO
+    // Middle stage (0.3 <= progress <= 0.6): linear transition 0.5 -> 1.0
+    // Late stage (progress > 0.6): weight restored (1.0)
     double io_weight = 0.5;  
     
     if (progress_ratio > 0.6) {
         io_weight = 1.0;
     } else if (progress_ratio > 0.3) {
-        // 线性过渡: 0.5 -> 1.0
+        // Linear transition: 0.5 -> 1.0
         io_weight = 0.5 + (progress_ratio - 0.3) * 1.67;  
     }
     
@@ -408,7 +408,8 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
               ", io_weight=" + std::to_string(io_weight));
     
     // Real wirelength model: Star Model HPWL gradient with IO weighting
-    // Each net pulls its cells toward the net's center of gravity
+    // Each net creates gradients pointing away from the net's center of gravity
+    // (Gradient points toward increasing wirelength direction)
     for (const auto& net_ptr : netlist_db_->getNets()) {
         const Net* net = net_ptr.get();
         if (!net) continue;
@@ -418,7 +419,7 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
         Pin* driver = net->getDriver();
         if (loads.empty() && !driver) continue;
         
-        // 1. 检查该 Net 是否连接到 Fixed Pin (IO Pin)
+        // 1. Check if this Net connects to Fixed Pin (IO Pin)
         bool has_fixed_pin = false;
         if (driver && placer_db_->getCellInfo(driver->getOwner()).fixed) {
             has_fixed_pin = true;
@@ -433,11 +434,11 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
         // Calculate net center of gravity
         Point net_cog = getNetCenterOfGravity(net);
         
-        // 2. 计算基础权重
+        // 2. Calculate base weight
         double base_weight = getNetWeight(net);
         
-        // 3. 应用 IO 降权
-        // 如果连了 IO，就乘以 io_weight；如果是纯内部连线，权重保持 1.0
+        // 3. Apply IO down-weighting
+        // If connected to IO, multiply by io_weight; if pure internal connection, weight remains 1.0
         double final_weight = has_fixed_pin ? (base_weight * io_weight) : base_weight;
         
         // Apply gradient to driver pin
@@ -449,9 +450,9 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
                 if (it != cells_.end()) {
                     size_t idx = it - cells_.begin();
                     Point driver_pos{driver_cell->getX(), driver_cell->getY()};
-                    Point to_cog = net_cog - driver_pos;
-                    wire_gradients_[idx].x += to_cog.x * final_weight;
-                    wire_gradients_[idx].y += to_cog.y * final_weight;
+                    Point dist_from_cog = net_cog - driver_pos;  // Gradient points toward increasing wirelength
+                    wire_gradients_[idx].x += dist_from_cog.x * final_weight;
+                    wire_gradients_[idx].y += dist_from_cog.y * final_weight;
                 }
             }
         }
@@ -466,9 +467,9 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
                 if (it != cells_.end()) {
                     size_t idx = it - cells_.begin();
                     Point load_pos{load_cell->getX(), load_cell->getY()};
-                    Point to_cog = net_cog - load_pos;
-                    wire_gradients_[idx].x += to_cog.x * final_weight;
-                    wire_gradients_[idx].y += to_cog.y * final_weight;
+                    Point dist_from_cog = net_cog - load_pos;  // Gradient points toward increasing wirelength
+                    wire_gradients_[idx].x += dist_from_cog.x * final_weight;
+                    wire_gradients_[idx].y += dist_from_cog.y * final_weight;
                 }
             }
         }
@@ -539,9 +540,9 @@ Point GlobalPlacer::getDensityGradient(const Cell* cell) const {
     // Get bin from density grid
     const Bin& bin = density_grid_->getBin(grid_x, grid_y);
     
-    // Density gradient = negative of electrostatic force
-    // (Poisson solver outputs force, gradient is opposite direction)
-    return Point{-bin.electro_force_x, -bin.electro_force_y};
+    // Density gradient = negative of electrostatic gradient
+    // (Poisson solver outputs electrostatic gradient, true density gradient is opposite direction)
+    return Point{-bin.electro_gradient_x, -bin.electro_gradient_y};
 }
 
 std::pair<int, int> GlobalPlacer::getCellGridPosition(const Cell* cell) const {
@@ -557,63 +558,68 @@ std::pair<int, int> GlobalPlacer::getCellGridPosition(const Cell* cell) const {
 }
 
 // ============================================================================
-// Nesterov Accelerated Gradient Optimization
+// Momentum Gradient Descent Optimization
 // ============================================================================
 
-double GlobalPlacer::nesterovUpdate(int iteration) {
+// NOTE: This implementation uses standard Momentum Gradient Descent, not Nesterov Accelerated Gradient (NAG).
+// While the original code was named "Nesterov", the actual algorithm implemented is:
+//   v_{k+1} = momentum * v_k - learning_rate * gradient
+//   x_{k+1} = x_k + v_{k+1}
+// This is the classic Momentum update, which is widely used in commercial EDA placement tools
+// due to its stability and effectiveness.
+
+double GlobalPlacer::momentumUpdate(int iteration) {
     double total_movement = 0.0;
     
     // Calculate total gradients
     calculateTotalGradients();
     
-    // [一锤定音实验] 第50次迭代时打印关键力数据
+    // [Decisive Experiment] Print key force data at 50th iteration
     if (iteration == 50) {
-        double avg_wire_force = 0.0;
-        double avg_density_force_raw = 0.0;
+        double avg_wire_gradient = 0.0;
+        double avg_density_gradient_raw = 0.0;
         int active_cells = 0;
         
         for (size_t i = 0; i < cells_.size(); ++i) {
             if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
             
-            // 计算线长力模长
-            double wire_force_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
+            // Calculate wire force magnitude
+            double wire_gradient_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
                                              wire_gradients_[i].y * wire_gradients_[i].y);
-            avg_wire_force += wire_force_mag;
+            avg_wire_gradient += wire_gradient_mag;
             
-            // 计算原始密度力模长（Solver输出的原始值）
+            // Calculate raw density force magnitude (raw value from Solver output)
             Point density_grad = getDensityGradient(cells_[i]);
-            double density_force_raw_mag = std::sqrt(density_grad.x * density_grad.x + 
+            double density_gradient_raw_mag = std::sqrt(density_grad.x * density_grad.x + 
                                                     density_grad.y * density_grad.y);
-            avg_density_force_raw += density_force_raw_mag;
+            avg_density_gradient_raw += density_gradient_raw_mag;
             
             active_cells++;
         }
         
         if (active_cells > 0) {
-            avg_wire_force /= active_cells;
-            avg_density_force_raw /= active_cells;
+            avg_wire_gradient /= active_cells;
+            avg_density_gradient_raw /= active_cells;
             
-            double effective_density_force = current_lambda_ * avg_density_force_raw;
-            double force_ratio = (avg_density_force_raw > 1e-9) ? (avg_wire_force / avg_density_force_raw) : 0.0;
-            double effective_ratio = (effective_density_force > 1e-9) ? (avg_wire_force / effective_density_force) : 0.0;
+            double effective_density_gradient = current_lambda_ * avg_density_gradient_raw;
+            double force_ratio = (avg_density_gradient_raw > 1e-9) ? (avg_wire_gradient / avg_density_gradient_raw) : 0.0;
+            double effective_ratio = (effective_density_gradient > 1e-9) ? (avg_wire_gradient / effective_density_gradient) : 0.0;
             
-            std::cout << "\n========== [一锤定音] 第50次迭代力平衡诊断 ==========" << std::endl;
-            std::cout << "平均线长力模长 (Avg |F_wire|):     " << std::fixed << std::setprecision(6) << avg_wire_force << std::endl;
-            std::cout << "平均原始密度力模长 (Avg |F_dens_raw|): " << std::fixed << std::setprecision(6) << avg_density_force_raw << std::endl;
-            std::cout << "当前 Lambda (current_lambda):        " << std::scientific << std::setprecision(3) << current_lambda_ << std::endl;
-            std::cout << "有效密度力 (Lambda * F_dens_raw):    " << std::fixed << std::setprecision(6) << effective_density_force << std::endl;
-            std::cout << "原始力比 (F_wire / F_dens_raw):      " << std::fixed << std::setprecision(3) << force_ratio << std::endl;
-            std::cout << "有效力比 (F_wire / Lambda*F_dens):   " << std::fixed << std::setprecision(3) << effective_ratio << std::endl;
-            
-            // 判定标准
-            if (effective_ratio < 0.1) {
-                std::cout << "⚠️  警告: 有效密度力是线长力的10倍以上！单元可能炸飞到四角！" << std::endl;
-            } else if (effective_ratio > 10.0) {
-                std::cout << "⚠️  警告: 线长力是有效密度力的10倍以上！单元可能过度聚集！" << std::endl;
-            } else {
-                std::cout << "✅ 理想状态: 力平衡良好 (1:1左右)，预期温和扩散。" << std::endl;
-            }
-            std::cout << "====================================================\n" << std::endl;
+            std::cout << "\n========== [Decisive] 50th Iteration Gradient Balance Diagnosis ==========" << std::endl;
+                std::cout << "Average Wire Gradient Magnitude (Avg |∇_wire|):     " << std::fixed << std::setprecision(6) << avg_wire_gradient << std::endl;
+                std::cout << "Average Raw Density Gradient Magnitude (Avg |∇_dens_raw|): " << std::fixed << std::setprecision(6) << avg_density_gradient_raw << std::endl;
+                std::cout << "Current Lambda (current_lambda):        " << std::scientific << std::setprecision(3) << current_lambda_ << std::endl;
+                std::cout << "Effective Density Gradient (Lambda * ∇_dens_raw):    " << std::fixed << std::setprecision(6) << effective_density_gradient << std::endl;
+                std::cout << "Raw Gradient Ratio (∇_wire / ∇_dens_raw):      " << std::fixed << std::setprecision(3) << force_ratio << std::endl;
+                std::cout << "Effective Gradient Ratio (∇_wire / Lambda*∇_dens):   " << std::fixed << std::setprecision(3) << effective_ratio << std::endl;
+                
+                // Judgment criteria
+                if (effective_ratio < 0.1) {
+                    std::cout << "[WARNING] Effective density force is 10x+ wire force! Cells may explode to corners!" << std::endl;
+                        } else if (effective_ratio > 10.0) {
+                            std::cout << "[WARNING] Wire force is 10x+ effective density force! Cells may over-cluster!" << std::endl;
+                        } else {
+                            std::cout << "[IDEAL] Force balance is good (around 1:1), expect gentle diffusion." << std::endl;                }            std::cout << "====================================================\n" << std::endl;
         }
     }
     
@@ -628,35 +634,35 @@ double GlobalPlacer::nesterovUpdate(int iteration) {
         double total_grad_x = wire_gradients_[i].x + current_lambda_ * density_grad.x;
         double total_grad_y = wire_gradients_[i].y + current_lambda_ * density_grad.y;
         
-        // [工业级稳定器] 梯度裁剪 (Gradient Clipping)
-        // 防止中心区域的超大斥力把单元炸飞
+        // [Industrial Stabilizer] Gradient Clipping
+            // Prevent huge gradients in central area from blowing up cells
         const Rect& core_area = placer_db_->getCoreArea();
-        double max_force = core_area.width() * 0.01;  // 不超过核心宽度的1%（更保守）
+        double max_gradient = core_area.width() * 0.01;  // No more than 1% of core width (more conservative)
+            
+            // Simple clipping logic
+        if (total_grad_x > max_gradient) total_grad_x = max_gradient;
+        if (total_grad_x < -max_gradient) total_grad_x = -max_gradient;
+        if (total_grad_y > max_gradient) total_grad_y = max_gradient;
+        if (total_grad_y < -max_gradient) total_grad_y = -max_gradient;
         
-        // 简单的裁剪逻辑
-        if (total_grad_x > max_force) total_grad_x = max_force;
-        if (total_grad_x < -max_force) total_grad_x = -max_force;
-        if (total_grad_y > max_force) total_grad_y = max_force;
-        if (total_grad_y < -max_force) total_grad_y = -max_force;
-        
-        // Nesterov update: v_{k+1} = momentum * v_k - learning_rate * gradient
+        // Momentum update: v_{k+1} = momentum * v_k - learning_rate * gradient
         velocities_[i].x = momentum_ * velocities_[i].x - learning_rate_ * total_grad_x;
         velocities_[i].y = momentum_ * velocities_[i].y - learning_rate_ * total_grad_y;
         
-        // [安全阀 #1] 位移限制 (Displacement Clipping) - 防止"炸膛"
+        // [Safety Valve #1] Displacement Clipping - prevent "explosion"
         double dx = velocities_[i].x;
         double dy = velocities_[i].y;
         double dist = std::sqrt(dx*dx + dy*dy);
         
-        // 设定上限：芯片宽度的 2%（对小电路更保守）
+        // Set upper limit: 2% of chip width (more conservative for small circuits)
         double max_dist = core_area.width() * 0.02;
         
-        // 截断移动距离和速度
+        // Truncate movement distance and velocity
         if (dist > max_dist) {
             double scale = max_dist / dist;
             dx *= scale;
             dy *= scale;
-            velocities_[i].x *= scale;  // 防止动量积累过大
+            velocities_[i].x *= scale;  // Prevent excessive momentum accumulation
             velocities_[i].y *= scale;
         }
         
@@ -725,13 +731,13 @@ void GlobalPlacer::clampToCoreArea() {
 // ============================================================================
 
 void GlobalPlacer::updateLambda() {
-    // [慢爬升策略] Lambda 慢速增长，防止"炸膛"
-    // 每次增长 5%，给线长力足够时间理顺拓扑关系
-    double lambda_growth = 1.05;  // 慢速增长 5%
+    // [Slow Climb Strategy] Lambda grows slowly to prevent "explosion"
+    // Grow by 5% each time, giving wire force enough time to organize topology
+    double lambda_growth = 1.05;  // Slow growth 5%
     
     if (current_lambda_ < max_lambda_) {
         current_lambda_ *= lambda_growth;
-        // 确保不超过上限
+        // Ensure not exceeding upper limit
         current_lambda_ = std::min(current_lambda_, max_lambda_);
     }
 }
@@ -741,58 +747,7 @@ void GlobalPlacer::updateLambda() {
 // ============================================================================
 
 double GlobalPlacer::calculateHPWL() const {
-    // True net-based HPWL calculation
-    double total_hpwl = 0.0;
-    
-    for (const auto& net_ptr : netlist_db_->getNets()) {
-        const Net* net = net_ptr.get();
-        if (!net) continue;
-        
-        // Skip single-pin nets (no wirelength contribution)
-        const auto& loads = net->getLoads();
-        Pin* driver = net->getDriver();
-        if (loads.empty() && !driver) continue;
-        
-        // Initialize bounding box to opposite extremes
-        double net_min_x = std::numeric_limits<double>::max();
-        double net_max_x = std::numeric_limits<double>::lowest();
-        double net_min_y = std::numeric_limits<double>::max();
-        double net_max_y = std::numeric_limits<double>::lowest();
-        
-        // Include driver pin position
-        if (driver) {
-            Cell* driver_cell = driver->getOwner();
-            if (driver_cell) {
-                const auto& cell_info = placer_db_->getCellInfo(const_cast<Cell*>(driver_cell));
-                double pin_x = driver_cell->getX() + cell_info.width / 2.0;
-                double pin_y = driver_cell->getY() + cell_info.height / 2.0;
-                
-                net_min_x = net_max_x = pin_x;
-                net_min_y = net_max_y = pin_y;
-            }
-        }
-        
-        // Include load pin positions
-        for (Pin* load : loads) {
-            if (!load) continue;
-            Cell* load_cell = load->getOwner();
-            if (load_cell) {
-                const auto& cell_info = placer_db_->getCellInfo(const_cast<Cell*>(load_cell));
-                double pin_x = load_cell->getX() + cell_info.width / 2.0;
-                double pin_y = load_cell->getY() + cell_info.height / 2.0;
-                
-                net_min_x = std::min(net_min_x, pin_x);
-                net_max_x = std::max(net_max_x, pin_x);
-                net_min_y = std::min(net_min_y, pin_y);
-                net_max_y = std::max(net_max_y, pin_y);
-            }
-        }
-        
-        // Add HPWL for this net
-        total_hpwl += (net_max_x - net_min_x) + (net_max_y - net_min_y);
-    }
-    
-    return total_hpwl;
+    return HPWLCalculator::calculateHPWL(netlist_db_, placer_db_);
 }
 
 void GlobalPlacer::updateStatistics(int iteration, double total_movement, double step_time_ms) {
@@ -898,18 +853,18 @@ void GlobalPlacer::debugLog(const std::string& message) const {
 }
 
 void GlobalPlacer::setAggressiveParameters() {
-    // === 温和参数调整 (气体扩散模式) ===
-    learning_rate_ = 0.05;        // 降低步长：适应修复后的力计算
-    initial_lambda_ = 0.01;       // 保持适中：让自动调优起作用
-    lambda_growth_rate_ = 1.02;    // 温和增长：避免过度补偿
-    momentum_ = 0.9;              // 标准动量：平滑收敛
-    convergence_threshold_ = 0.001; // 精确收敛：追求高质量布局
+    // === Gentle Parameter Adjustment (Gas Diffusion Mode) ===
+    learning_rate_ = 0.05;        // Reduce step size: adapt to fixed force calculation
+    initial_lambda_ = 0.01;       // Keep moderate: let auto-tuning take effect
+    lambda_growth_rate_ = 1.02;    // Gentle growth: avoid over-compensation
+    momentum_ = 0.9;              // Standard momentum: smooth convergence
+    convergence_threshold_ = 0.001; // Precise convergence: pursue high-quality placement
     
-    debugLog("Applied gentle parameters for gas diffusion mode:");
+    debugLog("Applied gentle parameters for momentum optimization:");
     debugLog("  Learning Rate: " + std::to_string(learning_rate_));
     debugLog("  Initial Lambda: " + std::to_string(initial_lambda_));
     debugLog("  Lambda Growth Rate: " + std::to_string(lambda_growth_rate_));
-    debugLog("  Momentum: " + std::to_string(momentum_));
+    debugLog("  Momentum Factor: " + std::to_string(momentum_));
     debugLog("  Convergence Threshold: " + std::to_string(convergence_threshold_));
 }
 

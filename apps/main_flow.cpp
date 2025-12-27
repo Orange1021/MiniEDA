@@ -147,7 +147,7 @@ std::unique_ptr<PlacerDB> runPlacement(const AppConfig& config, std::shared_ptr<
     placement_config.row_height = actual_row_height;  // Use detected height
     placement_config.placement_algo = placement_algo;  // Set algorithm
     
-    // Use algorithm-specific folder for comparison (避免覆盖)
+    // Use algorithm-specific folder for comparison (avoid overwriting)
     placement_config.run_id = config.run_id + "_" + placement_algo;
     
     // Run placement using unified interface

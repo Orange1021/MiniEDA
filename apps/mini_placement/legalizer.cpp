@@ -6,68 +6,17 @@
 #include "legalizer.h"
 #include <iostream>
 #include <fstream>
+#include "../../lib/include/hpwl_calculator.h"
 
 namespace mini {
 
 double Legalizer::calculateHPWL() const {
     if (!db_) return 0.0;
 
-    double total_hpwl = 0.0;
-    
-    // Get netlist database
     NetlistDB* netlist_db = db_->getNetlistDB();
     if (!netlist_db) return 0.0;
 
-    // Calculate HPWL for each net
-    for (const auto& net_ptr : netlist_db->getNets()) {
-        const Net* net = net_ptr.get();
-        if (!net) continue;
-
-        double min_x = std::numeric_limits<double>::max();
-        double max_x = std::numeric_limits<double>::lowest();
-        double min_y = std::numeric_limits<double>::max();
-        double max_y = std::numeric_limits<double>::lowest();
-
-        bool has_pins = false;
-
-        // Check driver pin
-        Pin* driver = net->getDriver();
-        if (driver) {
-            Cell* driver_cell = driver->getOwner();
-            if (driver_cell) {
-                const auto& cell_info = db_->getCellInfo(driver_cell);
-                double pin_x = cell_info.x + cell_info.width / 2.0;
-                double pin_y = cell_info.y + cell_info.height / 2.0;
-                
-                min_x = max_x = pin_x;
-                min_y = max_y = pin_y;
-                has_pins = true;
-            }
-        }
-
-        // Check load pins
-        for (Pin* load : net->getLoads()) {
-            if (!load) continue;
-            Cell* load_cell = load->getOwner();
-            if (!load_cell) continue;
-
-            const auto& cell_info = db_->getCellInfo(load_cell);
-            double pin_x = cell_info.x + cell_info.width / 2.0;
-            double pin_y = cell_info.y + cell_info.height / 2.0;
-
-            min_x = std::min(min_x, pin_x);
-            max_x = std::max(max_x, pin_x);
-            min_y = std::min(min_y, pin_y);
-            max_y = std::max(max_y, pin_y);
-            has_pins = true;
-        }
-
-        if (has_pins) {
-            total_hpwl += (max_x - min_x) + (max_y - min_y);
-        }
-    }
-
-    return total_hpwl;
+    return HPWLCalculator::calculateHPWL(netlist_db, db_);
 }
 
 bool Legalizer::hasOverlaps() const {

@@ -51,7 +51,7 @@ int main() {
         }
 
         // Check library
-        std::cout << "\n✅ Library parsed successfully!" << std::endl;
+        std::cout << "\n[PASS] Library parsed successfully!" << std::endl;
         std::cout << "   Library name: " << library->getName() << std::endl;
         std::cout << "   Cell count: " << library->getCellCount() << std::endl;
 
@@ -129,7 +129,7 @@ int main() {
 
         std::cout << "\n";
         std::cout << "╔════════════════════════════════════╗" << std::endl;
-        std::cout << "║  ✅ All Parser Tests Passed!      ║" << std::endl;
+        std::cout << "║  [PASS] All Parser Tests Passed!      ║" << std::endl;
         std::cout << "╚════════════════════════════════════╝" << std::endl;
         std::cout << "\n";
 

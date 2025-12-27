@@ -442,7 +442,7 @@ std::pair<double, double> TableDelayModel::calculateInterconnectDelay(
     // Priority 1: Use actual routed wire length from Router (if available)
     Net* net = driver_pin->getNet();
     if (net && net->hasWireLength()) {
-        wire_length = net->getWireLength();  // ✅ Actual routing length
+        wire_length = net->getWireLength();  // [INFO] Actual routing length
     } else {
         // Priority 2: Fallback to Manhattan distance estimate (pre-routing)
         double driver_x = driver_cell->getX();

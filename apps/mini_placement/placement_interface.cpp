@@ -173,7 +173,7 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     placer_db->setCoreArea(core_area);
     placer_db->setRowHeight(config.row_height);
     
-    // [利用率诊断] 计算并打印关键设计信息
+    // [Utilization Diagnosis] Calculate and print key design information
     double core_area_size = core_area.width() * core_area.height();
     double actual_utilization = total_cell_area / core_area_size;
     
@@ -184,12 +184,12 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     std::cout << "Target Utilization: " << config.utilization << " (" << config.utilization * 100 << "%)" << std::endl;
     
     if (actual_utilization < 0.3) {
-        std::cout << "⚠️  WARNING: Very low utilization! This may cause 'corner explosion'." << std::endl;
+        std::cout << "[WARNING] Very low utilization! This may cause 'corner explosion'." << std::endl;
         std::cout << "   Recommendation: Use 'cold-start' Lambda strategy." << std::endl;
     } else if (actual_utilization < 0.5) {
-        std::cout << "📊 INFO: Low utilization. Consider conservative density targets." << std::endl;
+        std::cout << "[INFO] Low utilization. Consider conservative density targets." << std::endl;
     } else {
-        std::cout << "✅ GOOD: Reasonable utilization for standard placement." << std::endl;
+        std::cout << "[GOOD] Reasonable utilization for standard placement." << std::endl;
     }
     std::cout << "==========================================\n" << std::endl;
     

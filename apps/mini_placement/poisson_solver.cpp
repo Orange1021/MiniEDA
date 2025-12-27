@@ -123,26 +123,22 @@ void PoissonSolver::exportPotentialMap(const std::vector<Bin>& bins,
     std::cout << "[PoissonSolver] Potential map exported to " << filename << std::endl;
 }
 
-void PoissonSolver::exportForceField(const std::vector<Bin>& bins,
-                                    int grid_width, int grid_height,
-                                    const std::string& filename) {
+void PoissonSolver::exportGradientField(const std::vector<Bin>& bins,
+                                        int grid_width, int grid_height,
+                                        const std::string& filename) {
+    // Export gradient field for visualization
     std::ofstream file(filename);
-    if (!file.is_open()) {
-        std::cerr << "Error: Cannot open file " << filename << " for writing" << std::endl;
-        return;
-    }
-
-    file << "x,y,force_x,force_y,magnitude\n";
+    file << "# X,Y,Gradient_X,Gradient_Y,Magnitude\n";
     
     for (int y = 0; y < grid_height; ++y) {
         for (int x = 0; x < grid_width; ++x) {
             int idx = y * grid_width + x;
-            double fx = bins[idx].electro_force_x;
-            double fy = bins[idx].electro_force_y;
-            double magnitude = std::sqrt(fx*fx + fy*fy);
+            double gx = bins[idx].electro_gradient_x;
+            double gy = bins[idx].electro_gradient_y;
+            double magnitude = std::sqrt(gx*gx + gy*gy);
             
             file << bins[idx].x << "," << bins[idx].y << "," 
-                 << fx << "," << fy << "," << magnitude << "\n";
+                 << gx << "," << gy << "," << magnitude << "\n";
         }
     }
     
@@ -154,8 +150,8 @@ void PoissonSolver::printStatistics() const {
     std::cout << "\n=== Poisson Solver Statistics ===" << std::endl;
     std::cout << "Solution status: " << (solve_successful_ ? "SUCCESS" : "FAILED") << std::endl;
     std::cout << "Maximum potential: " << std::fixed << std::setprecision(6) << max_potential_ << std::endl;
-    std::cout << "Maximum force magnitude: " << std::fixed << std::setprecision(6) << max_force_magnitude_ << std::endl;
-    std::cout << "Average force magnitude: " << std::fixed << std::setprecision(6) << avg_force_magnitude_ << std::endl;
+    std::cout << "Maximum force magnitude: " << std::fixed << std::setprecision(6) << max_gradient_magnitude_ << std::endl;
+    std::cout << "Average force magnitude: " << std::fixed << std::setprecision(6) << avg_gradient_magnitude_ << std::endl;
     std::cout << "=================================" << std::endl;
 }
 
@@ -336,8 +332,8 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
     
     // Reset statistics
     max_potential_ = 0.0;
-    max_force_magnitude_ = 0.0;
-    double total_force_magnitude = 0.0;
+    max_gradient_magnitude_ = 0.0;
+    double total_gradient_magnitude = 0.0;
     int count = 0;
     
     // Use provided bin dimensions or calculate from bins if not set
@@ -402,7 +398,7 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
                 int right_idx = y * width + (x + 1);
                 grad_x = (potential[right_idx].real() - potential[left_idx].real()) / dx;
             }
-            bins[idx].electro_force_x = -grad_x;  // F_x = -∂Φ/∂x
+            bins[idx].electro_gradient_x = -grad_x;  // F_x = -∂Φ/∂x
             
             // Calculate Y gradient: ∂Φ/∂y
             double grad_y;
@@ -420,19 +416,19 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
                 int down_idx = (y + 1) * width + x;
                 grad_y = (potential[down_idx].real() - potential[up_idx].real()) / dy;
             }
-            bins[idx].electro_force_y = -grad_y;  // F_y = -∂Φ/∂y
+            bins[idx].electro_gradient_y = -grad_y;  // F_y = -∂Φ/∂y
             
             // Update force statistics
             double force_mag = std::sqrt(grad_x * grad_x + grad_y * grad_y);
             
             
-            max_force_magnitude_ = std::max(max_force_magnitude_, force_mag);
-            total_force_magnitude += force_mag;
+            max_gradient_magnitude_ = std::max(max_gradient_magnitude_, force_mag);
+            total_gradient_magnitude += force_mag;
             count++;
         }
     }
     
-    avg_force_magnitude_ = (count > 0) ? (total_force_magnitude / count) : 0.0;
+    avg_gradient_magnitude_ = (count > 0) ? (total_gradient_magnitude / count) : 0.0;
     
     debugLog("Gradient forces calculated with proper scaling");
 }

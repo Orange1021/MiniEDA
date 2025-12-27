@@ -74,8 +74,9 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - Real physical dimensions from LEF instead of area estimation
 - Advanced global placement algorithms:
   - Basic force-directed placement
-  - Nesterov electrostatic placement with density control
+  - Momentum electrostatic placement with density control
   - Hybrid cascade placement (warm-up + refinement)
+- Unified HPWL calculator for consistent wire length estimation across all modules
 - Strategy Pattern legalization with algorithm selection:
   - Greedy (Tetris) legalization: fast but aggressive HPWL reduction
   - Abacus optimization-based legalization: preserves GP quality with quadratic programming
@@ -120,7 +121,9 @@ MiniEDA/
 │   │   ├── visualizer.h           # Python visualization bridge
 │   │   ├── pin_mapper.h           # Pin mapping utilities
 │   │   ├── placer_db.h            # Physical placement database
-│   │   └── app_config.h           # Unified application configuration
+│   │   ├── hpwl_calculator.h      # Unified HPWL calculation utility
+│   │   ├── app_config.h           # Unified application configuration
+│   │   └── arg_parser.h           # Command line argument parsing
 │   └── src/                       # Implementation files
 │       ├── cell.cpp               # Cell implementation
 │       ├── net.cpp                # Net implementation
@@ -133,6 +136,7 @@ MiniEDA/
 │       ├── visualizer.cpp         # Visualization
 │       ├── pin_mapper.cpp         # Pin mapping
 │       ├── placer_db.cpp          # Physical placement database
+│       ├── hpwl_calculator.cpp    # Unified HPWL calculation implementation
 │       ├── app_config.cpp         # Unified configuration management
 │       └── arg_parser.cpp         # Command line argument parsing
 ├── apps/                          # Applications
@@ -246,26 +250,29 @@ After successful compilation, executables will be in the `build/bin/` directory.
 ### MiniPlacement - Chip Placement Optimization
 
 ```bash
-# Run placement (requires Liberty library)
+# Run placement with default hybrid algorithm (recommended)
 ./build/bin/mini_placement \
   -v benchmarks/ISCAS/Verilog/s27.v \
-  -lib benchmarks/sample.lib
+  -lib benchmarks/NangateOpenCellLibrary_typical.lib
 
 # Run with LEF physical library (Nangate 45nm)
 ./build/bin/mini_placement \
   -v benchmarks/ISCAS/Verilog/s27.v \
-  -lib benchmarks/sample.lib \
+  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
   -lef benchmarks/NangateOpenCellLibrary.macro.lef
 
 # Run with custom utilization
 ./build/bin/mini_placement \
   -v benchmarks/ISCAS/Verilog/s344.v \
-  -lib benchmarks/sample.lib \
+  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
   -util 0.8 \
   -rowheight 2.5
 
-# View help
-./build/bin/mini_placement -help
+# Run with specific placement algorithm
+./build/bin/mini_placement \
+  -v benchmarks/ISCAS/Verilog/s27.v \
+  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
+  -algo hybrid    # Options: basic, nesterov, hybrid
 ```
 
 **Command Line Options:**
@@ -274,6 +281,10 @@ After successful compilation, executables will be in the `build/bin/` directory.
 - `-lef <file>`      : LEF physical library file (optional)
 - `-util <value>`    : Target utilization (default: 0.7)
 - `-rowheight <val>` : Row height in micrometers (default: 3.0)
+- `-algo <name>`     : Placement algorithm (default: hybrid)
+  - `basic`: Force-directed placement
+  - `nesterov`: Momentum electrostatic placement
+  - `hybrid`: Warm-up + refinement (recommended)
 - `-help`            : Show help message
 
 ### MiniRouter - A* Maze Routing
@@ -300,7 +311,7 @@ After successful compilation, executables will be in the `build/bin/` directory.
 ### MiniFlow - Integrated EDA Flow
 
 ```bash
-# Run complete flow (placement + routing + timing)
+# Run complete flow (placement + routing + timing) with default hybrid placement
 ./build/bin/mini_flow \
   -v benchmarks/ISCAS/Verilog/s27.v \
   -lib benchmarks/NangateOpenCellLibrary_typical.lib \
@@ -315,8 +326,11 @@ After successful compilation, executables will be in the `build/bin/` directory.
   -util 0.7 \
   -clk 8.0
 
-# View help
-./build/bin/mini_flow -help
+# Run with specific placement algorithm (basic/nesterov/hybrid)
+MINIEDA_PLACEMENT_ALGO=basic ./build/bin/mini_flow \
+  -v benchmarks/ISCAS/Verilog/s27.v \
+  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
+  -lef benchmarks/NangateOpenCellLibrary.macro.lef
 ```
 
 **Command Line Options:**
@@ -396,9 +410,11 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 
 #### MiniPlacement
 - Force-directed global placement
-- Tetris-like legalization
-- Greedy swap detailed placement
-- HPWL (Half-Perimeter Wire Length) objective
+- Momentum electrostatic placement with density optimization
+- Hybrid cascade placement (warm-up + electrostatic refinement)
+- Strategy Pattern legalization (Greedy + Abacus optimization)
+- Unified HPWL calculator for consistent wire length estimation
+- Advanced density grid with Poisson equation solver
 
 #### MiniRouter
 - A* pathfinding algorithm
@@ -411,17 +427,19 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 
 ## Project Statistics
 
-- **Total Code**: 20,000+ lines of C++
-- **Source Files**: 75+ files
+- **Total Code**: 22,100+ lines of C++
+- **Source Files**: 85+ files
 - **Test Coverage**: ISCAS benchmark suite (100% pass rate)
 - **Libraries Supported**: Nangate 45nm (135 Liberty cells + 134 LEF macros)
 - **Advanced Features**: 
   - Dynamic constraint lookup, industrial timing analysis, complete Liberty parsing
-  - Strategy Pattern legalization with algorithm selection
-  - Abacus quadratic optimization for placement preservation
-  - Advanced global placement with electrostatic modeling
+  - Strategy Pattern legalization with algorithm selection (Greedy + Abacus)
+  - Unified HPWL calculator eliminating code duplication
+  - Advanced global placement with electrostatic modeling and Poisson solver
+  - Hybrid cascade placement with warm-up and momentum optimization
 - **STA Engine**: 12 major simplifications resolved for industrial-grade accuracy
-- **Placement Algorithms**: 3 global placement + 2 legalization strategies
+- **Placement Algorithms**: 3 global placement (basic, momentum, hybrid) + 2 legalization strategies
+- **Code Quality**: All comments in English, emoji symbols removed for maximum compatibility
 
 ## Contribution Guidelines
 
@@ -447,4 +465,4 @@ For questions, suggestions, or bug reports, please use GitHub Issues.
 
 **Project Status**: MiniEDA Industrial Suite - Complete EDA Flow
 
-**Note**: This is an educational project demonstrating core EDA algorithms. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling.
+**Note**: This is an educational project demonstrating core EDA algorithms. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with internationalized English documentation and emoji-free output for maximum compatibility.
