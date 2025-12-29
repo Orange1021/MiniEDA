@@ -66,6 +66,18 @@ public:
     double getRowHeight() const { return row_height_; }
 
     /**
+     * @brief Set site width for grid alignment
+     * @param width Site width in micrometers
+     */
+    void setSiteWidth(double width) { site_width_ = width; }
+
+    /**
+     * @brief Get site width
+     * @return Site width in micrometers
+     */
+    double getSiteWidth() const { return site_width_; }
+
+    /**
      * @brief Add a cell to the physical database (legacy method)
      * @param cell Pointer to the netlist cell
      * @param area Cell area (from liberty library)
@@ -146,6 +158,11 @@ public:
      * @return Pointer to the netlist database
      */
     NetlistDB* getNetlistDB() const { return netlist_db_; }
+    /**
+     * @brief Get cells organized by rows
+     * @return Vector of rows, each containing cells sorted by X coordinate
+     */
+    std::vector<std::vector<Cell*>> getCellsByRow();
 
     /**
      * @brief Get total cell area
@@ -164,6 +181,7 @@ private:
     NetlistDB* netlist_db_;                                    // Netlist database
     Rect core_area_;                                           // Placement boundary
     double row_height_;                                        // Standard row height
+    double site_width_;                                        // Standard site width (for grid alignment)
     std::unordered_map<Cell*, CellInfo> cell_infos_;           // Physical data
     std::unordered_map<Cell*, const LefMacro*> cell_lef_macros_; // LEF macro pointers
     std::mt19937 random_engine_;                               // Random number generator

@@ -157,173 +157,22 @@ void PlacerEngine::runLegalization() {
 void PlacerEngine::runDetailedPlacement() {
     if (!db_) return;
     
-    std::cout << "Starting Detailed Placement (Greedy Adjacent Swap)..." << std::endl;
+    std::cout << "Starting Detailed Placement Optimization..." << std::endl;
     
-    // PRE-CHECK: Verify no overlaps before detailed placement
-    std::cout << "  Pre-check overlap status: ";
-    if (hasOverlaps()) {
-        std::cout << "FOUND OVERLAPS - This should not happen!" << std::endl;
-    } else {
-        std::cout << "No overlaps (good)" << std::endl;
-    }
+    // Initialize detailed placer with verbose mode
+    detailed_placer_ = std::make_unique<DetailedPlacer>(db_, db_->getNetlistDB());
+    detailed_placer_->setVerbose(true);
+    detailed_placer_->setIterations(3);
     
-    // 1. Data Prep: Group cells by rows, sorted by x-coordinate
-    const Rect& core_area = db_->getCoreArea();
-    double row_height = db_->getRowHeight();
-    double core_y_min = core_area.y_min;
+    // Run detailed placement optimization
+    detailed_placer_->run();
     
-    // Create row structure
-    std::map<int, std::vector<Cell*>> rows;
+    // Update current HPWL
+    current_hpwl_ = detailed_placer_->getFinalHPWL();
     
-    for (Cell* cell : db_->getAllCells()) {
-        const auto& info = db_->getCellInfo(cell);
-        if (info.fixed) continue;
-        
-        double current_y = info.y + info.height / 2.0;
-        int row_idx = static_cast<int>(std::round((current_y - core_y_min) / row_height));
-        rows[row_idx].push_back(cell);
-    }
+    std::cout << "  Final HPWL after detailed placement: " << current_hpwl_ << std::endl;
     
-    // Sort each row by x-coordinate
-    for (auto& [row_idx, cells_in_row] : rows) {
-        std::sort(cells_in_row.begin(), cells_in_row.end(),
-                 [this](Cell* a, Cell* b) {
-                     return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
-                 });
-    }
-    
-    std::cout << "  Prepared " << rows.size() << " rows for detailed optimization" << std::endl;
-    
-    // 2. Optimization Loop: Multiple passes over all rows
-    const int max_passes = 5;
-    double initial_hpwl = calculateHPWL();
-    double current_hpwl = initial_hpwl;
-    int total_swaps = 0;
-    
-    for (int pass = 0; pass < max_passes; ++pass) {
-        int pass_swaps = 0;
-        std::cout << "  Pass " << (pass + 1) << "/" << max_passes << std::endl;
-        
-        // 3. Row Traversal: Try adjacent swaps in each row
-        for (auto& [row_idx, cells_in_row] : rows) {
-            for (size_t i = 0; i < cells_in_row.size() - 1; ++i) {
-                Cell* left_cell = cells_in_row[i];      // Originally on the left
-                Cell* right_cell = cells_in_row[i + 1]; // Originally on the right
-                
-                // Store original cell information for potential rollback
-                const auto left_orig_info = db_->getCellInfo(left_cell);
-                const auto right_orig_info = db_->getCellInfo(right_cell);
-                
-                // Calculate reference X coordinate (starting point for this pair)
-                double start_x = (i > 0) ? 
-                    db_->getCellInfo(cells_in_row[i - 1]).x + 
-                    db_->getCellInfo(cells_in_row[i - 1]).width : 
-                    core_area.x_min;
-                
-                // PROACTIVE BOUNDARY CHECK: Calculate proposed positions after swap
-                // After swap: right_cell becomes the new "left", left_cell becomes the new "right"
-                double proposed_x_new_left = start_x;
-                double proposed_x_new_right = start_x + db_->getCellInfo(right_cell).width;
-                
-                // RIGHT BOUNDARY VALIDATION: Ensure swap won't exceed core area
-                double row_limit = core_area.x_max;
-                if (proposed_x_new_right + db_->getCellInfo(left_cell).width > row_limit) {
-                    // VIOLATION: Swap would cause overflow beyond core boundary
-                    // ACTION: Abort this swap attempt, move to next iteration
-                    continue;
-                }
-                
-                // ADDITIONAL VALIDATION: Check for conflicts with subsequent cells in the same row
-                bool has_conflict = false;
-                if (i + 2 < cells_in_row.size()) {
-                    Cell* next_cell = cells_in_row[i + 2];
-                    const auto& next_info = db_->getCellInfo(next_cell);
-                    double next_cell_left = next_info.x;
-                    
-                    // Check if our swapped right cell would overlap with the next cell
-                    if (proposed_x_new_right + db_->getCellInfo(left_cell).width > next_cell_left) {
-                        has_conflict = true;
-                    }
-                }
-                
-                if (has_conflict) {
-                    // VIOLATION: Swap would cause overlap with subsequent cell
-                    // ACTION: Abort this swap attempt, move to next iteration
-                    continue;
-                }
-                
-                // Measure current HPWL before making changes
-                double hpwl_before = calculateHPWL();
-                
-                // ATOMIC SWAP EXECUTION: Exchange order in vector
-                std::swap(cells_in_row[i], cells_in_row[i + 1]);
-                
-                // COMMIT PHYSICAL PLACEMENT: Update positions with validated coordinates
-                db_->placeCell(right_cell, proposed_x_new_left, right_orig_info.y);   // Original right, now left
-                db_->placeCell(left_cell, proposed_x_new_right, left_orig_info.y);    // Original left, now right
-                
-                // Measure new HPWL after swap
-                double hpwl_after = calculateHPWL();
-                
-                // DECISION LOGIC: Keep swap only if it improves wirelength AND doesn't cause overlaps
-                if (hpwl_after < hpwl_before - 1e-9) {  // Small epsilon for numerical stability
-                    // Check for overlaps after the swap
-                    if (!hasOverlaps()) {
-                        // ACCEPT the swap - improvement achieved and no overlaps!
-                        pass_swaps++;
-                        total_swaps++;
-                    } else {
-                        // ROLLBACK due to overlaps: Revert both vector order and physical positions
-                        std::swap(cells_in_row[i], cells_in_row[i + 1]);
-                        // Restore original coordinates (safest approach, no recalculation)
-                        db_->placeCell(left_cell, left_orig_info.x, left_orig_info.y);
-                        db_->placeCell(right_cell, right_orig_info.x, right_orig_info.y);
-                    }
-                } else {
-                    // SAFE ROLLBACK: Revert both vector order and physical positions
-                    std::swap(cells_in_row[i], cells_in_row[i + 1]);
-                    // Restore original coordinates (safest approach, no recalculation)
-                    db_->placeCell(left_cell, left_orig_info.x, left_orig_info.y);
-                    db_->placeCell(right_cell, right_orig_info.x, right_orig_info.y);
-                }
-            }
-        }
-        
-        current_hpwl = calculateHPWL();
-        std::cout << "    Pass swaps: " << pass_swaps 
-                  << ", HPWL: " << current_hpwl 
-                  << " (improvement: " << (initial_hpwl - current_hpwl) << ")" << std::endl;
-        
-        // Early termination if no improvements
-        if (pass_swaps == 0) {
-            std::cout << "  No improvements in pass " << (pass + 1) << ", early termination" << std::endl;
-            break;
-        }
-    }
-    
-    // 4. Finalize
-    double final_hpwl = calculateHPWL();
-    double total_improvement = initial_hpwl - final_hpwl;
-    
-    // Update cached HPWL to maintain consistency
-    current_hpwl_ = final_hpwl;
-    
-    std::cout << "Detailed Placement completed!" << std::endl;
-    std::cout << "  Total swaps performed: " << total_swaps << std::endl;
-    std::cout << "  Initial HPWL: " << initial_hpwl << std::endl;
-    std::cout << "  Final HPWL: " << final_hpwl << std::endl;
-    std::cout << "  Total improvement: " << total_improvement << " (" 
-              << (total_improvement / initial_hpwl * 100.0) << "%)" << std::endl;
-    
-    // 5. Final overlap check
-    bool has_overlaps = hasOverlaps();
-    double total_overlap = calculateTotalOverlap();
-    std::cout << "  Final overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
-    if (has_overlaps) {
-        std::cout << "  Total overlap area: " << total_overlap << std::endl;
-    }
-    
-    // 6. Visualize final result
+    // Visualize final result
     if (viz_) {
         viz_->drawPlacementWithRunId("detailed", run_id_);
     }

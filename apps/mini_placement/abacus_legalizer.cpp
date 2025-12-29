@@ -64,6 +64,10 @@ void AbacusLegalizer::run() {
         legalizeRow(row);
     }
     
+    // Phase 3: Snap to site grid (final alignment)
+    debugLog("Phase 3: Site alignment (snap to grid)");
+    snapToSiteGrid();
+    
     // Calculate and report final statistics
     double final_hpwl = calculateHPWL();
     std::cout << "  Final HPWL: " << final_hpwl << std::endl;
@@ -75,7 +79,7 @@ void AbacusLegalizer::run() {
     // Export result for visualization
     Legalizer::exportResult("abacus_complete.csv");
     
-    debugLog("Abacus legalization completed (Phase 1 + Phase 2)");
+    debugLog("Abacus legalization completed (Phase 1 + Phase 2 + Phase 3)");
 }
 
 void AbacusLegalizer::distributeCellsToRows() {
@@ -346,6 +350,63 @@ void AbacusLegalizer::collapseClusters(AbacusRow& row, int cluster_idx) {
 bool AbacusLegalizer::clusterFitsAt(const AbacusCluster& cluster, double x, const AbacusRow& row) const {
     // TODO: Check if cluster fits within row boundaries
     return (x >= row.min_x) && (x + cluster.width <= row.max_x);
+}
+
+// ============================================================================
+// Phase 3: Site Alignment Implementation
+// ============================================================================
+
+void AbacusLegalizer::snapToSiteGrid() {
+    double site_width = db_->getSiteWidth();
+    
+    if (site_width <= 0.0) {
+        std::cerr << "Warning: Invalid site width (" << site_width 
+                  << "), skipping site alignment" << std::endl;
+        return;
+    }
+    
+    std::cout << "  Snapping cells to site grid (width = " << site_width << " um)" << std::endl;
+    
+    for (auto& row : rows_) {
+        double current_x_limit = row.min_x;
+        
+        // Sort cells in each row by their current X coordinate
+        std::sort(row.cells.begin(), row.cells.end(), 
+                 [this](Cell* a, Cell* b) {
+                     return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+                 });
+        
+        // Left-to-right scan with site alignment
+        for (Cell* cell : row.cells) {
+            const auto& cell_info = db_->getCellInfo(cell);
+            double cell_width = cell_info.width;
+            
+            // Calculate the nearest site position that doesn't violate the boundary
+            // We want: snapped_x >= current_x_limit
+            double raw_x = cell_info.x;
+            double snapped_x = std::round(raw_x / site_width) * site_width;
+            
+            // If snapped position would cause overlap, move to next available site
+            if (snapped_x < current_x_limit) {
+                snapped_x = std::ceil(current_x_limit / site_width) * site_width;
+            }
+            
+            // Ensure we're still within row boundaries
+            if (snapped_x + cell_width > row.max_x) {
+                std::cerr << "Warning: Cell " << cell->getName() 
+                         << " would exceed row boundary after site alignment" << std::endl;
+                snapped_x = std::max(row.min_x, row.max_x - cell_width);
+            }
+            
+            // Place the cell at the snapped position
+            db_->placeCell(cell, snapped_x, row.y_coordinate);
+            
+            // Update boundary pointer for next cell
+            current_x_limit = snapped_x + cell_width;
+        }
+    }
+    
+    std::cout << "  Site alignment completed" << std::endl;
 }
 
 } // namespace mini

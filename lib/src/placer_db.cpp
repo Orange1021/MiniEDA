@@ -13,6 +13,7 @@ PlacerDB::PlacerDB(NetlistDB* netlist_db)
     : netlist_db_(netlist_db)
     , core_area_(0.0, 0.0, 1000.0, 1000.0)  // Default large core area
     , row_height_(3.0)                       // Default 3.0um row height
+    , site_width_(0.19)                      // Default 0.19um site width (Nangate 45nm)
     , random_engine_(42)                     // Fixed seed for reproducibility
 {
 }
@@ -148,4 +149,34 @@ bool PlacerDB::isValidPlacement(Cell* cell) const {
             info.y + info.height <= core_area_.y_max);
 }
 
+std::vector<std::vector<Cell*>> PlacerDB::getCellsByRow() {
+    std::unordered_map<double, std::vector<Cell*>> row_map;
+    
+    // Group cells by Y coordinate (row)
+    auto all_cells = getAllCells();
+    for (Cell* cell : all_cells) {
+        double y = getCellInfo(cell).y;
+        row_map[y].push_back(cell);
+    }
+    
+    // Convert to vector and sort each row by X coordinate
+    std::vector<std::vector<Cell*>> rows;
+    for (auto& [y, cells] : row_map) {
+        std::sort(cells.begin(), cells.end(), 
+                 [this](Cell* a, Cell* b) {
+                     return getCellInfo(a).x < getCellInfo(b).x;
+                 });
+        rows.push_back(cells);
+    }
+    
+    // Sort rows by Y coordinate
+    std::sort(rows.begin(), rows.end(),
+             [this](const std::vector<Cell*>& row1, const std::vector<Cell*>& row2) {
+                 return getCellInfo(row1[0]).y < getCellInfo(row2[0]).y;
+             });
+    
+    return rows;
+}
+
 } // namespace mini
+

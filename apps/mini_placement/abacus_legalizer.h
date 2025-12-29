@@ -152,6 +152,16 @@ private:
     bool clusterFitsAt(const AbacusCluster& cluster, double x, const AbacusRow& row) const;
     
     // ============================================================================
+    // Phase 3: Site Alignment (Snap to Grid)
+    // ============================================================================
+    
+    /**
+     * @brief Snap cells to site grid (left-alignment scan method)
+     * @details Aligns cell left edges to site boundaries while preventing overlaps
+     */
+    void snapToSiteGrid();
+    
+    // ============================================================================
     // Utility Functions
     // ============================================================================
     

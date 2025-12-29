@@ -160,21 +160,28 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
         }
     }
     
-    // Calculate core area based on utilization with row height alignment
+    // Calculate core area based on utilization with row height AND site width alignment
     double core_area_needed = total_cell_area / config.utilization;
     double core_width = std::sqrt(core_area_needed);
     
+    // Get site width for alignment (Nangate 45nm standard)
+    double site_width = 0.19;  // Standard site width for Nangate 45nm
+    placer_db->setSiteWidth(site_width);
+    
+    // Align core width to site grid: ceil(width / site_width) * site_width
+    double aligned_core_width = std::ceil(core_width / site_width) * site_width;
+    
     // Align core height to row height
     double row_height = config.row_height;
-    int num_rows = static_cast<int>(std::ceil(core_width / row_height));
+    int num_rows = static_cast<int>(std::ceil(aligned_core_width / row_height));
     double core_height = num_rows * row_height;
     
-    Rect core_area(0, 0, core_width, core_height);
+    Rect core_area(0, 0, aligned_core_width, core_height);
     placer_db->setCoreArea(core_area);
     placer_db->setRowHeight(config.row_height);
     
     // [Utilization Diagnosis] Calculate and print key design information
-    double core_area_size = core_area.width() * core_area.height();
+    double core_area_size = aligned_core_width * core_height;
     double actual_utilization = total_cell_area / core_area_size;
     
     std::cout << "\n>>> DESIGN INFO (UTILIZATION DIAGNOSIS) <<<" << std::endl;
@@ -196,9 +203,13 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     if (config.verbose) {
         std::cout << "  Total cell area: " << total_cell_area << " square micrometers" << std::endl;
         std::cout << "  Target utilization: " << (config.utilization * 100) << "%" << std::endl;
-        std::cout << "  Core area: " << core_width << " x " << core_height 
-                  << " = " << (core_width * core_height) << " square micrometers" << std::endl;
+        std::cout << "  Original core width: " << core_width << " μm" << std::endl;
+        std::cout << "  Aligned core width: " << aligned_core_width << " μm (site-aligned)" << std::endl;
+        std::cout << "  Core area: " << aligned_core_width << " x " << core_height 
+                  << " = " << (aligned_core_width * core_height) << " square micrometers" << std::endl;
         std::cout << "  Row capacity: " << num_rows << " rows (each " << row_height << " μm tall)" << std::endl;
+        std::cout << "  Site width: " << site_width << " μm" << std::endl;
+        std::cout << "  Site alignment: " << (aligned_core_width / site_width) << " sites" << std::endl;
     }
     
     // Initialize Visualizer (after PlacerDB is created)

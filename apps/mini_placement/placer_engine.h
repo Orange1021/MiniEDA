@@ -10,6 +10,7 @@
 #include "../../lib/include/visualizer.h"
 #include "../../lib/include/placer_db.h"
 #include "placement_interface.h"
+#include "detailed_placer.h"
 
 namespace mini {
 
@@ -99,6 +100,7 @@ private:
     std::string run_id_;              // Run ID for file naming
     GlobalPlacer* global_placer_;     // Pointer to advanced global placer
     LegalizationAlgorithm leg_algo_;  // Legalization algorithm selection
+std::unique_ptr<DetailedPlacer> detailed_placer_;  // Detailed placement optimizer
 
     /**
      * @brief Single iteration of force-directed algorithm
