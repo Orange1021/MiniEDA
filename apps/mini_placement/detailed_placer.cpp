@@ -40,14 +40,50 @@ void DetailedPlacer::run() {
     // Calculate final HPWL
     final_hpwl_ = HPWLCalculator::calculateHPWL(netlist_, db_);
     
+    // Verify site alignment after optimization
+    auto [aligned_count, total_count] = verifySiteAlignment();
+    double alignment_rate = (total_count > 0) ? (double(aligned_count) / total_count * 100) : 100.0;
+    
     if (verbose_) {
         std::cout << "  Final HPWL: " << final_hpwl_ << std::endl;
         double improvement = ((initial_hpwl_ - final_hpwl_) / initial_hpwl_) * 100;
         std::cout << "  HPWL improvement: " << std::fixed << std::setprecision(2) 
                   << improvement << "%" << std::endl;
+        std::cout << "  Site alignment: " << aligned_count << "/" << total_count 
+                  << " (" << std::fixed << std::setprecision(1) << alignment_rate << "%)" << std::endl;
     }
     
     debugLog("Detailed placement optimization completed");
+    
+    // [DEBUG] Export detailed placement result for comparison
+    exportResult("detailed_placement.csv");
+}
+
+void DetailedPlacer::exportResult(const std::string& filename) const {
+    std::ofstream csv_file(filename);
+    if (!csv_file.is_open()) {
+        std::cerr << "Error: Cannot open file " << filename << " for writing" << std::endl;
+        return;
+    }
+    
+    // CSV header
+    csv_file << "cell_name,x,y,width,height,fixed,algorithm\n";
+    
+    // Export all cells
+    auto all_cells = db_->getAllCells();
+    for (Cell* cell : all_cells) {
+        const auto& info = db_->getCellInfo(cell);
+        csv_file << cell->getName() << ","
+                 << info.x << ","
+                 << info.y << ","
+                 << info.width << ","
+                 << info.height << ","
+                 << (info.fixed ? "1" : "0") << ","
+                 << "Detailed" << "\n";
+    }
+    
+    csv_file.close();
+    debugLog("Detailed placement result exported to " + filename);
 }
 
 void DetailedPlacer::globalSwap() {
@@ -153,6 +189,19 @@ void DetailedPlacer::detailedReordering() {
 bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double start_x) {
     if (window_cells.size() != 3) return false;
     
+    // [FIX 1] Pre-sort to ensure physical order
+    std::sort(window_cells.begin(), window_cells.end(), 
+             [this](Cell* a, Cell* b) {
+                 return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+             });
+    
+    // [FIX 2] CRITICAL: Check contiguity before re-packing!
+    // If there are gaps, re-packing will swallow gaps and cause overlaps
+    if (!isContiguous(window_cells)) {
+        debugLog("Skipping non-contiguous window to avoid gap collapse");
+        return false;
+    }
+    
     // Calculate original HPWL
     double best_hpwl = calculateLocalHPWL(window_cells);
     std::vector<Cell*> best_order = window_cells;
@@ -165,11 +214,6 @@ bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double sta
     }
     
     // Generate all permutations of the window
-    std::sort(window_cells.begin(), window_cells.end(), 
-             [this](Cell* a, Cell* b) {
-                 return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
-             });
-    
     do {
         // === KEY: Site-aligned re-packing ===
         // Re-pack cells compactly from start_x
@@ -202,23 +246,41 @@ bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double sta
 }
 
 void DetailedPlacer::rePackToSites(const std::vector<Cell*>& cells, double start_x) {
+    double site_width = db_->getSiteWidth();
+    
+    // [SAFETY] Ensure start_x is site-aligned
+    if (!isSiteAligned(start_x, site_width)) {
+        debugLog("Warning: start_x is not site-aligned, snapping to nearest site");
+        start_x = std::round(start_x / site_width) * site_width;
+    }
+    
     double current_x = start_x;
     
     for (Cell* cell : cells) {
         double cell_width = db_->getCellInfo(cell).width;
         double cell_y = db_->getCellInfo(cell).y;
         
-        // Place cell at current position (should already be site-aligned)
+        // [SAFETY] Ensure cell width is site-multiple
+        if (!isSiteAligned(cell_width, site_width)) {
+            debugLog("Warning: cell width is not site-multiple for " + cell->getName());
+        }
+        
+        // Place cell at current position (guaranteed site-aligned)
         db_->placeCell(cell, current_x, cell_y);
         
-        // Move to next position (width is guaranteed to be site-multiple)
+        // Move to next position (width should be site-multiple for alignment)
         current_x += cell_width;
     }
 }
 
 bool DetailedPlacer::isSiteAligned(double x, double site_width) const {
+    if (site_width <= 0.0) return false;
+    
+    // Use relative epsilon for robustness
+    const double EPSILON = 1e-10;
     double quotient = x / site_width;
-    return std::abs(quotient - std::round(quotient)) < 1e-9;
+    double rounded_quotient = std::round(quotient);
+    return std::abs(quotient - rounded_quotient) < EPSILON;
 }
 
 double DetailedPlacer::calculateLocalHPWL(const std::vector<Cell*>& cells) {
@@ -296,6 +358,9 @@ std::vector<std::vector<Cell*>> DetailedPlacer::getCellsByRow() {
     // Group cells by Y coordinate (row)
     auto all_cells = db_->getAllCells();
     for (Cell* cell : all_cells) {
+        // [FIX 3] Must exclude fixed cells!
+        if (db_->getCellInfo(cell).fixed) continue;
+        
         double y = db_->getCellInfo(cell).y;
         row_map[y].push_back(cell);
     }
@@ -323,6 +388,45 @@ bool DetailedPlacer::hasEqualWidth(Cell* c1, Cell* c2) const {
     double w1 = db_->getCellInfo(c1).width;
     double w2 = db_->getCellInfo(c2).width;
     return std::abs(w1 - w2) < 1e-9;  // Use epsilon for floating point comparison
+}
+
+std::pair<int, int> DetailedPlacer::verifySiteAlignment() const {
+    double site_width = db_->getSiteWidth();
+    auto all_cells = db_->getAllCells();
+    
+    int aligned_count = 0;
+    int total_count = 0;
+    
+    for (Cell* cell : all_cells) {
+        const auto& info = db_->getCellInfo(cell);
+        if (info.fixed) continue;  // Skip fixed cells
+        
+        total_count++;
+        if (isSiteAligned(info.x, site_width)) {
+            aligned_count++;
+        }
+    }
+    
+    return {aligned_count, total_count};
+}
+
+bool DetailedPlacer::isContiguous(const std::vector<Cell*>& cells) const {
+    if (cells.size() < 2) return true;
+    
+    // Check if cells are contiguous (no gaps between them)
+    for (size_t i = 0; i < cells.size() - 1; ++i) {
+        Cell* current = cells[i];
+        Cell* next = cells[i+1];
+        
+        double curr_end = db_->getCellInfo(current).x + db_->getCellInfo(current).width;
+        double next_start = db_->getCellInfo(next).x;
+        
+        // Allow tiny floating point error
+        if (std::abs(next_start - curr_end) > 1e-4) {
+            return false; // Gap or overlap detected
+        }
+    }
+    return true;
 }
 
 } // namespace mini

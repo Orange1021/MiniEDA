@@ -160,6 +160,25 @@ private:
      */
     bool isSiteAligned(double x, double site_width) const;
 
+    /**
+     * @brief Verify site alignment for all cells
+     * @return Alignment statistics (aligned_count, total_count)
+     */
+    std::pair<int, int> verifySiteAlignment() const;
+
+    /**
+     * @brief Export detailed placement result for visualization
+     * @param filename Output CSV filename
+     */
+    void exportResult(const std::string& filename) const;
+
+    /**
+     * @brief Check if cells are contiguous (no gaps between them)
+     * @param cells Cells to check (must be sorted by X coordinate)
+     * @return True if cells are contiguous, false otherwise
+     */
+    bool isContiguous(const std::vector<Cell*>& cells) const;
+
     bool hasEqualWidth(Cell* c1, Cell* c2) const;
 };
 

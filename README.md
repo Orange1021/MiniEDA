@@ -69,7 +69,7 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 
 ### MiniPlacement - Chip Placement Optimization
 
-- LEF Parser Integration for industrial-grade physical library support
+- LEF Parser integration for industrial-grade physical library support
 - MacroMapper module for intelligent cell type mapping (100% mapping rate)
 - Real physical dimensions from LEF instead of area estimation
 - Advanced global placement algorithms:
@@ -77,11 +77,12 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
   - Momentum electrostatic placement with density control
   - Hybrid cascade placement (warm-up + refinement)
 - Unified HPWL calculator for consistent wire length estimation across all modules
-- Strategy Pattern legalization with algorithm selection:
+- Enhanced legalization algorithms:
   - Greedy (Tetris) legalization: fast but aggressive HPWL reduction
-  - Abacus optimization-based legalization: preserves GP quality with quadratic programming
-  - Cluster merging with mathematical optimization (x = q/e)
-- Detailed placement for local optimization
+  - Abacus optimization-based legalization with right-to-left compaction
+  - Capacity-aware row distribution to prevent boundary overflow
+  - Floating-point precision handling for site alignment
+- Detailed placement with contiguity checking and safe optimization
 - Python matplotlib-based visualization with algorithm comparison
 - Multi-strategy cell mapping with drive strength variants support
 
@@ -155,18 +156,18 @@ MiniEDA/
 │   │   ├── placer_db.h/.cpp       # Physical database
 │   │   ├── visualizer.h/.cpp      # Visualization
 │   │   ├── macro_mapper.h/.cpp    # Macro mapping
-│   │   ├── placement_interface.h/.cpp # High-level interface
+│   │   ├── placement_interface.cpp # High-level interface
 │   │   ├── legalizer.h/.cpp       # Abstract legalization base class
 │   │   ├── greedy_legalizer.h/.cpp # Greedy (Tetris) legalization
 │   │   ├── abacus_legalizer.h/.cpp # Abacus optimization-based legalization
 │   │   ├── global_placer.h/.cpp   # Advanced global placement
 │   │   ├── density_grid.h/.cpp    # Density grid for electrostatic placement
 │   │   ├── poisson_solver.h/.cpp  # Poisson equation solver
-│   │   └── main_placer.cpp        # Main program
+│   │   └── detailed_placer.h/.cpp  # Detailed placement optimization
 │   ├── mini_router/               # A* maze routing
 │   │   ├── maze_router.h/.cpp     # A* routing engine
 │   │   ├── routing_grid.h/.cpp    # 3D routing grid
-│   │   ├── main_router.cpp        # Main program
+│   │   ├── routing_interface.cpp  # Routing interface
 │   │   └── pin_mapper.h           # Pin location mapping
 │   └── main_flow.cpp              # Integrated flow
 ├── test/                          # Test programs
@@ -395,7 +396,7 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 - **Code Standards**: Modern C++ (namespaces, RAII, smart pointers, const correctness)
 - **Data Structures**: Hash tables for O(1) lookup, efficient graph representations
 - **Design**: Modular architecture with clear separation of concerns
-- **Comments**: English documentation throughout
+- **Documentation**: Professional English comments throughout
 
 ### Key Algorithms
 
@@ -412,7 +413,9 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 - Force-directed global placement
 - Momentum electrostatic placement with density optimization
 - Hybrid cascade placement (warm-up + electrostatic refinement)
-- Strategy Pattern legalization (Greedy + Abacus optimization)
+- Enhanced legalization algorithms (Greedy + Abacus with right-to-left compaction)
+- Capacity-aware row distribution and floating-point precision handling
+- Detailed placement with contiguity checking and safe optimization
 - Unified HPWL calculator for consistent wire length estimation
 - Advanced density grid with Poisson equation solver
 
@@ -433,13 +436,14 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 - **Libraries Supported**: Nangate 45nm (135 Liberty cells + 134 LEF macros)
 - **Advanced Features**: 
   - Dynamic constraint lookup, industrial timing analysis, complete Liberty parsing
-  - Strategy Pattern legalization with algorithm selection (Greedy + Abacus)
+  - Enhanced legalization with capacity-aware distribution and precision handling
   - Unified HPWL calculator eliminating code duplication
   - Advanced global placement with electrostatic modeling and Poisson solver
   - Hybrid cascade placement with warm-up and momentum optimization
+  - Detailed placement with contiguity checking and safe optimization
 - **STA Engine**: 12 major simplifications resolved for industrial-grade accuracy
-- **Placement Algorithms**: 3 global placement (basic, momentum, hybrid) + 2 legalization strategies
-- **Code Quality**: All comments in English, emoji symbols removed for maximum compatibility
+- **Placement Algorithms**: 3 global placement (basic, momentum, hybrid) + 2 legalization strategies + detailed optimization
+- **Code Quality**: Professional English comments, maximum compatibility maintained
 
 ## Contribution Guidelines
 
@@ -465,4 +469,4 @@ For questions, suggestions, or bug reports, please use GitHub Issues.
 
 **Project Status**: MiniEDA Industrial Suite - Complete EDA Flow
 
-**Note**: This is an educational project demonstrating core EDA algorithms. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with internationalized English documentation and emoji-free output for maximum compatibility.
+**Note**: This is an educational project demonstrating core EDA algorithms. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.

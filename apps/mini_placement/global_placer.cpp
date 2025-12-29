@@ -392,7 +392,7 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
     std::fill(wire_gradients_.begin(), wire_gradients_.end(), Point{0.0, 0.0});
     
     // [IO Weight Schedule] Dynamically calculate IO weight
-    // Early stage (progress < 0.3): moderate weight (0.5),适度考虑 IO
+    // Early stage: moderate IO weight (0.5)
     // Middle stage (0.3 <= progress <= 0.6): linear transition 0.5 -> 1.0
     // Late stage (progress > 0.6): weight restored (1.0)
     double io_weight = 0.5;  

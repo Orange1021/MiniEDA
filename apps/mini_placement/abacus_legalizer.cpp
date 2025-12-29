@@ -83,44 +83,68 @@ void AbacusLegalizer::run() {
 }
 
 void AbacusLegalizer::distributeCellsToRows() {
-    // Initialize rows based on core area
+    // Initialize rows
     initializeRows();
     
-    // Get all movable cells
-    auto all_cells = db_->getAllCells();
+    // Row capacity tracker
+    std::vector<double> row_usage(rows_.size(), 0.0);
+    double core_width = db_->getCoreArea().width();
     
-    // Distribute each cell to its nearest row
+    // Get movable cells
+    auto all_cells = db_->getAllCells();
+    std::vector<Cell*> movable_cells;
     for (Cell* cell : all_cells) {
-        const auto& cell_info = db_->getCellInfo(cell);
-        
-        // Skip fixed cells (like I/O pads)
-        if (cell_info.fixed) {
-            debugLog("Skipping fixed cell: " + cell->getName());
-            continue;
+        if (!db_->getCellInfo(cell).fixed) {
+            movable_cells.push_back(cell);
         }
-        
-        // Find nearest row based on Y coordinate
-        double current_y = cell_info.y;
-        const Rect& core_area = db_->getCoreArea();
-        double row_height = db_->getRowHeight();
-        
-        // Calculate row index: round to nearest row
-        int row_idx = static_cast<int>(
-            std::round((current_y - core_area.y_min) / row_height)
-        );
-        
-        // Boundary protection
-        if (row_idx < 0) row_idx = 0;
-        if (row_idx >= static_cast<int>(rows_.size())) row_idx = rows_.size() - 1;
-        
-        // Assign cell to row
-        rows_[row_idx].cells.push_back(cell);
-        
-        // Snap Y coordinate to row (vertical alignment)
-        snapCellToRow(cell, row_idx);
     }
     
-    // Sort cells in each row by X coordinate (critical for Abacus)
+    // Sort by X for better capacity distribution
+    std::sort(movable_cells.begin(), movable_cells.end(), 
+        [this](Cell* a, Cell* b) {
+            return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+        });
+    
+    // Smart allocation with capacity awareness
+    for (Cell* cell : movable_cells) {
+        const auto& cell_info = db_->getCellInfo(cell);
+        double cell_w = cell_info.width;
+        
+        // Find ideal row
+        double current_y = cell_info.y;
+        double row_height = db_->getRowHeight();
+        int best_row_idx = static_cast<int>(std::round((current_y - db_->getCoreArea().y_min) / row_height));
+        
+        // Spiral search for available row
+        int final_row_idx = -1;
+        int max_search_range = static_cast<int>(rows_.size());
+        
+        for (int offset = 0; offset < max_search_range; ++offset) {
+            int search_dir = (offset % 2 == 0) ? (offset / 2) : -(offset + 1) / 2;
+            int try_row = best_row_idx + search_dir;
+            
+            if (try_row < 0 || try_row >= static_cast<int>(rows_.size())) continue;
+            
+            // Capacity check
+            if (row_usage[try_row] + cell_w <= core_width + 1e-5) {
+                final_row_idx = try_row;
+                break;
+            }
+        }
+        
+        // Emergency: chip full
+        if (final_row_idx == -1) {
+            std::cerr << "CRITICAL WARNING: Chip is 100% full! Cannot place cell " << cell->getName() << std::endl;
+            final_row_idx = std::max(0, std::min(best_row_idx, (int)rows_.size()-1));
+        }
+        
+        // Place cell
+        rows_[final_row_idx].cells.push_back(cell);
+        row_usage[final_row_idx] += cell_w;
+        snapCellToRow(cell, final_row_idx);
+    }
+    
+    // Re-sort by X for Abacus
     for (auto& row : rows_) {
         std::sort(row.cells.begin(), row.cells.end(), 
             [this](Cell* a, Cell* b) {
@@ -312,29 +336,43 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
     debugLog("Row " + std::to_string(row.index) + " reduced to " + 
              std::to_string(row.clusters.size()) + " clusters");
     
-    // 4. Write back final positions
+// Right-to-Left compaction to fix boundary pile-up
+    double current_right_limit = row.max_x;
+    
+    // Process from right to left
+    for (int i = row.clusters.size() - 1; i >= 0; --i) {
+        AbacusCluster& cluster = row.clusters[i];
+        
+        // Push back if exceeds boundary
+        if (cluster.x + cluster.width > current_right_limit) {
+            cluster.x = current_right_limit - cluster.width;
+        }
+        
+        // Update limit for next cluster
+        current_right_limit = cluster.x;
+    }
+    
+    // Handle left boundary overflow
+    if (!row.clusters.empty() && row.clusters[0].x < row.min_x) {
+        std::cerr << "Warning: Row " << row.index << " is OVER-UTILIZED! Cells cannot fit." << std::endl;
+        // Force left alignment
+        row.clusters[0].x = row.min_x;
+        for(size_t i=1; i<row.clusters.size(); ++i) {
+            row.clusters[i].x = row.clusters[i-1].x + row.clusters[i-1].width;
+        }
+    }
+
+    // Step 4. Write back final positions
     for (auto& cluster : row.clusters) {
         double current_x = cluster.x;
         
-        // Boundary checking (Clamp to row boundaries)
-        if (current_x < row.min_x) {
-            current_x = row.min_x;
-            debugLog("  Clamped cluster to left boundary: " + std::to_string(current_x));
-        }
-        if (current_x + cluster.width > row.max_x) {
-            current_x = row.max_x - cluster.width;
-            debugLog("  Clamped cluster to right boundary: " + std::to_string(current_x));
-        }
-        
-        // Place each cell in the cluster
+        // Place sequentially (boundary handled above)
         for (Cell* cell : cluster.cells) {
             const auto& cell_info = db_->getCellInfo(cell);
             
-            // Set final coordinates
             cell->setPosition(current_x, row.y_coordinate);
-            db_->placeCell(cell, current_x, row.y_coordinate);  // Sync with DB
+            db_->placeCell(cell, current_x, row.y_coordinate);
             
-            // Next cell goes right after this one
             current_x += cell_info.width;
         }
     }
@@ -384,18 +422,31 @@ void AbacusLegalizer::snapToSiteGrid() {
             // Calculate the nearest site position that doesn't violate the boundary
             // We want: snapped_x >= current_x_limit
             double raw_x = cell_info.x;
-            double snapped_x = std::round(raw_x / site_width) * site_width;
             
-            // If snapped position would cause overlap, move to next available site
-            if (snapped_x < current_x_limit) {
-                snapped_x = std::ceil(current_x_limit / site_width) * site_width;
+            // [FIX] Apply epsilon tolerance for floating-point precision issues
+            double snapped_x;
+            
+            // Check if the cell is already effectively aligned (considering floating-point errors)
+            if (isSiteAligned(raw_x, site_width, 1e-9)) {
+                // Cell is already effectively aligned, keep original position to avoid unnecessary movement
+                snapped_x = raw_x;
+            } else {
+                // Calculate the nearest site position
+                double ratio = raw_x / site_width;
+                double rounded_ratio = std::round(ratio);
+                snapped_x = rounded_ratio * site_width;
             }
             
-            // Ensure we're still within row boundaries
-            if (snapped_x + cell_width > row.max_x) {
+            // If snapped position would cause overlap, move to next available site
+            if (!isEqual(snapped_x, current_x_limit) && snapped_x < current_x_limit) {
+                double limit_ratio = current_x_limit / site_width;
+                snapped_x = std::ceil(limit_ratio) * site_width;
+            }
+            
+// Allow slight overflow over creating overlap
+            if (snapped_x + cell_width > row.max_x + 1e-9) {
                 std::cerr << "Warning: Cell " << cell->getName() 
-                         << " would exceed row boundary after site alignment" << std::endl;
-                snapped_x = std::max(row.min_x, row.max_x - cell_width);
+                         << " slightly exceeds boundary after site alignment (overflow preferred over overlap)" << std::endl;
             }
             
             // Place the cell at the snapped position
@@ -407,6 +458,21 @@ void AbacusLegalizer::snapToSiteGrid() {
     }
     
     std::cout << "  Site alignment completed" << std::endl;
+}
+
+// ============================================================================
+// Utility Functions Implementation
+// ============================================================================
+
+bool AbacusLegalizer::isEqual(double a, double b, double epsilon) const {
+    return std::abs(a - b) < epsilon;
+}
+
+bool AbacusLegalizer::isSiteAligned(double value, double site_width, double epsilon) const {
+    double ratio = value / site_width;
+    double rounded_ratio = std::round(ratio);
+    double aligned_value = rounded_ratio * site_width;
+    return isEqual(value, aligned_value, epsilon * site_width);
 }
 
 } // namespace mini
