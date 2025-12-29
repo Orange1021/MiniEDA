@@ -172,6 +172,10 @@ void PlacerEngine::runDetailedPlacement() {
     
     std::cout << "  Final HPWL after detailed placement: " << current_hpwl_ << std::endl;
     
+    // Check for overlaps after detailed placement
+    bool has_overlaps = hasOverlaps();
+    std::cout << "  Overlap check after detailed placement: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
+    
     // Visualize final result
     if (viz_) {
         viz_->drawPlacementWithRunId("detailed", run_id_);

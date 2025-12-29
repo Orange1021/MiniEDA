@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
+#include <map>
 
 namespace mini {
 
@@ -51,6 +52,9 @@ void DetailedPlacer::run() {
                   << improvement << "%" << std::endl;
         std::cout << "  Site alignment: " << aligned_count << "/" << total_count 
                   << " (" << std::fixed << std::setprecision(1) << alignment_rate << "%)" << std::endl;
+        // Reset cout precision to avoid affecting subsequent output
+        std::cout.unsetf(std::ios::fixed);
+        std::cout.precision(6);
     }
     
     debugLog("Detailed placement optimization completed");
@@ -153,6 +157,15 @@ void DetailedPlacer::detailedReordering() {
     auto rows = getCellsByRow();
     int total_improvements = 0;
     
+    // Print row analysis for debugging
+    if (verbose_) {
+        std::cout << "  [DEBUG] Row analysis:" << std::endl;
+        for (size_t i = 0; i < rows.size(); ++i) {
+            std::cout << "    Row " << i << ": " << rows[i].size() << " cells (y=" 
+                      << (rows[i].empty() ? 0.0 : db_->getCellInfo(rows[i][0]).y) << ")" << std::endl;
+        }
+    }
+    
     for (auto& row_cells : rows) {
         if (row_cells.size() < 3) continue;  // Need at least 3 cells for sliding window
         
@@ -169,9 +182,29 @@ void DetailedPlacer::detailedReordering() {
             // Get starting X coordinate (should be site-aligned)
             double start_x = db_->getCellInfo(window[0]).x;
             
+            // Debug: Print window before optimization
+            if (verbose_ && i < 3) {  // Only print first few windows
+                std::cout << "  [DEBUG] Window " << i << ": ";
+                for (size_t j = 0; j < window.size(); ++j) {
+                    auto& info = db_->getCellInfo(window[j]);
+                    std::cout << window[j]->getName() << "(" << info.x << ") ";
+                }
+                std::cout << "start_x=" << start_x << std::endl;
+            }
+            
             // Optimize this window
             if (optimizeWindow(window, start_x)) {
                 total_improvements++;
+                
+                // Debug: Print window after optimization
+                if (verbose_ && i < 3) {
+                    std::cout << "  [DEBUG] After opt: ";
+                    for (size_t j = 0; j < window.size(); ++j) {
+                        auto& info = db_->getCellInfo(window[j]);
+                        std::cout << window[j]->getName() << "(" << info.x << ") ";
+                    }
+                    std::cout << std::endl;
+                }
                 
                 // Update row_cells with new order
                 row_cells[i] = window[0];
@@ -206,6 +239,10 @@ bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double sta
     double best_hpwl = calculateLocalHPWL(window_cells);
     std::vector<Cell*> best_order = window_cells;
     
+    // Record original physical right boundary
+    double original_end_x = db_->getCellInfo(window_cells.back()).x + 
+                           db_->getCellInfo(window_cells.back()).width;
+    
     // Store original coordinates for rollback
     std::vector<std::pair<double, double>> original_coords;
     for (Cell* cell : window_cells) {
@@ -215,9 +252,27 @@ bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double sta
     
     // Generate all permutations of the window
     do {
-        // === KEY: Site-aligned re-packing ===
-        // Re-pack cells compactly from start_x
+        // Width conservation check
+        double current_perm_width = 0;
+        for(Cell* c : window_cells) current_perm_width += db_->getCellInfo(c).width;
+        
+        // Prevent floating point drift
+        if (start_x + current_perm_width > original_end_x + 1e-9) {
+            continue; // Skip if width changed
+        }
+        
+// Safe to place - re-pack cells compactly from start_x
         rePackToSites(window_cells, start_x);
+        
+        // [CRITICAL] Post-placement boundary verification
+        // Check actual positions after placement to prevent floating point drift
+        double actual_end_x = db_->getCellInfo(window_cells.back()).x + 
+                           db_->getCellInfo(window_cells.back()).width;
+        
+        // If actual placement exceeds boundary, skip this permutation
+        if (actual_end_x > original_end_x + 1e-9) {
+            continue; // Skip due to boundary violation
+        }
         
         // Calculate new HPWL
         double new_hpwl = calculateLocalHPWL(window_cells);
@@ -230,11 +285,18 @@ bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double sta
         
     } while (std::next_permutation(window_cells.begin(), window_cells.end()));
     
-    // Apply best arrangement
+    // Apply best arrangement with final boundary verification
     if (calculateLocalHPWL(best_order) < calculateLocalHPWL(window_cells)) {
         rePackToSites(best_order, start_x);
-        window_cells = best_order;
-        return true;
+        
+        // Final boundary check
+        double final_end_x = db_->getCellInfo(best_order.back()).x + 
+                           db_->getCellInfo(best_order.back()).width;
+        
+        if (final_end_x <= original_end_x + 1e-9) {
+            window_cells = best_order;
+            return true;
+        }
     }
     
     // Restore original arrangement
@@ -246,13 +308,8 @@ bool DetailedPlacer::optimizeWindow(std::vector<Cell*>& window_cells, double sta
 }
 
 void DetailedPlacer::rePackToSites(const std::vector<Cell*>& cells, double start_x) {
-    double site_width = db_->getSiteWidth();
-    
-    // [SAFETY] Ensure start_x is site-aligned
-    if (!isSiteAligned(start_x, site_width)) {
-        debugLog("Warning: start_x is not site-aligned, snapping to nearest site");
-        start_x = std::round(start_x / site_width) * site_width;
-    }
+    // NEVER modify start_x - it's the window left boundary determined by previous cell
+    // If we snap start_x, the entire window shifts right and overlaps with neighbors
     
     double current_x = start_x;
     
@@ -260,15 +317,8 @@ void DetailedPlacer::rePackToSites(const std::vector<Cell*>& cells, double start
         double cell_width = db_->getCellInfo(cell).width;
         double cell_y = db_->getCellInfo(cell).y;
         
-        // [SAFETY] Ensure cell width is site-multiple
-        if (!isSiteAligned(cell_width, site_width)) {
-            debugLog("Warning: cell width is not site-multiple for " + cell->getName());
-        }
-        
-        // Place cell at current position (guaranteed site-aligned)
+        // Place cell directly without any snapping
         db_->placeCell(cell, current_x, cell_y);
-        
-        // Move to next position (width should be site-multiple for alignment)
         current_x += cell_width;
     }
 }
@@ -353,21 +403,27 @@ void DetailedPlacer::debugLog(const std::string& message) const {
 }
 
 std::vector<std::vector<Cell*>> DetailedPlacer::getCellsByRow() {
-    std::unordered_map<double, std::vector<Cell*>> row_map;
+    // Use integer row index instead of floating point Y coordinate
+    std::map<int, std::vector<Cell*>> row_map;
+    double row_height = db_->getRowHeight();
+    const auto& core_area = db_->getCoreArea();
+    double core_y = core_area.y_min;
     
     // Group cells by Y coordinate (row)
     auto all_cells = db_->getAllCells();
     for (Cell* cell : all_cells) {
-        // [FIX 3] Must exclude fixed cells!
+        // Must exclude fixed cells
         if (db_->getCellInfo(cell).fixed) continue;
         
         double y = db_->getCellInfo(cell).y;
-        row_map[y].push_back(cell);
+        // Quantize Y coordinate to row index
+        int row_idx = std::round((y - core_y) / row_height);
+        row_map[row_idx].push_back(cell);
     }
     
     // Convert to vector and sort each row by X coordinate
     std::vector<std::vector<Cell*>> rows;
-    for (auto& [y, cells] : row_map) {
+    for (auto& [idx, cells] : row_map) {
         std::sort(cells.begin(), cells.end(), 
                  [this](Cell* a, Cell* b) {
                      return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
