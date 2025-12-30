@@ -14,7 +14,7 @@ namespace mini {
 // ============================================================================
 
 RoutingGrid::RoutingGrid() 
-    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(2) {
+    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(3) {
     // Grid will be initialized in init() method
 }
 
@@ -45,7 +45,7 @@ void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y) {
     for (int layer = 0; layer < num_layers_; ++layer) {
         grid_[layer].resize(grid_height_);
         for (int y = 0; y < grid_height_; ++y) {
-            grid_[layer][y].resize(grid_width_, GridState::FREE);
+            grid_[layer][y].resize(grid_width_, GridNode(GridState::FREE, 0));
         }
     }
     
@@ -79,38 +79,77 @@ GridPoint RoutingGrid::physToGrid(double x, double y, int layer) const {
     return GridPoint(gx, gy, layer);
 }
 
-std::vector<GridPoint> RoutingGrid::getNeighbors(const GridPoint& current) const {
+std::vector<GridPoint> RoutingGrid::getNeighbors(const GridPoint& current, int current_net_id) const {
     std::vector<GridPoint> neighbors;
     
     if (!isValid(current)) {
         return neighbors;  // Empty list for invalid points
     }
     
-    // Same-layer movement (Routing Constraints)
-    if (current.layer == 0) {  // M1: Horizontal preferred
-        // Left (x-1)
-        if (current.x > 0) {
-            neighbors.emplace_back(current.x - 1, current.y, current.layer);
-        }
-        // Right (x+1)
-        if (current.x < grid_width_ - 1) {
-            neighbors.emplace_back(current.x + 1, current.y, current.layer);
-        }
-    } else if (current.layer == 1) {  // M2: Vertical preferred
-        // Up (y+1)
-        if (current.y < grid_height_ - 1) {
-            neighbors.emplace_back(current.x, current.y + 1, current.layer);
-        }
-        // Down (y-1)
-        if (current.y > 0) {
-            neighbors.emplace_back(current.x, current.y - 1, current.layer);
+    int cx = current.x;
+    int cy = current.y;
+    int cz = current.layer;
+    
+    // Define directions: North, South, West, East
+    // dirs[0] = North (0, +1), dirs[1] = South (0, -1), dirs[2] = West (-1, 0), dirs[3] = East (+1, 0)
+    const int dirs[4][2] = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
+    
+    // === 3-LAYER ROUTING STRATEGY ===
+    // M1 (Layer 0): Access layer - restricted to horizontal (East/West) due to cell obstacles
+    // M2 (Layer 1): Vertical layer - preferred direction North/South for Manhattan routing
+    // M3 (Layer 2): Horizontal layer - preferred direction East/West for long-distance routing
+    
+    // Determine direction range based on layer
+    int start_dir = 0;
+    int end_dir = 4; // Default: try all 4 directions
+    
+    if (cz == 0) {
+        // M1: Only allow horizontal (East/West -> dirs[2], dirs[3])
+        // M1 is heavily blocked by cells, vertical movement is meaningless
+        start_dir = 2;
+        end_dir = 4;
+    } else if (cz == 1) {
+        // M2: Preferred vertical direction (North/South -> dirs[0], dirs[1])
+        // Allow horizontal but with penalty (handled in calculateMovementCost)
+        start_dir = 0;
+        end_dir = 2; // Only North/South for preferred routing
+    } else if (cz == 2) {
+        // M3: Preferred horizontal direction (East/West -> dirs[2], dirs[3])
+        // This is the new horizontal freeway!
+        start_dir = 2;
+        end_dir = 4;
+    }
+    
+    for (int i = start_dir; i < end_dir; ++i) {
+        int nx = cx + dirs[i][0];
+        int ny = cy + dirs[i][1];
+        GridPoint neighbor(nx, ny, cz);
+        
+        // Check if planar neighbor is valid with enemy/friend identification
+        if (isValid(neighbor) && isFree(neighbor, current_net_id)) {
+            neighbors.emplace_back(neighbor);
         }
     }
     
-    // Inter-layer movement (Via)
-    // Always allow via to the other layer at same coordinates
-    int other_layer = 1 - current.layer;  // 0 -> 1, 1 -> 0
-    neighbors.emplace_back(current.x, current.y, other_layer);
+    // === 3. Vertical movement (Via) - 3-LAYER ESCAPE ROUTES ===
+    // Support M1<->M2 and M2<->M3 vias
+    
+    // Try to go up (Up)
+    if (cz + 1 < num_layers_) {
+        GridPoint up_neighbor(cx, cy, cz + 1);
+        // Via requires both current and target to be valid
+        if (isValid(up_neighbor) && isFree(up_neighbor, current_net_id)) {
+            neighbors.emplace_back(up_neighbor);
+        }
+    }
+    
+    // Try to go down (Down)
+    if (cz - 1 >= 0) {
+        GridPoint down_neighbor(cx, cy, cz - 1);
+        if (isValid(down_neighbor) && isFree(down_neighbor, current_net_id)) {
+            neighbors.emplace_back(down_neighbor);
+        }
+    }
     
     return neighbors;
 }
@@ -134,8 +173,9 @@ void RoutingGrid::addObstacle(const Rect& phys_rect, int layer) {
     // Don't override ROUTED cells with OBSTACLE (improvement)
     for (int y = min_y; y <= max_y; ++y) {
         for (int x = min_x; x <= max_x; ++x) {
-            if (grid_[layer][y][x] != GridState::ROUTED) {
-                grid_[layer][y][x] = GridState::OBSTACLE;
+            if (grid_[layer][y][x].state != GridState::ROUTED) {
+                grid_[layer][y][x].state = GridState::OBSTACLE;
+                grid_[layer][y][x].net_id = 0;
             }
         }
     }
@@ -149,22 +189,50 @@ GridState RoutingGrid::getState(const GridPoint& gp) const {
     if (!isValid(gp)) {
         throw std::out_of_range("Grid point out of bounds");
     }
-    return grid_[gp.layer][gp.y][gp.x];
+    return grid_[gp.layer][gp.y][gp.x].state;
 }
 
-void RoutingGrid::setState(const GridPoint& gp, GridState state) {
+int RoutingGrid::getNetId(const GridPoint& gp) const {
     if (!isValid(gp)) {
         throw std::out_of_range("Grid point out of bounds");
     }
-    grid_[gp.layer][gp.y][gp.x] = state;
+    return grid_[gp.layer][gp.y][gp.x].net_id;
 }
 
-bool RoutingGrid::isFree(const GridPoint& gp) const {
+void RoutingGrid::setState(const GridPoint& gp, GridState state, int net_id) {
+    if (!isValid(gp)) {
+        throw std::out_of_range("Grid point out of bounds");
+    }
+    grid_[gp.layer][gp.y][gp.x].state = state;
+    grid_[gp.layer][gp.y][gp.x].net_id = net_id;
+}
+
+bool RoutingGrid::isFree(const GridPoint& gp, int current_net_id) const {
     if (!isValid(gp)) {
         return false;  // Out of bounds is not free
     }
-    GridState state = grid_[gp.layer][gp.y][gp.x];
-    return state == GridState::FREE || state == GridState::PIN;
+    
+    const GridNode& node = grid_[gp.layer][gp.y][gp.x];
+    
+    // Always allow access to FREE and PIN
+    if (node.state == GridState::FREE || node.state == GridState::PIN) {
+        return true;
+    }
+    
+    // **CRITICAL FIX**: Enemy vs Friend identification for ROUTED cells
+    if (node.state == GridState::ROUTED) {
+        // Friend: same net_id -> allow access (no additional cost)
+        if (node.net_id == current_net_id) {
+            return true;
+        }
+        // Enemy: different net_id -> block access
+        else {
+            return false;
+        }
+    }
+    
+    // OBSTACLE and other states are not free
+    return false;
 }
 
 // ============================================================================
@@ -182,18 +250,20 @@ void RoutingGrid::clear() {
     for (int layer = 0; layer < num_layers_; ++layer) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
-                grid_[layer][y][x] = GridState::FREE;
+                grid_[layer][y][x].state = GridState::FREE;
+                grid_[layer][y][x].net_id = 0;
             }
         }
     }
 }
 
-void RoutingGrid::markPath(const std::vector<GridPoint>& path) {
+void RoutingGrid::markPath(const std::vector<GridPoint>& path, int net_id) {
     for (const auto& gp : path) {
         if (isValid(gp)) {
             // Don't override PIN states, but mark everything else as ROUTED
-            if (grid_[gp.layer][gp.y][gp.x] != GridState::PIN) {
-                grid_[gp.layer][gp.y][gp.x] = GridState::ROUTED;
+            if (grid_[gp.layer][gp.y][gp.x].state != GridState::PIN) {
+                grid_[gp.layer][gp.y][gp.x].state = GridState::ROUTED;
+                grid_[gp.layer][gp.y][gp.x].net_id = net_id;
             }
         }
     }

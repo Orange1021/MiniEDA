@@ -20,6 +20,7 @@ namespace mini {
     class Net;
     class Pin;
     class LefPinMapper;
+    class PlacerDB;
 }
 
 namespace mini {
@@ -73,6 +74,7 @@ class MazeRouter {
 private:
     RoutingGrid* grid_;
     LefPinMapper* pin_mapper_;  ///< [Key] Unified Key generator
+    PlacerDB* placer_db_;       ///< Placement database for Steiner tree building
     
     // --- Cost Parameters ---
     double via_cost_ = 10.0;              ///< Via cost (expensive, minimize usage)
@@ -83,14 +85,23 @@ private:
     int failed_nets_ = 0;
     double total_wirelength_ = 0.0;
     int total_vias_ = 0;
+    
+    // **NEW**: Segments-level statistics for accurate reporting
+    int total_segments_attempted_ = 0;
+    int total_segments_succeeded_ = 0;
+    int total_segments_failed_ = 0;
+    
+    // **CRITICAL FIX**: Current net ID for enemy/friend identification
+    int current_net_id_ = 0;
 
 public:
     /**
      * @brief Constructor
      * @param grid Pointer to routing grid
      * @param pin_mapper Pointer to pin mapper for key generation
+     * @param placer_db Pointer to placement database (for Steiner tree building)
      */
-    MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper);
+    MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper, PlacerDB* placer_db = nullptr);
     
     /**
      * @brief Unified entry point for routing a net
@@ -120,6 +131,15 @@ public:
     int getFailedNets() const { return failed_nets_; }
     double getTotalWirelength() const { return total_wirelength_; }
     int getTotalVias() const { return total_vias_; }
+    
+    // **NEW**: Segments-level statistics
+    int getTotalSegmentsAttempted() const { return total_segments_attempted_; }
+    int getTotalSegmentsSucceeded() const { return total_segments_succeeded_; }
+    int getTotalSegmentsFailed() const { return total_segments_failed_; }
+    double getSegmentSuccessRate() const { 
+        return (total_segments_attempted_ > 0) ? 
+            (double)total_segments_succeeded_ / total_segments_attempted_ * 100.0 : 0.0; 
+    }
     
     /**
      * @brief Reset statistics
@@ -157,7 +177,7 @@ private:
      * @brief Mark path on routing grid as ROUTED
      * @param path Path to mark
      */
-    void markPath(const std::vector<GridPoint>& path);
+    void markPath(const std::vector<GridPoint>& path, int net_id = 0);
     
     /**
      * @brief Calculate wire length of a path

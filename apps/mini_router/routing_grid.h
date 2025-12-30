@@ -59,6 +59,23 @@ struct GridPointHash {
 };
 
 // ============================================================================
+// Grid Node Structure
+// ============================================================================
+
+/**
+ * @struct GridNode
+ * @brief Individual grid cell with state and ownership information
+ */
+struct GridNode {
+    GridState state;      ///< Current state of the cell
+    int net_id;          ///< Owner net ID (0 = unowned, >0 = net ID)
+    
+    // Constructor
+    GridNode() : state(GridState::FREE), net_id(0) {}
+    GridNode(GridState s, int id = 0) : state(s), net_id(id) {}
+};
+
+// ============================================================================
 // RoutingGrid Class
 // ============================================================================
 
@@ -76,12 +93,12 @@ private:
     // --- Discrete Dimensions (calculated) ---
     int grid_width_;      ///< Total number of X-direction cells
     int grid_height_;     ///< Total number of Y-direction cells
-    int num_layers_;      ///< Number of layers (fixed to 2)
+    int num_layers_;      ///< Number of layers (upgraded to 3: M1, M2, M3)
 
     // --- Core Data Storage ---
-    /// 3D array: [layer][y][x] -> GridState
+    /// 3D array: [layer][y][x] -> GridNode
     /// Using nested vectors for dynamic resizing
-    std::vector<std::vector<std::vector<GridState>>> grid_;
+    std::vector<std::vector<std::vector<GridNode>>> grid_;
 
 public:
     // Constructor
@@ -90,18 +107,19 @@ public:
     // Core Methods
     void init(const Rect& core_area, double pitch_x, double pitch_y);
     GridPoint physToGrid(double x, double y, int layer) const;
-    std::vector<GridPoint> getNeighbors(const GridPoint& current) const;
+    std::vector<GridPoint> getNeighbors(const GridPoint& current, int current_net_id = 0) const;
     void addObstacle(const Rect& phys_rect, int layer);
     
     // State Management
     GridState getState(const GridPoint& gp) const;
-    void setState(const GridPoint& gp, GridState state);
-    bool isFree(const GridPoint& gp) const;
+    void setState(const GridPoint& gp, GridState state, int net_id = 0);
+    bool isFree(const GridPoint& gp, int current_net_id = 0) const;
+    int getNetId(const GridPoint& gp) const;
     
     // Utility Methods
     bool isValid(const GridPoint& gp) const;
     void clear();
-    void markPath(const std::vector<GridPoint>& path);
+    void markPath(const std::vector<GridPoint>& path, int net_id = 0);
     
     // Getters
     int getGridWidth() const { return grid_width_; }

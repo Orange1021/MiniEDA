@@ -216,7 +216,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         
         // Phase 7: Run maze routing
         LefPinMapper pin_mapper(*lef_lib, macro_mapper);
-        MazeRouter router(&routing_grid, &pin_mapper);
+        MazeRouter router(&routing_grid, &pin_mapper, placer_db.get());
         router.setViaCost(config.via_cost);
         router.setWireCostPerUnit(config.wire_cost);
         
@@ -224,6 +224,8 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             std::cout << "Routing " << netlist_db->getNumNets() << " nets..." << std::endl;
         }
         
+        // **CRITICAL FIX**: Net ordering optimization - small nets first
+        std::vector<Net*> nets_to_route;
         for (const auto& net_ptr : netlist_db->getNets()) {
             Net* net = net_ptr.get();
             if (!net) continue;
@@ -233,20 +235,90 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 continue;
             }
             
+            nets_to_route.push_back(net);
+        }
+        
+        // Sort nets by HPWL (Half-Perimeter Wire Length) - small nets first
+        std::sort(nets_to_route.begin(), nets_to_route.end(), 
+            [&pin_locations](Net* a, Net* b) {
+                // Calculate HPWL for net A
+                double hpwl_a = std::numeric_limits<double>::max();
+                auto pins_a = a->getAllPins();
+                if (!pins_a.empty()) {
+                    double min_x = std::numeric_limits<double>::max();
+                    double max_x = std::numeric_limits<double>::lowest();
+                    double min_y = std::numeric_limits<double>::max();
+                    double max_y = std::numeric_limits<double>::lowest();
+                    
+                    for (Pin* pin : pins_a) {
+                        std::string pin_key = pin->getOwner()->getName() + ":" + pin->getName();
+                        auto it = pin_locations.find(pin_key);
+                        if (it != pin_locations.end()) {
+                            const Point& p = it->second;
+                            min_x = std::min(min_x, p.x);
+                            max_x = std::max(max_x, p.x);
+                            min_y = std::min(min_y, p.y);
+                            max_y = std::max(max_y, p.y);
+                        }
+                    }
+                    hpwl_a = (max_x - min_x) + (max_y - min_y);
+                }
+                
+                // Calculate HPWL for net B
+                double hpwl_b = std::numeric_limits<double>::max();
+                auto pins_b = b->getAllPins();
+                if (!pins_b.empty()) {
+                    double min_x = std::numeric_limits<double>::max();
+                    double max_x = std::numeric_limits<double>::lowest();
+                    double min_y = std::numeric_limits<double>::max();
+                    double max_y = std::numeric_limits<double>::lowest();
+                    
+                    for (Pin* pin : pins_b) {
+                        std::string pin_key = pin->getOwner()->getName() + ":" + pin->getName();
+                        auto it = pin_locations.find(pin_key);
+                        if (it != pin_locations.end()) {
+                            const Point& p = it->second;
+                            min_x = std::min(min_x, p.x);
+                            max_x = std::max(max_x, p.x);
+                            min_y = std::min(min_y, p.y);
+                            max_y = std::max(max_y, p.y);
+                        }
+                    }
+                    hpwl_b = (max_x - min_x) + (max_y - min_y);
+                }
+                
+                // Small HPWL first (ascending order)
+                return hpwl_a < hpwl_b;
+            });
+        
+        // Route nets in optimized order
+        for (Net* net : nets_to_route) {
             RoutingResult result = router.routeNet(net, pin_locations);
             if (result.success) {
                 results.push_back(result);
             }
         }
         
-        if (config.verbose) {
+        {
             double total_wirelength;
             int total_vias, routed_count, failed_count;
             getRoutingStatistics(results, total_wirelength, total_vias, routed_count, failed_count);
             
+            // **NEW**: Get segments-level statistics for accurate reporting
+            int segments_attempted = router.getTotalSegmentsAttempted();
+            int segments_succeeded = router.getTotalSegmentsSucceeded();
+            int segments_failed = router.getTotalSegmentsFailed();
+            double segment_success_rate = router.getSegmentSuccessRate();
+            
             std::cout << "  Routing completed: " << routed_count << " successful, " 
                       << failed_count << " failed" << std::endl;
-            std::cout << "  Statistics:" << std::endl;
+            std::cout << "  **CORRECTED Statistics (Segments-Level):**" << std::endl;
+            std::cout << "    Segments attempted: " << segments_attempted << std::endl;
+            std::cout << "    Segments succeeded: " << segments_succeeded << std::endl;
+            std::cout << "    Segments failed: " << segments_failed << std::endl;
+            std::cout << "    Real success rate: " << std::fixed << std::setprecision(1) 
+                      << segment_success_rate << "%" << std::endl;
+            std::cout << "  Traditional Statistics (Network-Level):" << std::endl;
             std::cout << "    Total wirelength: " << total_wirelength << std::endl;
             std::cout << "    Total vias: " << total_vias << std::endl;
         }

@@ -21,12 +21,13 @@ struct RoutingResult;
 /**
  * @struct RoutingConfig
  * @brief Configuration parameters for routing
+ * @note Uses AppConfig as single source of truth for routing parameters
  */
 struct RoutingConfig {
     std::string lef_file;           // LEF physical library file
     std::string liberty_file;       // Liberty timing library file
-    double via_cost = 10.0;         // Via penalty cost multiplier
-    double wire_cost = 1.0;         // Wire cost per unit length
+    double via_cost;                // Via penalty cost multiplier (from AppConfig)
+    double wire_cost;                // Wire cost per unit length (from AppConfig)
     bool verbose = false;           // Enable verbose output
     std::string run_id = "routing";  // Run identifier for output files
 };
