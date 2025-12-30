@@ -101,21 +101,7 @@ private:
      */
     void detailedReordering();
 
-    /**
-     * @brief Optimize a single window of cells
-     * @param window_cells Cells in the current window
-     * @param start_x Starting X coordinate of the window
-     * @return True if improvement was found
-     */
-    bool optimizeWindow(std::vector<Cell*>& window_cells, double start_x);
-
-    /**
-     * @brief Re-pack cells in site-aligned manner
-     * @details Places cells compactly from start_x, maintaining site alignment
-     * @param cells Cells to re-pack
-     * @param start_x Starting X coordinate (must be site-aligned)
-     */
-    void rePackToSites(const std::vector<Cell*>& cells, double start_x);
+    
 
     /**
      * @brief Calculate HPWL for a subset of cells
@@ -166,11 +152,13 @@ private:
      */
     std::pair<int, int> verifySiteAlignment() const;
 
+    
+
     /**
-     * @brief Export detailed placement result for visualization
-     * @param filename Output CSV filename
+     * @brief Verify that no overlaps exist in the final placement
+     * @details Comprehensive overlap check with detailed reporting
      */
-    void exportResult(const std::string& filename) const;
+    void verifyNoOverlaps() const;
 
     /**
      * @brief Check if cells are contiguous (no gaps between them)

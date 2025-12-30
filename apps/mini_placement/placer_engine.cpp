@@ -8,6 +8,7 @@
 #include "abacus_legalizer.h"
 #include "greedy_legalizer.h"
 #include "legalizer.h"
+#include "overlap_detector.h"
 #include "../../lib/include/hpwl_calculator.h"
 #include "../../lib/include/visualizer.h"
 #include <iostream>
@@ -143,7 +144,8 @@ void PlacerEngine::runLegalization() {
     current_hpwl_ = final_hpwl;
     
     // Verify no overlaps
-    bool has_overlaps = hasOverlaps();
+    OverlapDetector legal_detector(db_);
+    bool has_overlaps = legal_detector.hasOverlaps();
     std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
     
     // Visualize the result
@@ -173,8 +175,8 @@ void PlacerEngine::runDetailedPlacement() {
     std::cout << "  Final HPWL after detailed placement: " << current_hpwl_ << std::endl;
     
     // Check for overlaps after detailed placement
-    bool has_overlaps = hasOverlaps();
-    std::cout << "  Overlap check after detailed placement: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
+    OverlapDetector detector(db_);
+    detector.generateReport("DETAILED PLACEMENT OVERLAP ANALYSIS", false);
     
     // Visualize final result
     if (viz_) {
@@ -303,79 +305,15 @@ void PlacerEngine::calculateNetBoundingBox(const Net* net,
 bool PlacerEngine::hasOverlaps() const {
     if (!db_) return false;
     
-    // Check all pairs of cells for overlaps
-    auto cells = db_->getAllCells();
-    int overlap_count = 0;
-    
-    for (size_t i = 0; i < cells.size(); ++i) {
-        for (size_t j = i + 1; j < cells.size(); ++j) {
-            const auto& info1 = db_->getCellInfo(cells[i]);
-            const auto& info2 = db_->getCellInfo(cells[j]);
-            
-            // Check if rectangles overlap
-            double right1 = info1.x + info1.width;
-            double right2 = info2.x + info2.width;
-            double top1 = info1.y + info1.height;
-            double top2 = info2.y + info2.height;
-            
-            // Add small epsilon to handle floating-point precision issues
-            // True overlap means actual intersection, not just edge touching
-            const double EPSILON = 1e-9;
-            
-            bool x_overlap = !(right1 <= info2.x + EPSILON || right2 <= info1.x + EPSILON);
-            bool y_overlap = !(top1 <= info2.y + EPSILON || top2 <= info1.y + EPSILON);
-            
-            if (x_overlap && y_overlap) {
-                overlap_count++;
-                if (overlap_count <= 3) {  // Only print first 3 overlaps to avoid spam
-                    std::cout << "    OVERLAP DETECTED: " << cells[i]->getName() 
-                              << " and " << cells[j]->getName() << std::endl;
-                    std::cout << "      " << cells[i]->getName() << ": (" << info1.x 
-                              << "," << info1.y << ") size=" << info1.width << "x" << info1.height 
-                              << " -> x:[" << info1.x << "," << right1 << "] y:[" << info1.y << "," << top1 << "]" << std::endl;
-                    std::cout << "      " << cells[j]->getName() << ": (" << info2.x 
-                              << "," << info2.y << ") size=" << info2.width << "x" << info2.height 
-                              << " -> x:[" << info2.x << "," << right2 << "] y:[" << info2.y << "," << top2 << "]" << std::endl;
-                    std::cout << "      x_overlap=" << x_overlap << " (right1=" << right1 << " <= x2=" << info2.x << "=" << (right1 <= info2.x) 
-                              << " OR right2=" << right2 << " <= x1=" << info1.x << "=" << (right2 <= info1.x) << ")" << std::endl;
-                    std::cout << "      y_overlap=" << y_overlap << " (top1=" << top1 << " <= y2=" << info2.y << "=" << (top1 <= info2.y) 
-                              << " OR top2=" << top2 << " <= y1=" << info1.y << "=" << (top2 <= info1.y) << ")" << std::endl;
-                }
-            }
-        }
-    }
-    
-    if (overlap_count > 0) {
-        std::cout << "    Total overlaps found: " << overlap_count << std::endl;
-    }
-    
-    return overlap_count > 0;
+    OverlapDetector detector(db_);
+    return detector.hasOverlaps();
 }
 
 double PlacerEngine::calculateTotalOverlap() const {
     if (!db_) return 0.0;
     
-    double total_overlap = 0.0;
-    auto cells = db_->getAllCells();
-    
-    for (size_t i = 0; i < cells.size(); ++i) {
-        for (size_t j = i + 1; j < cells.size(); ++j) {
-            const auto& info1 = db_->getCellInfo(cells[i]);
-            const auto& info2 = db_->getCellInfo(cells[j]);
-            
-            // Calculate overlap area
-            double x_overlap = std::min(info1.x + info1.width, info2.x + info2.width) - 
-                              std::max(info1.x, info2.x);
-            double y_overlap = std::min(info1.y + info1.height, info2.y + info2.height) - 
-                              std::max(info1.y, info2.y);
-            
-            if (x_overlap > 0 && y_overlap > 0) {
-                total_overlap += x_overlap * y_overlap;
-            }
-        }
-    }
-    
-    return total_overlap;
+    OverlapDetector detector(db_);
+    return detector.calculateTotalOverlap();
 }
 
 void PlacerEngine::runBasicStrategy() {

@@ -90,8 +90,12 @@ $(BUILD_LIB_DIR)/density_grid.o: $(PLACEMENT_DIR)/density_grid.cpp
 	@mkdir -p $(BUILD_LIB_DIR)
 	$(CXX) $(CXXFLAGS) -c $< -o $@
 
+$(BUILD_LIB_DIR)/overlap_detector.o: $(PLACEMENT_DIR)/overlap_detector.cpp
+	@mkdir -p $(BUILD_LIB_DIR)
+	$(CXX) $(CXXFLAGS) -c $< -o $@
+
 # Link Integrated Flow executable
-$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(ALL_LIB_OBJS) $(BUILD_LIB_DIR)/legalizer.o $(BUILD_LIB_DIR)/greedy_legalizer.o $(BUILD_LIB_DIR)/abacus_legalizer.o $(BUILD_LIB_DIR)/density_grid.o | $(BUILD_BIN_DIR)
+$(BUILD_BIN_DIR)/mini_flow: $(BUILD_LIB_DIR)/flow_main_flow.o $(ALL_LIB_OBJS) $(BUILD_LIB_DIR)/legalizer.o $(BUILD_LIB_DIR)/greedy_legalizer.o $(BUILD_LIB_DIR)/abacus_legalizer.o $(BUILD_LIB_DIR)/density_grid.o $(BUILD_LIB_DIR)/overlap_detector.o | $(BUILD_BIN_DIR)
 	$(CXX) $(CXXFLAGS) $(filter %.o,$^) -o $@ $(LDFLAGS)
 	@echo "MiniEDA Integrated Flow compilation completed: $@"
 

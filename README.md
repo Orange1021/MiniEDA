@@ -82,7 +82,9 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
   - Abacus optimization-based legalization with right-to-left compaction
   - Capacity-aware row distribution to prevent boundary overflow
   - Floating-point precision handling for site alignment
-- Detailed placement with contiguity checking and safe optimization
+- Detailed placement with equal-width cell swapping strategy
+- OverlapDetector utility for comprehensive overlap analysis and boundary touch detection
+- Zero-overlap guarantee through spatial conservation principles
 - Python matplotlib-based visualization with algorithm comparison
 - Multi-strategy cell mapping with drive strength variants support
 
@@ -163,7 +165,8 @@ MiniEDA/
 │   │   ├── global_placer.h/.cpp   # Advanced global placement
 │   │   ├── density_grid.h/.cpp    # Density grid for electrostatic placement
 │   │   ├── poisson_solver.h/.cpp  # Poisson equation solver
-│   │   └── detailed_placer.h/.cpp  # Detailed placement optimization
+│   │   ├── detailed_placer.h/.cpp  # Detailed placement optimization
+│   │   └── overlap_detector.h/.cpp # Overlap detection utility
 │   ├── mini_router/               # A* maze routing
 │   │   ├── maze_router.h/.cpp     # A* routing engine
 │   │   ├── routing_grid.h/.cpp    # 3D routing grid
@@ -415,7 +418,8 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
 - Hybrid cascade placement (warm-up + electrostatic refinement)
 - Enhanced legalization algorithms (Greedy + Abacus with right-to-left compaction)
 - Capacity-aware row distribution and floating-point precision handling
-- Detailed placement with contiguity checking and safe optimization
+- Detailed placement with equal-width cell swapping and spatial conservation
+- OverlapDetector utility for precise overlap analysis and boundary detection
 - Unified HPWL calculator for consistent wire length estimation
 - Advanced density grid with Poisson equation solver
 
@@ -440,9 +444,10 @@ Test suite location: `benchmarks/ISCAS/Verilog/`
   - Unified HPWL calculator eliminating code duplication
   - Advanced global placement with electrostatic modeling and Poisson solver
   - Hybrid cascade placement with warm-up and momentum optimization
-  - Detailed placement with contiguity checking and safe optimization
+  - Detailed placement with equal-width swapping and zero-overlap guarantee
+  - OverlapDetector utility for comprehensive overlap analysis
 - **STA Engine**: 12 major simplifications resolved for industrial-grade accuracy
-- **Placement Algorithms**: 3 global placement (basic, momentum, hybrid) + 2 legalization strategies + detailed optimization
+- **Placement Algorithms**: 3 global placement (basic, momentum, hybrid) + 2 legalization strategies + equal-width detailed placement
 - **Code Quality**: Professional English comments, maximum compatibility maintained
 
 ## Contribution Guidelines
@@ -467,6 +472,6 @@ For questions, suggestions, or bug reports, please use GitHub Issues.
 
 ---
 
-**Project Status**: MiniEDA Industrial Suite - Complete EDA Flow
+**Project Status**: MiniEDA Industrial Suite - Complete EDA Flow with Robust Detailed Placement
 
-**Note**: This is an educational project demonstrating core EDA algorithms. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.
+**Note**: This is an educational project demonstrating core EDA algorithms. The detailed placement implementation now features equal-width cell swapping with zero-overlap guarantee and comprehensive overlap analysis. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.
