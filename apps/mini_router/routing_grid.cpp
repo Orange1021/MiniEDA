@@ -54,6 +54,91 @@ void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y) {
     std::cout << "Core area: (" << core_area_.x_min << "," << core_area_.y_min 
               << ") to (" << core_area_.x_max << "," << core_area_.y_max << ")" << std::endl;
     std::cout << "Pitch: X=" << pitch_x_ << "um, Y=" << pitch_y_ << "um" << std::endl;
+    
+    // Initialize congestion tracking
+    initializeHistoryCosts();
+}
+
+void RoutingGrid::initializeHistoryCosts() {
+    // Resize history costs matrix to match grid dimensions
+    history_costs_.resize(num_layers_);
+    for (int layer = 0; layer < num_layers_; ++layer) {
+        history_costs_[layer].resize(grid_height_);
+        for (int y = 0; y < grid_height_; ++y) {
+            history_costs_[layer][y].resize(grid_width_, 1.0);  // Base cost = 1.0
+        }
+    }
+}
+
+void RoutingGrid::addHistoryCost(int x, int y, int z, double increment) {
+    GridPoint gp(x, y, z);
+    if (isValid(gp)) {
+        history_costs_[z][y][x] += increment;
+    }
+}
+
+double RoutingGrid::getHistoryCost(int x, int y, int z) const {
+    GridPoint gp(x, y, z);
+    if (isValid(gp)) {
+        return history_costs_[z][y][x];
+    }
+    return 1e9;  // Out of bounds protection - very expensive
+}
+
+void RoutingGrid::clearRoutes() {
+    // Clear all ROUTED states but preserve history costs
+    for (int z = 0; z < num_layers_; ++z) {
+        for (int y = 0; y < grid_height_; ++y) {
+            for (int x = 0; x < grid_width_; ++x) {
+                if (grid_[z][y][x].state == GridState::ROUTED) {
+                    grid_[z][y][x].state = GridState::FREE;
+                    grid_[z][y][x].net_id = 0;
+                }
+            }
+        }
+    }
+}
+
+int RoutingGrid::countConflicts() const {
+    int conflicts = 0;
+    
+    // Count grid points that are used by multiple nets
+    for (int z = 0; z < num_layers_; ++z) {
+        for (int y = 0; y < grid_height_; ++y) {
+            for (int x = 0; x < grid_width_; ++x) {
+                if (grid_[z][y][x].state == GridState::ROUTED) {
+                    // Check if this point is also claimed by another net
+                    // (This is a simplified check - a full implementation would track overlaps)
+                    // For now, we count any ROUTED point as potentially conflicting
+                    conflicts++;
+                }
+            }
+        }
+    }
+    
+    return conflicts;
+}
+
+double RoutingGrid::calculateMovementCost(const GridPoint& from, const GridPoint& to, 
+                                           int current_net_id, double collision_penalty) const {
+    // Base movement cost
+    double base_cost = 1.0;
+    
+    // Get history cost for destination
+    double history_cost = getHistoryCost(to.x, to.y, to.layer);
+    
+    // Check for collision penalty (short circuit cost)
+    double collision_cost = 0.0;
+    if (isValid(to)) {
+        const GridNode& node = grid_[to.layer][to.y][to.x];
+        if (node.state == GridState::ROUTED && node.net_id != current_net_id) {
+            // This is a short circuit - add collision penalty
+            collision_cost = collision_penalty;
+        }
+    }
+    
+    // Total cost = base * history + collision
+    return base_cost * history_cost + collision_cost;
 }
 
 GridPoint RoutingGrid::physToGrid(double x, double y, int layer) const {
@@ -219,19 +304,15 @@ bool RoutingGrid::isFree(const GridPoint& gp, int current_net_id) const {
         return true;
     }
     
-    // **CRITICAL FIX**: Enemy vs Friend identification for ROUTED cells
+    // **PATHFINDER CHANGE**: Allow short circuits for congestion negotiation
+    // Enemy nets can still use this point, but A* algorithm will add cost penalty
     if (node.state == GridState::ROUTED) {
-        // Friend: same net_id -> allow access (no additional cost)
-        if (node.net_id == current_net_id) {
-            return true;
-        }
-        // Enemy: different net_id -> block access
-        else {
-            return false;
-        }
+        // Friend: same net_id -> allow access
+        // Enemy: different net_id -> also allow access (but with penalty in A*)
+        return true;
     }
     
-    // OBSTACLE and other states are not free
+    // OBSTACLE cells are never free
     return false;
 }
 

@@ -80,6 +80,9 @@ private:
     double via_cost_ = 10.0;              ///< Via cost (expensive, minimize usage)
     double wire_cost_per_unit_ = 1.0;     ///< Wire cost per unit length
     
+    // --- PathFinder Parameters ---
+    double collision_penalty_ = 50.0;      ///< Penalty for short circuits (increases with iterations)
+    
     // --- Statistics ---
     int total_routed_nets_ = 0;
     int failed_nets_ = 0;
@@ -125,6 +128,7 @@ public:
     // --- Configuration ---
     void setViaCost(double cost) { via_cost_ = cost; }
     void setWireCostPerUnit(double cost) { wire_cost_per_unit_ = cost; }
+    void setCollisionPenalty(double penalty) { collision_penalty_ = penalty; }
     
     // --- Statistics ---
     int getTotalRoutedNets() const { return total_routed_nets_; }

@@ -21,6 +21,7 @@ namespace mini {
 class Net;
 class Pin;
 class Cell;
+class MacroMapper;
 
 /**
  * @struct Segment
@@ -80,9 +81,13 @@ public:
      * @brief Build routing topology for a net
      * @param net Pointer to the net to process
      * @param db Pointer to placement database for pin coordinates
+     * @param lef_lib Pointer to LEF library for pin geometry data
+     * @param macro_mapper Pointer to macro mapper for cell type mapping
      * @return Vector of segments representing the MST topology
      */
-    static std::vector<Segment> build(Net* net, PlacerDB* db);
+    static std::vector<Segment> build(Net* net, PlacerDB* db, 
+                                     const LefLibrary* lef_lib = nullptr,
+                                     const MacroMapper* macro_mapper = nullptr);
 
 public:
     /**
@@ -105,6 +110,18 @@ static size_t extractPinPoints(Net* net, PlacerDB* db,
                                          std::vector<Point>& nodes, std::vector<Pin*>& pins);
 
 private:
+    
+    /**
+     * @brief Get absolute position of a pin using LEF data
+     * @param pin Pointer to the pin
+     * @param db Pointer to placement database
+     * @param lef_lib Pointer to LEF library
+     * @param macro_mapper Pointer to macro mapper
+     * @return Absolute coordinates of the pin center
+     */
+    static Point getPinAbsolutePosition(Pin* pin, PlacerDB* db, 
+                                        const LefLibrary* lef_lib, 
+                                        const MacroMapper* macro_mapper);
     
     /**
      * @brief Validate input parameters

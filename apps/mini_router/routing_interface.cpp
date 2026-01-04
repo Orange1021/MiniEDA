@@ -291,34 +291,104 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 return hpwl_a < hpwl_b;
             });
         
-        // Route nets in optimized order
-        for (Net* net : nets_to_route) {
-            RoutingResult result = router.routeNet(net, pin_locations);
-            if (result.success) {
-                results.push_back(result);
-            }
-        }
+        // **PATHFINDER ITERATIVE ROUTING**: Congestion negotiation loop
+        const int max_iterations = 8;
+        const double initial_collision_penalty = 50.0;
+        bool solution_found = false;
         
-        {
+        for (int iter = 0; iter < max_iterations && !solution_found; ++iter) {
+            std::cout << "\n>>> PathFinder Iteration " << iter << " <<<" << std::endl;
+            
+            // Set collision penalty for this iteration (increases over time)
+            double current_penalty = initial_collision_penalty * (iter + 1);
+            router.setCollisionPenalty(current_penalty);
+            
+            // Clear previous iteration routes but preserve history costs
+            if (iter > 0) {
+                routing_grid.clearRoutes();
+                
+                // Update history costs based on previous conflicts
+                int conflicts = routing_grid.countConflicts();
+                if (config.verbose) {
+                    std::cout << "  Updating history costs based on " << conflicts << " conflicts" << std::endl;
+                }
+                
+                // Add history penalty to conflicted areas
+                for (int z = 0; z < routing_grid.getNumLayers(); ++z) {
+                    for (int y = 0; y < routing_grid.getGridHeight(); ++y) {
+                        for (int x = 0; x < routing_grid.getGridWidth(); ++x) {
+                            GridPoint gp(x, y, z);
+                            if (routing_grid.getState(gp) == GridState::ROUTED) {
+                                routing_grid.addHistoryCost(x, y, z, 1.0);
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Route nets in optimized order for this iteration
+            results.clear();
+            router.resetStatistics();  // Reset for clean iteration
+            
+            for (Net* net : nets_to_route) {
+                RoutingResult result = router.routeNet(net, pin_locations);
+                
+                // **DIAGNOSTIC PROBE**: Track which networks fail
+                if (!result.success) {
+                    std::cout << "  FAILED NET: " << net->getName() 
+                              << " - Reason: " << result.error_message << std::endl;
+                }
+                
+                results.push_back(result);  // Push all results for accurate statistics
+            }
+            
+            // Check for convergence
+            int conflicts = routing_grid.countConflicts();
             double total_wirelength;
             int total_vias, routed_count, failed_count;
             getRoutingStatistics(results, total_wirelength, total_vias, routed_count, failed_count);
             
-            // **NEW**: Get segments-level statistics for accurate reporting
             int segments_attempted = router.getTotalSegmentsAttempted();
             int segments_succeeded = router.getTotalSegmentsSucceeded();
             int segments_failed = router.getTotalSegmentsFailed();
             double segment_success_rate = router.getSegmentSuccessRate();
             
-            std::cout << "  Routing completed: " << routed_count << " successful, " 
-                      << failed_count << " failed" << std::endl;
-            std::cout << "  **CORRECTED Statistics (Segments-Level):**" << std::endl;
+            std::cout << "  Success: " << routed_count << "/" << nets_to_route.size() 
+                      << " nets, Conflicts: " << conflicts << std::endl;
+            std::cout << "  Segments: " << segments_succeeded << "/" << segments_attempted 
+                      << " (" << std::fixed << std::setprecision(1) << segment_success_rate << "%)" << std::endl;
+            
+            // Check if we have a valid solution (all nets routed, no conflicts)
+            if (conflicts == 0 && routed_count == static_cast<int>(nets_to_route.size())) {
+                std::cout << "\n*** VALID SOLUTION FOUND! ***" << std::endl;
+                solution_found = true;
+            }
+            
+            // Early termination if no improvement in recent iterations
+            if (iter > 2 && conflicts > 50) {
+                std::cout << "\nEarly termination: too many conflicts remaining" << std::endl;
+                break;
+            }
+        }
+        
+        // Final statistics
+        {
+            double total_wirelength;
+            int total_vias, routed_count, failed_count;
+            getRoutingStatistics(results, total_wirelength, total_vias, routed_count, failed_count);
+            
+            int segments_attempted = router.getTotalSegmentsAttempted();
+            int segments_succeeded = router.getTotalSegmentsSucceeded();
+            int segments_failed = router.getTotalSegmentsFailed();
+            double segment_success_rate = router.getSegmentSuccessRate();
+            
+            std::cout << "\n  **PATHFINDER FINAL RESULTS:**" << std::endl;
+            std::cout << "    Networks routed: " << routed_count << "/" << nets_to_route.size() << std::endl;
             std::cout << "    Segments attempted: " << segments_attempted << std::endl;
             std::cout << "    Segments succeeded: " << segments_succeeded << std::endl;
-            std::cout << "    Segments failed: " << segments_failed << std::endl;
             std::cout << "    Real success rate: " << std::fixed << std::setprecision(1) 
                       << segment_success_rate << "%" << std::endl;
-            std::cout << "  Traditional Statistics (Network-Level):" << std::endl;
+            std::cout << "  Traditional Statistics:" << std::endl;
             std::cout << "    Total wirelength: " << total_wirelength << std::endl;
             std::cout << "    Total vias: " << total_vias << std::endl;
         }
@@ -368,12 +438,18 @@ void RoutingInterface::getRoutingStatistics(
     
     total_wirelength = 0.0;
     total_vias = 0;
-    routed_count = static_cast<int>(results.size());
+    routed_count = 0;
     failed_count = 0;
     
     for (const auto& result : results) {
         total_wirelength += result.total_wirelength;
         total_vias += result.total_vias;
+        
+        if (result.success) {
+            routed_count++;
+        } else {
+            failed_count++;
+        }
     }
 }
 

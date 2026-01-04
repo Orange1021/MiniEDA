@@ -168,21 +168,33 @@ RoutingResult MazeRouter::routeNet(Net* net,
         Point start_phys = seg.start;
         Point end_phys = seg.end;
         
-        // Convert to grid coordinates
-        GridPoint start_gp = grid_->physToGrid(start_phys.x, start_phys.y, 0);
-        GridPoint end_gp = grid_->physToGrid(end_phys.x, end_phys.y, 0);
+        // Convert to grid coordinates (initially on M1 layer)
+        GridPoint start_gp_m1 = grid_->physToGrid(start_phys.x, start_phys.y, 0);
+        GridPoint end_gp_m1 = grid_->physToGrid(end_phys.x, end_phys.y, 0);
         
-        // Mark both endpoints as PIN state
-        grid_->setState(start_gp, GridState::PIN);
-        grid_->setState(end_gp, GridState::PIN);
+        // Mark both endpoints as PIN state on M1
+        grid_->setState(start_gp_m1, GridState::PIN);
+        grid_->setState(end_gp_m1, GridState::PIN);
+        
+        // **TARGET ELEVATION STRATEGY**: Try to elevate to M2 if possible
+        GridPoint start_gp = start_gp_m1;  // Start with M1 coordinates
+        GridPoint end_gp = end_gp_m1;      // Start with M1 coordinates
+        
+        // Check if we can elevate start point to M2
+        if (grid_->isFree(GridPoint(start_gp.x, start_gp.y, 1), current_net_id_)) {
+            start_gp = GridPoint(start_gp.x, start_gp.y, 1);  // Elevate to M2
+        }
+        
+        // Check if we can elevate end point to M2  
+        if (grid_->isFree(GridPoint(end_gp.x, end_gp.y, 1), current_net_id_)) {
+            end_gp = GridPoint(end_gp.x, end_gp.y, 1);  // Elevate to M2
+        }
         
         // 4. Call core A* algorithm for each segment
         std::vector<GridPoint> segment;
         
         // **CRITICAL FIX**: Temporarily mark start/end as FREE for A* to work
-        // This is needed because A* algorithm's obstacle checking logic
-        GridState original_start_state = grid_->getState(start_gp);
-        GridState original_end_state = grid_->getState(end_gp);
+        // Note: We work with the elevated points (M2) but restore original M1 PIN states later
         grid_->setState(start_gp, GridState::FREE);
         grid_->setState(end_gp, GridState::FREE);
         
@@ -230,77 +242,103 @@ RoutingResult MazeRouter::routeNet(Net* net,
                 }
             }
             
-            // **CRITICAL FIX**: Restore original PIN states after successful routing
-            grid_->setState(start_gp, original_start_state);
-            grid_->setState(end_gp, original_end_state);
+            // **TARGET ELEVATION FIX**: Always restore M1 PIN states (not elevated M2 states)
+            // The actual pins are on M1 and must remain marked as PIN
+            grid_->setState(start_gp_m1, GridState::PIN);
+            grid_->setState(end_gp_m1, GridState::PIN);
         } else {
-            // **CRITICAL FIX**: Restore original PIN states even if routing failed
-            grid_->setState(start_gp, original_start_state);
-            grid_->setState(end_gp, original_end_state);
+            // **TARGET ELEVATION FIX**: Restore M1 PIN states even if routing failed
+            grid_->setState(start_gp_m1, GridState::PIN);
+            grid_->setState(end_gp_m1, GridState::PIN);
             
-            // **DEBUG**: Capture first few failed segments for analysis
+            // **FAILURE CLASSIFICATION PROBE**: Diagnose why routing failed
+            static int fail_count = 0;
+            if (++fail_count <= 5) {  // Only show first 5 failures to avoid spam
+                std::cout << "\n>>> FAILURE DIAGNOSIS #" << fail_count << " <<<" << std::endl;
+                std::cout << "Net: " << net->getName() << std::endl;
+                
+                // Check M1 PIN status
+                bool start_m1_ok = (grid_->getState(GridPoint(start_gp_m1.x, start_gp_m1.y, 0)) == GridState::PIN);
+                bool end_m1_ok = (grid_->getState(GridPoint(end_gp_m1.x, end_gp_m1.y, 0)) == GridState::PIN);
+                
+                // Check M2 access availability  
+                bool start_m2_ok = grid_->isFree(GridPoint(start_gp_m1.x, start_gp_m1.y, 1), current_net_id_);
+                bool end_m2_ok = grid_->isFree(GridPoint(end_gp_m1.x, end_gp_m1.y, 1), current_net_id_);
+                
+                // Check M3 overlay
+                bool m3_blocked = grid_->getState(GridPoint(start_gp_m1.x, start_gp_m1.y, 2)) == GridState::OBSTACLE;
+                
+                std::cout << "START Point: M1=" << (start_m1_ok ? "PIN" : "BLOCK/FREE") 
+                          << ", M2 Access=" << (start_m2_ok ? "OK" : "BLOCKED!") << std::endl;
+                std::cout << "END   Point: M1=" << (end_m1_ok ? "PIN" : "BLOCK/FREE") 
+                          << ", M2 Access=" << (end_m2_ok ? "OK" : "BLOCKED!") << std::endl;
+                std::cout << "M3 Overlay: " << (m3_blocked ? "BLOCKED (Error)" : "FREE") << std::endl;
+                
+                // Classification
+                if (!start_m2_ok && !end_m2_ok) {
+                    std::cout << "CLASSIFICATION: DOUBLE LAUNCH FAIL (Both ends blocked on M2)" << std::endl;
+                } else if (!start_m2_ok) {
+                    std::cout << "CLASSIFICATION: LAUNCH FAIL (Start blocked on M2)" << std::endl;
+                } else if (!end_m2_ok) {
+                    std::cout << "CLASSIFICATION: LANDING FAIL (End blocked on M2)" << std::endl;
+                } else {
+                    std::cout << "CLASSIFICATION: NO PATH (M2 access OK but no path found)" << std::endl;
+                }
+                std::cout << "========================================" << std::endl;
+            }
             
-                        static int debug_count = 0;
-            
-                        if (debug_count < 3) {
-            
-                            std::cout << "\n>>> DEBUG FAILED SEGMENT #" << (debug_count + 1) << " for net " << net->getName() << " <<<" << std::endl;
-            
-                            std::cout << "  Start (Phys): (" << start_phys.x << ", " << start_phys.y << ") (Layer " << start_gp.layer << ")" << std::endl;
-            
-                            std::cout << "  End   (Phys): (" << end_phys.x << ", " << end_phys.y << ") (Layer " << end_gp.layer << ")" << std::endl;
-            
-                            
-            
-                            // Check grid coordinates conversion
-            
-                            std::cout << "  Start (Grid): (" << start_gp.x << ", " << start_gp.y << ")" << std::endl;
-            
-                            std::cout << "  End   (Grid): (" << end_gp.x << ", " << end_gp.y << ")" << std::endl;
-            
-                            
-            
-                            // **SUSPECT B DEEP DIVE**: Check path blocking
-            
-                            std::cout << "  Checking path blocking..." << std::endl;
-            
-                            int path_length = std::abs(end_gp.x - start_gp.x) + std::abs(end_gp.y - start_gp.y);
-            
-                            std::cout << "  Manhattan distance: " << path_length << std::endl;
-            
-                            
-            
-                            // Check each point along the horizontal path
-            
-                            int step_dir = (end_gp.x > start_gp.x) ? 1 : -1;
-            
-                            for (int x = start_gp.x; x != end_gp.x; x += step_dir) {
-            
-                                GridPoint check_point(x, start_gp.y, start_gp.layer);
-            
-                                GridState state = grid_->getState(check_point);
-            
-                                std::cout << "  Point (" << x << "," << start_gp.y << "): " 
-            
-                                          << (state == GridState::FREE ? "FREE" : 
-            
-                                           state == GridState::OBSTACLE ? "OBSTACLE" :
-            
-                                           state == GridState::ROUTED ? "ROUTED" :
-            
-                                           state == GridState::PIN ? "PIN" : "OTHER") << std::endl;
-            
-                            }
-            
-                            
-            
-                            debug_count++;
-            
+            // **GRID MICROSCOPE**: Analyze failed segment to detect coordinate mismatch
+            static int microscope_count = 0;
+            if (microscope_count < 3) {  // Only show first 3 failures to avoid spam
+                microscope_count++;
+                
+                auto& target = end_gp;  // Check the target endpoint
+                int cx = target.x;
+                int cy = target.y;
+                int cz = target.layer;
+                
+                std::cout << "\n=== GRID MICROSCOPE #" << microscope_count 
+                          << " (Failed Segment Target) ===" << std::endl;
+                std::cout << "Target Physical: (" << end_phys.x << ", " 
+                          << end_phys.y << ")" << std::endl;
+                std::cout << "Target Grid: (" << cx << ", " << cy << ", " << cz << ")" << std::endl;
+                
+                // Print 5x5 grid state around target
+                std::cout << "Grid State (5x5 area):" << std::endl;
+                for (int y = cy + 2; y >= cy - 2; --y) {
+                    printf("y=%-3d | ", y);
+                    for (int x = cx - 2; x <= cx + 2; ++x) {
+                        if (!grid_->isValid(GridPoint(x, y, cz))) {
+                            std::cout << " X ";
+                            continue;
                         }
-            
-            
-            
-            
+                        
+                        auto state = grid_->getState(GridPoint(x, y, cz));
+                        if (state == GridState::PIN) std::cout << " P ";
+                        else if (state == GridState::OBSTACLE) std::cout << " # ";
+                        else if (state == GridState::FREE) std::cout << " . ";
+                        else if (state == GridState::ROUTED) std::cout << " = ";
+                        else std::cout << " ? ";
+                    }
+                    std::cout << "\n";
+                }
+                std::cout << "Legend: P=Pin, #=Obstacle, .=Free, ==Routed, X=Out of bounds" << std::endl;
+                
+                // Check if start point is properly marked as PIN
+                auto start_state = grid_->getState(start_gp);
+                auto end_state = grid_->getState(end_gp);
+                std::cout << "Start point state: " << (start_state == GridState::PIN ? "PIN" : "NOT PIN") << std::endl;
+                std::cout << "End point state: " << (end_state == GridState::PIN ? "PIN" : "NOT PIN") << std::endl;
+                
+                // Show grid conversion details
+                double pitch_x = grid_->getPitchX();
+                double pitch_y = grid_->getPitchY();
+                std::cout << "Grid pitch: X=" << pitch_x << ", Y=" << pitch_y << std::endl;
+                std::cout << "Expected grid X: (round(" << end_phys.x << " / " << pitch_x << ")) = " 
+                          << static_cast<int>(std::round(end_phys.x / pitch_x)) << std::endl;
+                std::cout << "Expected grid Y: (round(" << end_phys.y << " / " << pitch_y << ")) = " 
+                          << static_cast<int>(std::round(end_phys.y / pitch_y)) << std::endl;
+            }
             
             result.error_message = "Failed to route MST segment";
         }
@@ -422,49 +460,10 @@ std::vector<GridPoint> MazeRouter::backtrack(
 }
 
 double MazeRouter::calculateMovementCost(const GridPoint& from, const GridPoint& to) const {
-    double cost = 0.0;
-    
-    // Add via cost if changing layers
-    if (from.layer != to.layer) {
-        cost += via_cost_;
-    } else {
-        // Planar movement cost with 3-layer directional strategy
-        
-        // Check movement direction
-        bool is_horizontal_move = (from.y == to.y); // Y coordinate same, X changed
-        bool is_vertical_move = (from.x == to.x);   // X coordinate same, Y changed
-        
-        // **3-LAYER ROUTING STRATEGY**:
-        // M1 (Layer 0): Horizontal preferred (but mostly blocked by cells)
-        // M2 (Layer 1): Vertical preferred (North/South)
-        // M3 (Layer 2): Horizontal preferred (East/West) - NEW FREEWAY!
-        
-        if (from.layer == 0) {
-            // M1: Horizontal movement is preferred
-            if (is_horizontal_move) {
-                cost += wire_cost_per_unit_; // Normal cost
-            } else if (is_vertical_move) {
-                cost += wire_cost_per_unit_ * 3.0; // Heavy penalty for vertical on M1
-            }
-        } else if (from.layer == 1) {
-            // M2: Vertical movement is preferred
-            if (is_vertical_move) {
-                cost += wire_cost_per_unit_; // Normal cost
-            } else if (is_horizontal_move) {
-                cost += wire_cost_per_unit_ * 1.5; // Reduced penalty to encourage M3 usage
-            }
-        } else if (from.layer == 2) {
-            // M3: Horizontal movement is preferred (this is the new highway!)
-            if (is_horizontal_move) {
-                cost += wire_cost_per_unit_; // Normal cost - M3 is designed for this!
-            } else if (is_vertical_move) {
-                cost += wire_cost_per_unit_ * 2.0; // Moderate penalty for vertical on M3
-            }
-        } else {
-            // Fallback: normal cost
-            cost += wire_cost_per_unit_;
-        }
-    }
+    // **PATHFINDER CHANGE**: Use RoutingGrid's cost calculation instead of local logic
+    // This includes history costs and collision penalties
+    double cost = grid_->calculateMovementCost(from, to, current_net_id_, collision_penalty_);
+    return cost;
     
     return cost;
 }

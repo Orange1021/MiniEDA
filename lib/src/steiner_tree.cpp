@@ -3,6 +3,8 @@
 // @details Transforms multi-pin nets into efficient 2-pin segments
 
 #include "steiner_tree.h"
+#include "lef_parser.h"
+#include "lef_pin_mapper.h"
 #include <cmath>
 #include <limits>
 #include <algorithm>
@@ -13,6 +15,68 @@ namespace mini {
 
 double SteinerTreeBuilder::manhattanDist(const Point& p1, const Point& p2) {
     return std::abs(p1.x - p2.x) + std::abs(p1.y - p2.y);
+}
+
+Point SteinerTreeBuilder::getPinAbsolutePosition(Pin* pin, PlacerDB* db, 
+                                                const LefLibrary* lef_lib, 
+                                                const MacroMapper* macro_mapper) {
+    if (!pin || !pin->getOwner() || !db) {
+        return Point(0, 0);  // Fallback
+    }
+    
+    Cell* cell = pin->getOwner();
+    
+    // Get cell origin from Cell object directly (more reliable than PlacerDB)
+    double cell_origin_x = cell->getX();
+    double cell_origin_y = cell->getY();
+    
+    // Default: use cell center (fallback for backward compatibility)
+    double offset_x = 0.0;
+    double offset_y = 0.0;
+    
+    // Try to get precise pin offset from LEF data
+    if (lef_lib && macro_mapper) {
+        std::string cell_type_name = cellTypeToString(cell->getType());
+        const LefMacro* macro = macro_mapper->mapType(cell_type_name);
+        
+        if (macro) {
+            // Try direct pin name match first
+            const LefPort* port = macro->getPin(pin->getName());
+            
+            // If direct match fails, try heuristic mapping (common pin naming conventions)
+            if (!port) {
+                std::string pin_name = pin->getName();
+                // Try common input pin mappings
+                if (pin_name == "A" || pin_name == "B" || pin_name == "C") {
+                    port = macro->getPin(pin_name + "1");
+                }
+                // Try common output pin mappings  
+                if (!port && pin_name == "Y") {
+                    port = macro->getPin("ZN");
+                }
+                // Try clock pin mappings
+                if (!port && (pin_name == "CK" || pin_name == "CLK")) {
+                    port = macro->getPin("CP");
+                }
+            }
+            
+            if (port && !port->rects.empty()) {
+                // Use the center of the first rectangle as pin offset
+                const Rect& rect = port->rects[0];
+                offset_x = (rect.x_min + rect.x_max) / 2.0;
+                offset_y = (rect.y_min + rect.y_max) / 2.0;
+            }
+        }
+    }
+    
+    // If no LEF data available, fall back to cell center
+    if (offset_x == 0.0 && offset_y == 0.0) {
+        auto cell_info = db->getCellInfo(cell);
+        offset_x = cell_info.width / 2.0;
+        offset_y = cell_info.height / 2.0;
+    }
+    
+    return Point(cell_origin_x + offset_x, cell_origin_y + offset_y);
 }
 
 size_t SteinerTreeBuilder::extractPinPoints(Net* net, PlacerDB* db, 
@@ -68,7 +132,9 @@ bool SteinerTreeBuilder::validateInput(Net* net, PlacerDB* db) {
     return true;
 }
 
-std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db) {
+std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db, 
+                                             const LefLibrary* lef_lib,
+                                             const MacroMapper* macro_mapper) {
     std::vector<Segment> segments;
     
     // Input validation
@@ -76,13 +142,42 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db) {
         return segments;
     }
     
-    // Extract pin points for MST construction
+    // Extract pin points for MST construction using PRECISE pin coordinates
+    // This is the critical fix: use actual pin locations instead of cell centers
     std::vector<Point> pin_points;
     std::vector<Pin*> pin_ptrs;
     
-    if (extractPinPoints(net, db, pin_points, pin_ptrs) < 2) {
+    // Extract driver pin with precise coordinates
+    if (net->getDriver()) {
+        Pin* driver_pin = net->getDriver();
+        Point driver_pos = getPinAbsolutePosition(driver_pin, db, lef_lib, macro_mapper);
+        pin_points.push_back(driver_pos);
+        pin_ptrs.push_back(driver_pin);
+        
+        // Debug: Log driver pin position
+        std::cout << "  Driver pin " << driver_pin->getName() 
+                  << " at (" << driver_pos.x << ", " << driver_pos.y << ")" << std::endl;
+    }
+    
+    // Extract load pins with precise coordinates
+    for (Pin* load_pin : net->getLoads()) {
+        Point load_pos = getPinAbsolutePosition(load_pin, db, lef_lib, macro_mapper);
+        pin_points.push_back(load_pos);
+        pin_ptrs.push_back(load_pin);
+        
+        // Debug: Log load pin position
+        std::cout << "  Load pin " << load_pin->getName() 
+                  << " at (" << load_pos.x << ", " << load_pos.y << ")" << std::endl;
+    }
+    
+    if (pin_points.size() < 2) {
+        std::cout << "  Warning: Net " << net->getName() 
+                  << " has fewer than 2 pins, skipping MST construction" << std::endl;
         return segments;
     }
+    
+    std::cout << "  Building MST for " << pin_points.size() << " pins in net " 
+              << net->getName() << std::endl;
     
     // Build Minimum Spanning Tree using Prim's algorithm
     size_t n = pin_points.size();
@@ -108,8 +203,16 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db) {
         connected[u] = true;
         
         if (parent[u] != -1) {
-            segments.emplace_back(pin_points[parent[u]], pin_points[u], 
-                                    pin_ptrs[parent[u]], pin_ptrs[u]);
+            Segment seg(pin_points[parent[u]], pin_points[u], 
+                       pin_ptrs[parent[u]], pin_ptrs[u]);
+            segments.push_back(seg);
+            
+            // Debug: Log segment creation
+            std::cout << "    Segment: " << pin_ptrs[parent[u]]->getName() 
+                      << " (" << pin_points[parent[u]].x << ", " << pin_points[parent[u]].y << ")"
+                      << " -> " << pin_ptrs[u]->getName()
+                      << " (" << pin_points[u].x << ", " << pin_points[u].y << ")"
+                      << " length=" << seg.manhattanLength() << std::endl;
         }
         
         // Update distances to remaining vertices
@@ -124,6 +227,7 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db) {
         }
     }
     
+    std::cout << "  MST complete: " << segments.size() << " segments created" << std::endl;
     return segments;
 }
 

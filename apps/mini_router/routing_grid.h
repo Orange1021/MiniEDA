@@ -99,6 +99,11 @@ private:
     /// 3D array: [layer][y][x] -> GridNode
     /// Using nested vectors for dynamic resizing
     std::vector<std::vector<std::vector<GridNode>>> grid_;
+    
+    // --- Congestion Tracking for PathFinder Algorithm ---
+    /// History cost matrix: [layer][y][x] -> accumulated congestion penalty
+    /// This creates "hot spots" that become increasingly expensive over iterations
+    std::vector<std::vector<std::vector<double>>> history_costs_;
 
 public:
     // Constructor
@@ -121,6 +126,55 @@ public:
     void clear();
     void markPath(const std::vector<GridPoint>& path, int net_id = 0);
     
+    // --- PathFinder Congestion Management ---
+    /**
+     * @brief Initialize history costs matrix
+     * @details Called during grid initialization to set up congestion tracking
+     */
+    void initializeHistoryCosts();
+    
+    /**
+     * @brief Add history cost penalty to a grid point
+     * @param x Grid X coordinate
+     * @param y Grid Y coordinate  
+     * @param z Grid layer
+     * @param increment Penalty increment (typically 1.0)
+     */
+    void addHistoryCost(int x, int y, int z, double increment);
+    
+    /**
+     * @brief Get history cost for a grid point
+     * @param x Grid X coordinate
+     * @param y Grid Y coordinate
+     * @param z Grid layer
+     * @return History cost multiplier (1.0 = no penalty, higher = more expensive)
+     */
+    double getHistoryCost(int x, int y, int z) const;
+    
+    /**
+     * @brief Clear all routing traces but preserve history costs
+     * @details Critical for PathFinder iterations - removes ROUTED states
+     *          but keeps accumulated congestion penalties
+     */
+    void clearRoutes();
+    
+    /**
+     * @brief Count total conflicts (overlaps) in current routing
+     * @return Number of grid points with multiple net assignments
+     */
+    int countConflicts() const;
+    
+    /**
+     * @brief Calculate movement cost for PathFinder algorithm
+     * @param from Source grid point
+     * @param to Destination grid point
+     * @param current_net_id Current net ID
+     * @param collision_penalty Current collision penalty factor
+     * @return Total movement cost (base_cost * history_cost + collision_penalty)
+     */
+    double calculateMovementCost(const GridPoint& from, const GridPoint& to, 
+                                 int current_net_id, double collision_penalty) const;
+    
     // Getters
     int getGridWidth() const { return grid_width_; }
     int getGridHeight() const { return grid_height_; }
@@ -128,6 +182,9 @@ public:
     double getPitchX() const { return pitch_x_; }
     double getPitchY() const { return pitch_y_; }
     const Rect& getCoreArea() const { return core_area_; }
+    
+    // Access internal grid data for fuzzy search (used by maze router)
+    std::vector<std::vector<std::vector<GridNode>>>& getGridData() { return grid_; }
 
 private:
     // Helper Methods
