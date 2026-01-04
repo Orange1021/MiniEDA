@@ -7,6 +7,7 @@
 #ifndef MINI_MAZE_ROUTER_H
 #define MINI_MAZE_ROUTER_H
 
+#include <climits>
 #include "routing_grid.h"
 #include <unordered_map>
 #include <unordered_set>
@@ -83,10 +84,19 @@ private:
     // --- PathFinder Parameters ---
     double collision_penalty_ = 50.0;      ///< Penalty for short circuits (increases with iterations)
     
+    // --- Congestion Tracking ---
+    std::vector<std::vector<std::vector<int>>> congestion_map_;  ///< Usage counter for each grid point
+    int current_iteration_ = 0;            ///< Current PathFinder iteration number
+    
     // --- Statistics ---
     int total_routed_nets_ = 0;
     int failed_nets_ = 0;
     double total_wirelength_ = 0.0;
+    
+    // --- Best Solution Tracking ---
+    std::vector<std::vector<GridPoint>> best_solution_segments_;  ///< Best routing segments found
+    int min_conflicts_ = INT_MAX;                                 ///< Minimum conflicts encountered
+    int best_iteration_ = -1;                                      ///< Iteration when best solution was found
     int total_vias_ = 0;
     
     // **NEW**: Segments-level statistics for accurate reporting
@@ -146,9 +156,60 @@ public:
     }
     
     /**
+     * @brief Smart Access Point Finder - congestion-aware pin access selection
+     * @param pin_gx Pin grid X coordinate
+     * @param pin_gy Pin grid Y coordinate  
+     * @param net_id Current net ID for conflict checking
+     * @param out_gp Output best access point (will be on M2 layer)
+     * @return True if a suitable access point was found
+     * 
+     * This method implements congestion-aware pin access by searching
+     * around the pin location and selecting the point with minimum
+     * combined history cost and distance penalty.
+     */
+    bool findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoint& out_gp) const;
+    
+    /**
      * @brief Reset statistics
      */
     void resetStatistics();
+    
+    /**
+     * @brief Initialize congestion map for tracking usage
+     */
+    void initializeCongestionMap();
+    
+    /**
+     * @brief Reset congestion map (clear all usage counters)
+     */
+    void resetCongestionMap();
+    
+    /**
+     * @brief Update history costs based on congestion map
+     * @param history_increment History cost increment for this iteration
+     */
+    void updateHistoryCosts(double history_increment);
+    
+    /**
+     * @brief Save current routing solution if it's the best found so far
+     * @param results Current routing results
+     * @param iteration Current iteration number
+     * @param conflicts Current conflict count
+     */
+    void saveBestSolution(const std::vector<RoutingResult>& results, int iteration, int conflicts);
+    
+    /**
+     * @brief Restore the best solution found to the routing grid
+     */
+    void restoreBestSolution();
+    
+    /**
+     * @brief Get the minimum conflicts encountered so far
+     * @return Minimum conflict count
+     */
+    int getMinConflicts() const { return min_conflicts_; }
+    
+    
 
 private:
     /**

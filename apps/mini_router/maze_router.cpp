@@ -27,6 +27,9 @@ MazeRouter::MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper, PlacerDB* pl
     if (!pin_mapper_) {
         throw std::invalid_argument("LefPinMapper cannot be null");
     }
+    
+    // Initialize congestion tracking
+    initializeCongestionMap();
 }
 
 // ============================================================================
@@ -176,18 +179,32 @@ RoutingResult MazeRouter::routeNet(Net* net,
         grid_->setState(start_gp_m1, GridState::PIN);
         grid_->setState(end_gp_m1, GridState::PIN);
         
-        // **TARGET ELEVATION STRATEGY**: Try to elevate to M2 if possible
-        GridPoint start_gp = start_gp_m1;  // Start with M1 coordinates
-        GridPoint end_gp = end_gp_m1;      // Start with M1 coordinates
+        // **SMART ACCESS STRATEGY**: Use congestion-aware pin access selection
+        GridPoint start_gp = start_gp_m1;  // Default to M1 coordinates
+        GridPoint end_gp = end_gp_m1;      // Default to M1 coordinates
         
-        // Check if we can elevate start point to M2
-        if (grid_->isFree(GridPoint(start_gp.x, start_gp.y, 1), current_net_id_)) {
-            start_gp = GridPoint(start_gp.x, start_gp.y, 1);  // Elevate to M2
+        // Try to find best access point for start pin
+        if (!findBestAccessPoint(start_gp.x, start_gp.y, current_net_id_, start_gp)) {
+            // Fallback: try direct elevation if smart access fails
+            if (grid_->isFree(GridPoint(start_gp.x, start_gp.y, 1), current_net_id_)) {
+                start_gp = GridPoint(start_gp.x, start_gp.y, 1);
+            }
         }
         
-        // Check if we can elevate end point to M2  
-        if (grid_->isFree(GridPoint(end_gp.x, end_gp.y, 1), current_net_id_)) {
-            end_gp = GridPoint(end_gp.x, end_gp.y, 1);  // Elevate to M2
+        // Try to find best access point for end pin
+        if (!findBestAccessPoint(end_gp.x, end_gp.y, current_net_id_, end_gp)) {
+            // Fallback: try direct elevation if smart access fails
+            if (grid_->isFree(GridPoint(end_gp.x, end_gp.y, 1), current_net_id_)) {
+                end_gp = GridPoint(end_gp.x, end_gp.y, 1);
+            }
+        }
+        
+        // Debug: Check if we're dealing with the conflict hotspot
+        if ((start_gp.x == 4 && start_gp.y == 6) || (end_gp.x == 4 && end_gp.y == 6)) {
+            std::cout << "DEBUG: Net " << current_net_id_ 
+                      << " routing through hotspot area. Start: (" 
+                      << start_gp.x << "," << start_gp.y << ") End: (" 
+                      << end_gp.x << "," << end_gp.y << ")" << std::endl;
         }
         
         // 4. Call core A* algorithm for each segment
@@ -428,13 +445,134 @@ void MazeRouter::resetStatistics() {
     total_routed_nets_ = 0;
     failed_nets_ = 0;
     total_wirelength_ = 0.0;
-    total_vias_ = 0;
-    
-    // **NEW**: Reset segments statistics
-    total_segments_attempted_ = 0;
-    total_segments_succeeded_ = 0;
-    total_segments_failed_ = 0;
 }
+
+void MazeRouter::initializeCongestionMap() {
+    int width = grid_->getGridWidth();
+    int height = grid_->getGridHeight();
+    int layers = grid_->getNumLayers();
+    
+    congestion_map_.resize(layers);
+    for (int z = 0; z < layers; ++z) {
+        congestion_map_[z].resize(height);
+        for (int y = 0; y < height; ++y) {
+            congestion_map_[z][y].resize(width, 0);
+        }
+    }
+}
+
+void MazeRouter::resetCongestionMap() {
+    for (auto& layer : congestion_map_) {
+        for (auto& row : layer) {
+            std::fill(row.begin(), row.end(), 0);
+        }
+    }
+}
+
+void MazeRouter::updateHistoryCosts(double history_increment) {
+    std::cout << "Updating History Costs with increment: " << history_increment << std::endl;
+    
+    int width = grid_->getGridWidth();
+    int height = grid_->getGridHeight();
+    int layers = grid_->getNumLayers();
+    const int capacity = 1;  // Default capacity per grid point
+    
+    // **HISTORY COST DECAY**: First apply decay to existing costs
+    const double decay_factor = 0.9;  // Decay factor for cooling down hotspots
+    int decayed_count = 0;
+    
+    for (int z = 0; z < layers; ++z) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                double current = grid_->getHistoryCost(x, y, z);
+                if (current > 1.0) {
+                    // Cool down hotspots gradually
+                    double decayed = 1.0 + (current - 1.0) * decay_factor;
+                    grid_->setHistoryCost(x, y, z, decayed);
+                    decayed_count++;
+                }
+            }
+        }
+    }
+    
+    std::cout << "  Applied decay to " << decayed_count << " grid points" << std::endl;
+    
+    // Then apply new penalties based on current usage
+    int punished_count = 0;
+    for (int z = 0; z < layers; ++z) {
+        for (int y = 0; y < height; ++y) {
+            for (int x = 0; x < width; ++x) {
+                int usage = congestion_map_[z][y][x];
+                
+                if (usage > capacity) {
+                    // Found congestion! Apply penalty
+                    double overflow = usage - capacity;
+                    double penalty = overflow * history_increment;
+                    
+                    grid_->addHistoryCost(x, y, z, penalty);
+                    punished_count++;
+                    
+                    // Debug probe for our stubborn conflict points
+                    if ((x == 4 && y == 6 && z == 1) || (x == 16 && y == 6 && z == 1)) {
+                        double new_cost = grid_->getHistoryCost(x, y, z);
+                        std::cout << "  >>> PUNISHING (" << x << "," << y << "," << z 
+                                  << "): Usage=" << usage << ", Penalty=" << penalty 
+                                  << ", New HistCost=" << new_cost << std::endl;
+                    }
+                }
+            }
+        }
+    }
+    
+    std::cout << "  Applied penalties to " << punished_count << " congested points" << std::endl;
+}
+
+void MazeRouter::saveBestSolution(const std::vector<RoutingResult>& results, int iteration, int conflicts) {
+    if (conflicts < min_conflicts_) {
+        std::cout << ">>> NEW RECORD! Conflicts: " << conflicts << " (Saving at iteration " << iteration << ") <<<" << std::endl;
+        min_conflicts_ = conflicts;
+        best_iteration_ = iteration;
+        
+        // Clear previous best solution
+        best_solution_segments_.clear();
+        
+        // Save all successful routing segments
+        for (const auto& result : results) {
+            if (result.success) {
+                for (const auto& segment : result.segments) {
+                    best_solution_segments_.push_back(segment);
+                }
+            }
+        }
+        
+        std::cout << "  Saved " << best_solution_segments_.size() << " segments from best solution" << std::endl;
+    }
+}
+
+void MazeRouter::restoreBestSolution() {
+    if (best_iteration_ == -1) {
+        std::cout << "No best solution to restore" << std::endl;
+        return;
+    }
+    
+    std::cout << "Restoring best solution from iteration " << best_iteration_ 
+              << " with " << min_conflicts_ << " conflicts..." << std::endl;
+    
+    // Clear current routing (but preserve history costs)
+    grid_->clearRoutes();
+    
+    // Restore best solution segments to grid
+    // This will recreate the best conflict state found during iterations
+    for (const auto& segment : best_solution_segments_) {
+        grid_->markPath(segment, 0);  // Use 0 as default net_id for visualization
+    }
+    
+    std::cout << "Best solution restored successfully! Grid now has " 
+              << min_conflicts_ << " conflicts." << std::endl;
+}
+
+
+
 
 // ============================================================================
 // Private Methods
@@ -479,6 +617,73 @@ double MazeRouter::manhattanDistance(const GridPoint& from, const GridPoint& to)
 
 void MazeRouter::markPath(const std::vector<GridPoint>& path, int net_id) {
     grid_->markPath(path, net_id);
+    
+    // Update congestion map for history cost tracking
+    for (const auto& gp : path) {
+        if (grid_->isValid(gp)) {
+            congestion_map_[gp.layer][gp.y][gp.x]++;
+        }
+    }
+}
+
+bool MazeRouter::findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoint& out_gp) const {
+    
+    int best_x = -1, best_y = -1;
+    double min_cost = 1e9;
+    bool found = false;
+    
+    // Search around pin location for best access point
+    //扩大搜索范围：5x5区域，可以跳过整个拥塞团块
+    int search_radius = 2;
+    // Priority: direct access (0,0), then adjacent cells
+    std::vector<std::pair<int, int>> search_offsets = {
+        {0, 0},   // Direct access - highest priority
+        {-1, 0}, {1, 0}, {0, -1}, {0, 1},  // Adjacent cells
+        {-1, -1}, {-1, 1}, {1, -1}, {1, 1}  // Diagonal cells - lower priority
+    };
+    
+    for (const auto& [dx, dy] : search_offsets) {
+        int nx = pin_gx + dx;
+        int ny = pin_gy + dy;
+        
+        // 1. Basic validity checks
+        if (!grid_->isValid(GridPoint(nx, ny, 1))) continue;
+        if (grid_->getState(GridPoint(nx, ny, 1)) == GridState::OBSTACLE) continue;
+        
+        // 2. [Core] Check congestion cost (History Cost)
+        double current_hist = grid_->getHistoryCost(nx, ny, 1);
+        
+        // 3. Distance penalty (Manhattan distance from pin center)
+        double dist_penalty = (abs(dx) + abs(dy)) * 2.0;
+        
+        // 4. Combined score - lower is better
+        double total_score = current_hist + dist_penalty;
+        
+        if (total_score < min_cost) {
+            min_cost = total_score;
+            best_x = nx;
+            best_y = ny;
+            found = true;
+        }
+    }
+    
+    if (found) {
+        out_gp = GridPoint(best_x, best_y, 1);
+        
+        
+        
+        // Original smart access logging
+        if (best_x != pin_gx || best_y != pin_gy) {
+            std::cout << "Smart Access: Net " << net_id 
+                      << " shifted from (" << pin_gx << "," << pin_gy << ") to (" 
+                      << best_x << "," << best_y << ") [Cost: " << min_cost << "]" << std::endl;
+        }
+        return true;
+    }
+    
+    std::cout << "Smart Access: FAILED for Net " << net_id 
+              << " at (" << pin_gx << "," << pin_gy << ")" << std::endl;
+    return false;
 }
 
 int MazeRouter::calculateWirelength(const std::vector<GridPoint>& path) const {

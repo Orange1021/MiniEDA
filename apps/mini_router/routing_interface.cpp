@@ -14,6 +14,10 @@
 #include "../../apps/mini_placement/macro_mapper.h"
 #include <iostream>
 #include <iomanip>
+#include <algorithm>
+#include <random>
+#include <numeric>
+#include <chrono>
 
 namespace mini {
 
@@ -291,17 +295,37 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 return hpwl_a < hpwl_b;
             });
         
-        // **PATHFINDER ITERATIVE ROUTING**: Congestion negotiation loop
-        const int max_iterations = 8;
-        const double initial_collision_penalty = 50.0;
+// PathFinder parameters
+        const int max_iterations = 30;  // Increased to allow more iterations for convergence
+        const double initial_collision_penalty = 50.0;  // Start gentle, then grow aggressive
+        const double penalty_growth_rate = 1.3;  // EXPONENTIAL: Now using 1.3x growth for strong pressure
         bool solution_found = false;
+        
+        // Track penalty for reporting
+        double current_penalty = initial_collision_penalty;
+        
+        // Track conflict history for final analysis
+        std::vector<int> conflict_history;
+        
+        // **STAGNATION DETECTION**: Track improvement to enable early termination
+        int stagnation_count = 0;
+        int last_conflicts = INT_MAX;
+        
+        // **NUCLEAR PATHFINDER**: Track history increment for escalating congestion pressure
+        double current_history_increment = 1.0;
         
         for (int iter = 0; iter < max_iterations && !solution_found; ++iter) {
             std::cout << "\n>>> PathFinder Iteration " << iter << " <<<" << std::endl;
+            std::cout << "Current collision penalty: " << current_penalty << std::endl;
+            std::cout << "Current history increment: " << current_history_increment << std::endl;
             
-            // Set collision penalty for this iteration (increases over time)
-            double current_penalty = initial_collision_penalty * (iter + 1);
+            // Set collision penalty for this iteration (AGGRESSIVE exponential growth)
+            // This creates massive pressure to find alternative routes
             router.setCollisionPenalty(current_penalty);
+            
+            // **NUCLEAR PATHFINDER**: Set escalating history increment
+            // This makes congested cells increasingly "toxic" over time
+            routing_grid.setHistoryIncrement(current_history_increment);
             
             // Clear previous iteration routes but preserve history costs
             if (iter > 0) {
@@ -313,24 +337,40 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                     std::cout << "  Updating history costs based on " << conflicts << " conflicts" << std::endl;
                 }
                 
-                // Add history penalty to conflicted areas
+                // **NUCLEAR PATHFINDER**: Add escalating history penalty to conflicted areas
                 for (int z = 0; z < routing_grid.getNumLayers(); ++z) {
                     for (int y = 0; y < routing_grid.getGridHeight(); ++y) {
                         for (int x = 0; x < routing_grid.getGridWidth(); ++x) {
                             GridPoint gp(x, y, z);
                             if (routing_grid.getState(gp) == GridState::ROUTED) {
-                                routing_grid.addHistoryCost(x, y, z, 1.0);
+                                // Use dynamic history increment instead of fixed 1.0
+                                routing_grid.addHistoryCost(x, y, z, current_history_increment);
                             }
                         }
                     }
                 }
             }
             
-            // Route nets in optimized order for this iteration
+            // **FORCED TURN-BY-TURN**: Randomize net order to break deadlocks
             results.clear();
             router.resetStatistics();  // Reset for clean iteration
             
-            for (Net* net : nets_to_route) {
+            // Create indices for all nets
+            std::vector<int> net_indices(nets_to_route.size());
+            std::iota(net_indices.begin(), net_indices.end(), 0);  // 0, 1, 2, ...
+            
+            // **CRITICAL**: Use time-based seed for true randomness each iteration
+            // This ensures different ordering each round, breaking persistent deadlocks
+            auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+            std::mt19937 rng(seed);
+            
+            // Shuffle order completely randomly each iteration
+            std::shuffle(net_indices.begin(), net_indices.end(), rng);
+            
+            std::cout << "  Routing " << nets_to_route.size() << " nets in randomized order (seed=" << seed << ")" << std::endl;
+            
+            for (int net_idx : net_indices) {
+                Net* net = nets_to_route[net_idx];
                 RoutingResult result = router.routeNet(net, pin_locations);
                 
                 // **DIAGNOSTIC PROBE**: Track which networks fail
@@ -348,6 +388,47 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             int total_vias, routed_count, failed_count;
             getRoutingStatistics(results, total_wirelength, total_vias, routed_count, failed_count);
             
+            // Record conflict history for final analysis
+            conflict_history.push_back(conflicts);
+            
+            // **STAGNATION DETECTION**: Check for improvement or stagnation
+            if (conflicts < last_conflicts) {
+                // Found improvement - reset stagnation counter
+                stagnation_count = 0;
+                std::cout << "  Improvement: " << last_conflicts << " -> " << conflicts << " conflicts" << std::endl;
+            } else {
+                // No improvement - increment stagnation counter
+                stagnation_count++;
+                std::cout << "  Stagnation count: " << stagnation_count << " (conflicts stuck at " << conflicts << ")" << std::endl;
+            }
+            last_conflicts = conflicts;
+            
+            // **BEST SOLUTION TRACKING**: Save if this is the best solution found
+            router.saveBestSolution(results, iter, conflicts);
+            
+            // **EARLY TERMINATION CONDITIONS**
+            // 1. Perfect solution found
+            if (conflicts == 0 && routed_count == static_cast<int>(nets_to_route.size())) {
+                std::cout << "\n*** PERFECT SOLUTION FOUND! Early termination. ***" << std::endl;
+                solution_found = true;
+                break;
+            }
+            
+            // 2. Stagnation detected - no improvement for too long
+            if (stagnation_count >= 7) {
+                std::cout << "\n>>> STAGNATION DETECTED: No improvement for " << stagnation_count 
+                          << " iterations. Stopping early. <<<" << std::endl;
+                break;
+            }
+            
+            // 3. Divergence detected - conflicts getting much worse than best
+            if (conflicts > router.getMinConflicts() + 10) {
+                std::cout << "\n>>> DIVERGENCE DETECTED: Conflicts (" << conflicts 
+                          << ") much worse than best (" << router.getMinConflicts() 
+                          << "). Stopping early. <<<" << std::endl;
+                break;
+            }
+            
             int segments_attempted = router.getTotalSegmentsAttempted();
             int segments_succeeded = router.getTotalSegmentsSucceeded();
             int segments_failed = router.getTotalSegmentsFailed();
@@ -364,11 +445,176 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 solution_found = true;
             }
             
-            // Early termination if no improvement in recent iterations
-            if (iter > 2 && conflicts > 50) {
-                std::cout << "\nEarly termination: too many conflicts remaining" << std::endl;
-                break;
+            // [MISSING LINK] Congestion History Update Loop
+            // This is the critical missing piece that connects conflict detection to history costs
+            if (conflicts > 0) {
+                std::cout << "  Updating history costs based on " << conflicts << " conflicts" << std::endl;
+                router.updateHistoryCosts(current_history_increment);
             }
+            
+            // Early termination if no improvement in recent iterations
+            // DISABLED: Let PathFinder run through all iterations as intended
+            // PathFinder's philosophy is "chaos first, order later"
+            // High conflict counts in early iterations are normal and necessary
+            // if (iter > 2 && conflicts > 50) {
+            //     std::cout << "\nEarly termination: too many conflicts remaining" << std::endl;
+            //     break;
+            // }
+            
+// **NUCLEAR PATHFINDER**: Exponential penalty explosion to force detours
+            // This makes collision cost astronomically higher than detour cost
+            
+            // 1. Explosive exponential growth with very high ceiling (forces detours at all costs)
+            double next_penalty = current_penalty * 1.5;  // AGGRESSIVE: 1.5x per iteration
+            if (next_penalty > 100000.0) next_penalty = 100000.0;  // NO CAP: Allow up to 100000!
+            
+            router.setCollisionPenalty(next_penalty);
+            
+            // **CRITICAL FIX**: Update current_penalty for next iteration
+            current_penalty = next_penalty;
+            
+            
+            
+            // 2. Strong history increment growth (maintains massive pressure)
+            current_history_increment = 1.0 + (iter * 0.25);  // Strong growth
+            if (current_history_increment > 20.0) current_history_increment = 20.0;  // Cap at 20.0
+            
+            // Cap penalties to prevent numerical overflow
+            const double max_penalty = 100000.0;  // Increased cap for nuclear mode
+            if (current_penalty > max_penalty) {
+                current_penalty = max_penalty;
+            }
+            
+            const double max_history_increment = 50.0;  // Cap history increment
+            if (current_history_increment > max_history_increment) {
+                current_history_increment = max_history_increment;
+            }
+        }
+        
+        // **RESTORE BEST SOLUTION**: Restore the best solution found during iterations
+        std::cout << "\n=== RESTORING BEST SOLUTION ===" << std::endl;
+        router.restoreBestSolution();
+        
+        // **CONFLICT EVOLUTION ANALYSIS**: Report conflict changes over all iterations
+        std::cout << "\n=== CONFLICT EVOLUTION ANALYSIS ===" << std::endl;
+        std::cout << "Total iterations: " << conflict_history.size() << std::endl;
+        
+        if (!conflict_history.empty()) {
+            std::cout << "Initial conflicts: " << conflict_history[0] << std::endl;
+            std::cout << "Final conflicts: " << conflict_history.back() << std::endl;
+            
+            // Find minimum conflicts and when it occurred
+            auto min_it = std::min_element(conflict_history.begin(), conflict_history.end());
+            int min_conflicts = *min_it;
+            int min_iteration = std::distance(conflict_history.begin(), min_it);
+            std::cout << "Minimum conflicts: " << min_conflicts << " (at iteration " << min_iteration << ")" << std::endl;
+            
+            // Calculate conflict reduction
+            int total_reduction = conflict_history[0] - conflict_history.back();
+            double reduction_percentage = (conflict_history[0] > 0) ? 
+                (static_cast<double>(total_reduction) / conflict_history[0] * 100.0) : 0.0;
+            std::cout << "Total conflict reduction: " << total_reduction 
+                      << " (" << std::fixed << std::setprecision(1) << reduction_percentage << "%)" << std::endl;
+            
+            // Show conflict trend at key iterations
+            std::cout << "Conflict trend at key iterations:" << std::endl;
+            int report_interval = std::max(1, static_cast<int>(conflict_history.size() / 5));
+            for (size_t i = 0; i < conflict_history.size(); i += report_interval) {
+                std::cout << "  Iter " << i << ": " << conflict_history[i] << " conflicts" << std::endl;
+            }
+            // Always show the last iteration
+            if (conflict_history.size() % report_interval != 0) {
+                std::cout << "  Iter " << (conflict_history.size() - 1) 
+                          << ": " << conflict_history.back() << " conflicts" << std::endl;
+            }
+        }
+        std::cout << "=====================================" << std::endl;
+        
+        // **CONFLICT LOCATION ANALYSIS**: Print detailed conflict information
+        if (!conflict_history.empty() && conflict_history.back() > 0) {
+            routing_grid.printConflictLocations();
+            
+            // **FOUNDATION CHECK**: Inspect Layer 0 at the conflict hotspot (4,6)
+            std::cout << "\n>>> FOUNDATION CHECK (Layer 0 at 4,6) <<<" << std::endl;
+            int tx = 4, ty = 6;
+            
+            auto state_m0 = routing_grid.getState(GridPoint(tx, ty, 0));
+            std::cout << "State at (4,6,0): ";
+            if (state_m0 == GridState::PIN) {
+                int pin_net_id = routing_grid.getNetId(GridPoint(tx, ty, 0));
+                std::cout << "PIN (Net " << pin_net_id << ")";
+            } else if (state_m0 == GridState::OBSTACLE) {
+                std::cout << "OBSTACLE";
+            } else {
+                std::cout << "FREE/OTHER";
+            }
+            std::cout << std::endl;
+            
+            // Check surrounding area for other pins
+            std::cout << "Neighbors at Layer 0:" << std::endl;
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    if (dx == 0 && dy == 0) continue;
+                    int nx = tx + dx, ny = ty + dy;
+                    if (routing_grid.isValid(GridPoint(nx, ny, 0))) {
+                        auto neighbor_state = routing_grid.getState(GridPoint(nx, ny, 0));
+                        if (neighbor_state == GridState::PIN) {
+                            int neighbor_net_id = routing_grid.getNetId(GridPoint(nx, ny, 0));
+                            std::cout << "  (" << nx << "," << ny << ") is PIN (Net " 
+                                      << neighbor_net_id << ")" << std::endl;
+                        }
+                    }
+                }
+            }
+            
+            // **NET ID ANALYSIS**: Identify which nets are involved in conflicts
+            std::cout << "\n=== NET ID CONFLICT ANALYSIS ===" << std::endl;
+            
+            // Map net_id_hash -> net_name for reporting
+            std::unordered_map<int, std::string> net_id_to_name;
+            for (Net* net : nets_to_route) {
+                int net_id_hash = std::hash<std::string>{}(net->getName());
+                net_id_to_name[net_id_hash] = net->getName();
+            }
+            
+            // Report conflicting nets
+            std::cout << "Conflicting Net IDs found:" << std::endl;
+            for (const auto& [net_id, net_name] : net_id_to_name) {
+                std::cout << "  Net ID " << net_id << " = " << net_name << std::endl;
+            }
+            std::cout << "================================" << std::endl;
+            
+            // **SURROUNDING CHECK**: Inspect Layer 1 escape routes around the hotspot
+            std::cout << "\n>>> SURROUNDING CHECK (Layer 1 at 4,6) <<<" << std::endl;
+            std::cout << "Checking escape routes in M2 layer around (4,6,1):" << std::endl;
+            
+            for (int dy = -1; dy <= 1; ++dy) {
+                for (int dx = -1; dx <= 1; ++dx) {
+                    int nx = tx + dx, ny = ty + dy;
+                    
+                    if (routing_grid.isValid(GridPoint(nx, ny, 1))) {
+                        double history = routing_grid.getHistoryCost(nx, ny, 1);
+                        auto state = routing_grid.getState(GridPoint(nx, ny, 1));
+                        int net_id = routing_grid.getNetId(GridPoint(nx, ny, 1));
+                        
+                        printf("(%d,%d) ", nx, ny);
+                        if (state == GridState::OBSTACLE) {
+                            printf("BLK ");
+                        } else if (state == GridState::ROUTED) {
+                            printf("Rtd(N%d) ", net_id); // Show which net occupies it
+                        } else if (state == GridState::PIN) {
+                            printf("PIN(N%d) ", net_id);
+                        } else {
+                            printf("Free ");
+                        }
+                        
+                        printf("Hist=%.1f\n", history);
+                    } else {
+                        printf("(%d,%d) Invalid\n", nx, ny);
+                    }
+                }
+            }
+            std::cout << "=========================================" << std::endl;
         }
         
         // Final statistics

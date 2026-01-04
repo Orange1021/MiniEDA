@@ -69,10 +69,11 @@ struct GridPointHash {
 struct GridNode {
     GridState state;      ///< Current state of the cell
     int net_id;          ///< Owner net ID (0 = unowned, >0 = net ID)
+    int usage_count;     ///< Number of different nets that used this cell (for conflict detection)
     
     // Constructor
-    GridNode() : state(GridState::FREE), net_id(0) {}
-    GridNode(GridState s, int id = 0) : state(s), net_id(id) {}
+    GridNode() : state(GridState::FREE), net_id(0), usage_count(0) {}
+    GridNode(GridState s, int id = 0) : state(s), net_id(id), usage_count(0) {}
 };
 
 // ============================================================================
@@ -104,6 +105,9 @@ private:
     /// History cost matrix: [layer][y][x] -> accumulated congestion penalty
     /// This creates "hot spots" that become increasingly expensive over iterations
     std::vector<std::vector<std::vector<double>>> history_costs_;
+    
+    // Dynamic history cost increment for aggressive PathFinder
+    double history_increment_;
 
 public:
     // Constructor
@@ -152,6 +156,25 @@ public:
     double getHistoryCost(int x, int y, int z) const;
     
     /**
+     * @brief Set history cost for a grid point (for decay mechanism)
+     * @param x, y, z Grid coordinates
+     * @param cost New history cost value
+     */
+    void setHistoryCost(int x, int y, int z, double cost);
+    
+    /**
+     * @brief Set the history cost increment for congested cells
+     * @param increment History cost increment value
+     */
+    void setHistoryIncrement(double increment) { history_increment_ = increment; }
+    
+    /**
+     * @brief Get the current history cost increment
+     * @return Current history increment value
+     */
+    double getHistoryIncrement() const { return history_increment_; }
+    
+    /**
      * @brief Clear all routing traces but preserve history costs
      * @details Critical for PathFinder iterations - removes ROUTED states
      *          but keeps accumulated congestion penalties
@@ -163,6 +186,12 @@ public:
      * @return Number of grid points with multiple net assignments
      */
     int countConflicts() const;
+    
+    /**
+     * @brief Print detailed conflict locations for debugging
+     * @param current_net_id Current net ID being routed (for enemy/friend identification)
+     */
+    void printConflictLocations(int current_net_id = 0) const;
     
     /**
      * @brief Calculate movement cost for PathFinder algorithm
