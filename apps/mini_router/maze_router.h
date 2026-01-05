@@ -10,6 +10,7 @@
 #include <climits>
 #include "routing_grid.h"
 #include <unordered_map>
+#include <map>
 #include <unordered_set>
 #include <queue>
 #include <vector>
@@ -106,6 +107,16 @@ private:
     
     // **CRITICAL FIX**: Current net ID for enemy/friend identification
     int current_net_id_ = 0;
+    
+    // **TACTICAL VICTORY**: Track current network segment count for 2-pin detection
+    int current_net_segments_;
+    
+    // **GLOBAL REGISTRY**: Persistent storage for all successfully routed networks
+    // Maps Net ID -> List of path segments (for complete visualization)
+    std::map<int, std::vector<std::vector<GridPoint>>> final_routes_;
+    
+    // **BEST SOLUTION**: Store segments with their net IDs for proper restoration
+    std::vector<std::pair<std::vector<GridPoint>, int>> best_solution_segments_with_ids_;
 
 public:
     /**
@@ -150,6 +161,20 @@ public:
     int getTotalSegmentsAttempted() const { return total_segments_attempted_; }
     int getTotalSegmentsSucceeded() const { return total_segments_succeeded_; }
     int getTotalSegmentsFailed() const { return total_segments_failed_; }
+    
+    /**
+     * @brief Get all routed networks from global registry
+     * @return Map of net_id to routing segments for visualization
+     */
+    const std::map<int, std::vector<std::vector<GridPoint>>>& getAllRoutedNetworks() const { 
+        return final_routes_; 
+    }
+    
+    /**
+     * @brief Export visualization data to file
+     * @param filename Output file path
+     */
+    void exportVisualization(const std::string& filename);
     double getSegmentSuccessRate() const { 
         return (total_segments_attempted_ > 0) ? 
             (double)total_segments_succeeded_ / total_segments_attempted_ * 100.0 : 0.0; 

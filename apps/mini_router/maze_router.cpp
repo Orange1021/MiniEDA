@@ -40,9 +40,11 @@ RoutingResult MazeRouter::routeNet(Net* net,
                                  const std::unordered_map<std::string, Point>& pin_locations) {
     RoutingResult result;
     
-    // **CRITICAL FIX**: Set current net ID for enemy/friend identification
-    // Use name hash as net ID since Net class doesn't have getId()
+    // Set current net ID
     current_net_id_ = std::hash<std::string>{}(net->getName());
+    
+    // Calculate segment count
+    current_net_segments_ = net->getAllPins().size() - 1;
     
     // 1. Safety check
     if (!net) {
@@ -51,27 +53,12 @@ RoutingResult MazeRouter::routeNet(Net* net,
     }
     
     if (!net->getDriver()) {
-        // Check if this net has any pins connected (undriven nets are common in sequential circuits)
         if (net->getAllPins().empty()) {
             result.error_message = "Net has no connected pins";
         } else {
             result.error_message = "Net has no driver (undriven net - skipping)";
         }
         return result;
-    }
-    
-    // Debug: Print net info for problematic nets
-    if (net->getName() == "G5" || net->getName() == "G6" || net->getName() == "G7") {
-        std::cout << "Debug Net " << net->getName() << ":" << std::endl;
-        Pin* driver = net->getDriver();
-        if (driver) {
-            Cell* driver_cell = driver->getOwner();
-            std::cout << "  Driver: " << driver_cell->getName() 
-                      << ", Pin: " << driver->getName()
-                      << ", CellType: " << cellTypeToString(driver_cell->getType()) << std::endl;
-            std::string driver_key = pin_mapper_->getPinKey(driver_cell, driver);
-            std::cout << "  Driver key: " << driver_key << std::endl;
-        }
     }
     
     // 2. Get Driver coordinates
@@ -86,33 +73,25 @@ RoutingResult MazeRouter::routeNet(Net* net,
     }
     
     Point driver_phys = driver_it->second;
-    GridPoint source_gp = grid_->physToGrid(driver_phys.x, driver_phys.y, 0);  // Start on M1
+    GridPoint source_gp = grid_->physToGrid(driver_phys.x, driver_phys.y, 0);
     
     // Mark driver pin as PIN state
-    grid_->setState(source_gp, GridState::PIN);
+    grid_->setState(source_gp, GridState::PIN, current_net_id_);
     
-    // 3. Build MST topology using SteinerTreeBuilder (tree topology decomposition)
+    // 3. Build MST topology
     std::vector<Segment> mst_segments;
     
-    // Use SteinerTreeBuilder if PlacerDB is available, otherwise fall back to simple MST
     if (placer_db_) {
         mst_segments = SteinerTreeBuilder::build(net, placer_db_);
     } else {
-        // Fallback: simple MST construction for backward compatibility
+        // Fallback: simple MST
         std::vector<Point> pin_points;
         std::vector<Pin*> pin_ptrs;
         
-        // Add driver pin
         pin_points.push_back(driver_phys);
         pin_ptrs.push_back(driver);
         
-        // Add all load pins
         std::vector<Pin*> loads = net->getLoads();
-        if (loads.empty()) {
-            result.error_message = "No load pins found";
-            return result;
-        }
-        
         for (Pin* load : loads) {
             std::string load_key = pin_mapper_->getPinKey(load->getOwner(), load);
             auto load_it = pin_locations.find(load_key);
@@ -122,44 +101,37 @@ RoutingResult MazeRouter::routeNet(Net* net,
             }
         }
         
-        // Simple MST construction
-        if (pin_points.size() < 2) {
-            result.error_message = "Insufficient pins for topology generation";
-            return result;
-        }
-        
-        std::vector<bool> connected(pin_points.size(), false);
-        std::vector<int> parent(pin_points.size(), -1);
-        std::vector<double> min_dist(pin_points.size(), std::numeric_limits<double>::max());
-        
-        min_dist[0] = 0;
-        
-        for (size_t i = 0; i < pin_points.size(); ++i) {
-            int u = -1;
-            double shortest = std::numeric_limits<double>::max();
-            
-            for (size_t v = 0; v < pin_points.size(); ++v) {
-                if (!connected[v] && min_dist[v] < shortest) {
-                    shortest = min_dist[v];
-                    u = static_cast<int>(v);
+        if (pin_points.size() >= 2) {
+            // (Simple MST logic omitted for brevity, assuming it's correct in your file)
+            // Re-using your existing simple MST logic here implies strict copy-paste
+            // but to save space I will simplify the fallback logic block structure:
+            std::vector<bool> connected(pin_points.size(), false);
+            std::vector<int> parent(pin_points.size(), -1);
+            std::vector<double> min_dist(pin_points.size(), std::numeric_limits<double>::max());
+            min_dist[0] = 0;
+            for (size_t i = 0; i < pin_points.size(); ++i) {
+                int u = -1;
+                double shortest = std::numeric_limits<double>::max();
+                for (size_t v = 0; v < pin_points.size(); ++v) {
+                    if (!connected[v] && min_dist[v] < shortest) {
+                        shortest = min_dist[v];
+                        u = static_cast<int>(v);
+                    }
                 }
-            }
-            
-            if (u == -1) break;
-            connected[u] = true;
-            
-            if (parent[u] != -1) {
-                mst_segments.emplace_back(pin_points[parent[u]], pin_points[u], 
-                                        pin_ptrs[parent[u]], pin_ptrs[u]);
-            }
-            
-            for (size_t v = 0; v < pin_points.size(); ++v) {
-                if (!connected[v]) {
-                    double dist = std::abs(pin_points[u].x - pin_points[v].x) + 
-                                 std::abs(pin_points[u].y - pin_points[v].y);
-                    if (dist < min_dist[v]) {
-                        min_dist[v] = dist;
-                        parent[v] = u;
+                if (u == -1) break;
+                connected[u] = true;
+                if (parent[u] != -1) {
+                    mst_segments.emplace_back(pin_points[parent[u]], pin_points[u], 
+                                            pin_ptrs[parent[u]], pin_ptrs[u]);
+                }
+                for (size_t v = 0; v < pin_points.size(); ++v) {
+                    if (!connected[v]) {
+                        double dist = std::abs(pin_points[u].x - pin_points[v].x) + 
+                                     std::abs(pin_points[u].y - pin_points[v].y);
+                        if (dist < min_dist[v]) {
+                            min_dist[v] = dist;
+                            parent[v] = u;
+                        }
                     }
                 }
             }
@@ -171,200 +143,63 @@ RoutingResult MazeRouter::routeNet(Net* net,
         Point start_phys = seg.start;
         Point end_phys = seg.end;
         
-        // Convert to grid coordinates (initially on M1 layer)
         GridPoint start_gp_m1 = grid_->physToGrid(start_phys.x, start_phys.y, 0);
         GridPoint end_gp_m1 = grid_->physToGrid(end_phys.x, end_phys.y, 0);
         
-        // Mark both endpoints as PIN state on M1
-        grid_->setState(start_gp_m1, GridState::PIN);
-        grid_->setState(end_gp_m1, GridState::PIN);
+        grid_->setState(start_gp_m1, GridState::PIN, current_net_id_);
+        grid_->setState(end_gp_m1, GridState::PIN, current_net_id_);
         
-        // **SMART ACCESS STRATEGY**: Use congestion-aware pin access selection
-        GridPoint start_gp = start_gp_m1;  // Default to M1 coordinates
-        GridPoint end_gp = end_gp_m1;      // Default to M1 coordinates
+        GridPoint start_gp = start_gp_m1;
+        GridPoint end_gp = end_gp_m1;
         
-        // Try to find best access point for start pin
+        // Smart Access
         if (!findBestAccessPoint(start_gp.x, start_gp.y, current_net_id_, start_gp)) {
-            // Fallback: try direct elevation if smart access fails
             if (grid_->isFree(GridPoint(start_gp.x, start_gp.y, 1), current_net_id_)) {
                 start_gp = GridPoint(start_gp.x, start_gp.y, 1);
             }
         }
         
-        // Try to find best access point for end pin
         if (!findBestAccessPoint(end_gp.x, end_gp.y, current_net_id_, end_gp)) {
-            // Fallback: try direct elevation if smart access fails
             if (grid_->isFree(GridPoint(end_gp.x, end_gp.y, 1), current_net_id_)) {
                 end_gp = GridPoint(end_gp.x, end_gp.y, 1);
             }
         }
         
-        // Debug: Check if we're dealing with the conflict hotspot
-        if ((start_gp.x == 4 && start_gp.y == 6) || (end_gp.x == 4 && end_gp.y == 6)) {
-            std::cout << "DEBUG: Net " << current_net_id_ 
-                      << " routing through hotspot area. Start: (" 
-                      << start_gp.x << "," << start_gp.y << ") End: (" 
-                      << end_gp.x << "," << end_gp.y << ")" << std::endl;
-        }
-        
-        // 4. Call core A* algorithm for each segment
+        // 4. Call core A*
         std::vector<GridPoint> segment;
         
-        // **CRITICAL FIX**: Temporarily mark start/end as FREE for A* to work
-        // Note: We work with the elevated points (M2) but restore original M1 PIN states later
         grid_->setState(start_gp, GridState::FREE);
         grid_->setState(end_gp, GridState::FREE);
         
         if (findPath(start_gp, end_gp, segment)) {
-            // Update statistics first
+            // SUCCESS
             int wirelength = calculateWirelength(segment);
             int vias = countVias(segment);
 
-            // Debug: Trace path for suspicious nets - **FIXED**: Only print unique nets
-            static std::unordered_set<std::string> debugged_nets;
-            if (wirelength > 5 || segment.size() > 5) {
-                if (debugged_nets.find(net->getName()) == debugged_nets.end()) {
-                    debugged_nets.insert(net->getName());
-                    std::cout << "=== DEBUG: Net " << net->getName() << " Path Analysis ===" << std::endl;
-                    std::cout << "Path length: " << segment.size() << " points, wirelength=" << wirelength << ", vias=" << vias << std::endl;
-                    std::cout << "Path: ";
-                    for (size_t i = 0; i < std::min(segment.size(), size_t(10)); ++i) {
-                        const auto& p = segment[i];
-                        std::cout << "(" << p.x << "," << p.y << "," << p.layer << ")";
-                        if (i < std::min(segment.size(), size_t(10)) - 1) std::cout << " -> ";
-                    }
-                    if (segment.size() > 10) std::cout << " ...";
-                    std::cout << std::endl;
-                    std::cout << "========================================" << std::endl;
-                }
-            }
-
-            // Save path
             result.segments.push_back(segment);
-
-            // Mark path as ROUTED (prevent future shorts)
             markPath(segment, current_net_id_);
 
-            // Update result object with actual segment statistics
             result.total_wirelength += wirelength;
             result.total_vias += vias;
-
-            // Detect and log trivial routes (zero-length routing)
-            if (segment.size() <= 1 || wirelength == 0) {
-                static int trivial_count = 0;
-                if (trivial_count < 3) {
-                    std::cout << "Warning: Trivial route detected for net " << net->getName()
-                              << " (Segment path size: " << segment.size() << ")" << std::endl;
-                    trivial_count++;
-                }
-            }
             
-            // **TARGET ELEVATION FIX**: Always restore M1 PIN states (not elevated M2 states)
-            // The actual pins are on M1 and must remain marked as PIN
-            grid_->setState(start_gp_m1, GridState::PIN);
-            grid_->setState(end_gp_m1, GridState::PIN);
+            grid_->setState(start_gp_m1, GridState::PIN, current_net_id_);
+            grid_->setState(end_gp_m1, GridState::PIN, current_net_id_);
+            
         } else {
-            // **TARGET ELEVATION FIX**: Restore M1 PIN states even if routing failed
-            grid_->setState(start_gp_m1, GridState::PIN);
-            grid_->setState(end_gp_m1, GridState::PIN);
+            // FAILURE
+            grid_->setState(start_gp_m1, GridState::PIN, current_net_id_);
+            grid_->setState(end_gp_m1, GridState::PIN, current_net_id_);
             
-            // **FAILURE CLASSIFICATION PROBE**: Diagnose why routing failed
-            static int fail_count = 0;
-            if (++fail_count <= 5) {  // Only show first 5 failures to avoid spam
-                std::cout << "\n>>> FAILURE DIAGNOSIS #" << fail_count << " <<<" << std::endl;
-                std::cout << "Net: " << net->getName() << std::endl;
-                
-                // Check M1 PIN status
-                bool start_m1_ok = (grid_->getState(GridPoint(start_gp_m1.x, start_gp_m1.y, 0)) == GridState::PIN);
-                bool end_m1_ok = (grid_->getState(GridPoint(end_gp_m1.x, end_gp_m1.y, 0)) == GridState::PIN);
-                
-                // Check M2 access availability  
-                bool start_m2_ok = grid_->isFree(GridPoint(start_gp_m1.x, start_gp_m1.y, 1), current_net_id_);
-                bool end_m2_ok = grid_->isFree(GridPoint(end_gp_m1.x, end_gp_m1.y, 1), current_net_id_);
-                
-                // Check M3 overlay
-                bool m3_blocked = grid_->getState(GridPoint(start_gp_m1.x, start_gp_m1.y, 2)) == GridState::OBSTACLE;
-                
-                std::cout << "START Point: M1=" << (start_m1_ok ? "PIN" : "BLOCK/FREE") 
-                          << ", M2 Access=" << (start_m2_ok ? "OK" : "BLOCKED!") << std::endl;
-                std::cout << "END   Point: M1=" << (end_m1_ok ? "PIN" : "BLOCK/FREE") 
-                          << ", M2 Access=" << (end_m2_ok ? "OK" : "BLOCKED!") << std::endl;
-                std::cout << "M3 Overlay: " << (m3_blocked ? "BLOCKED (Error)" : "FREE") << std::endl;
-                
-                // Classification
-                if (!start_m2_ok && !end_m2_ok) {
-                    std::cout << "CLASSIFICATION: DOUBLE LAUNCH FAIL (Both ends blocked on M2)" << std::endl;
-                } else if (!start_m2_ok) {
-                    std::cout << "CLASSIFICATION: LAUNCH FAIL (Start blocked on M2)" << std::endl;
-                } else if (!end_m2_ok) {
-                    std::cout << "CLASSIFICATION: LANDING FAIL (End blocked on M2)" << std::endl;
-                } else {
-                    std::cout << "CLASSIFICATION: NO PATH (M2 access OK but no path found)" << std::endl;
-                }
-                std::cout << "========================================" << std::endl;
-            }
-            
-            // **GRID MICROSCOPE**: Analyze failed segment to detect coordinate mismatch
-            static int microscope_count = 0;
-            if (microscope_count < 3) {  // Only show first 3 failures to avoid spam
-                microscope_count++;
-                
-                auto& target = end_gp;  // Check the target endpoint
-                int cx = target.x;
-                int cy = target.y;
-                int cz = target.layer;
-                
-                std::cout << "\n=== GRID MICROSCOPE #" << microscope_count 
-                          << " (Failed Segment Target) ===" << std::endl;
-                std::cout << "Target Physical: (" << end_phys.x << ", " 
-                          << end_phys.y << ")" << std::endl;
-                std::cout << "Target Grid: (" << cx << ", " << cy << ", " << cz << ")" << std::endl;
-                
-                // Print 5x5 grid state around target
-                std::cout << "Grid State (5x5 area):" << std::endl;
-                for (int y = cy + 2; y >= cy - 2; --y) {
-                    printf("y=%-3d | ", y);
-                    for (int x = cx - 2; x <= cx + 2; ++x) {
-                        if (!grid_->isValid(GridPoint(x, y, cz))) {
-                            std::cout << " X ";
-                            continue;
-                        }
-                        
-                        auto state = grid_->getState(GridPoint(x, y, cz));
-                        if (state == GridState::PIN) std::cout << " P ";
-                        else if (state == GridState::OBSTACLE) std::cout << " # ";
-                        else if (state == GridState::FREE) std::cout << " . ";
-                        else if (state == GridState::ROUTED) std::cout << " = ";
-                        else std::cout << " ? ";
-                    }
-                    std::cout << "\n";
-                }
-                std::cout << "Legend: P=Pin, #=Obstacle, .=Free, ==Routed, X=Out of bounds" << std::endl;
-                
-                // Check if start point is properly marked as PIN
-                auto start_state = grid_->getState(start_gp);
-                auto end_state = grid_->getState(end_gp);
-                std::cout << "Start point state: " << (start_state == GridState::PIN ? "PIN" : "NOT PIN") << std::endl;
-                std::cout << "End point state: " << (end_state == GridState::PIN ? "PIN" : "NOT PIN") << std::endl;
-                
-                // Show grid conversion details
-                double pitch_x = grid_->getPitchX();
-                double pitch_y = grid_->getPitchY();
-                std::cout << "Grid pitch: X=" << pitch_x << ", Y=" << pitch_y << std::endl;
-                std::cout << "Expected grid X: (round(" << end_phys.x << " / " << pitch_x << ")) = " 
-                          << static_cast<int>(std::round(end_phys.x / pitch_x)) << std::endl;
-                std::cout << "Expected grid Y: (round(" << end_phys.y << " / " << pitch_y << ")) = " 
-                          << static_cast<int>(std::round(end_phys.y / pitch_y)) << std::endl;
-            }
+            // Log simple failure message (Probes removed)
+            // std::cout << "Failed to route segment for net " << net->getName() << std::endl;
             
             result.error_message = "Failed to route MST segment";
         }
-    }
+    } // End of MST segment loop
 
     // 5. Determine success and update statistics
     result.success = !result.segments.empty();
     
-    // **NEW**: Update segments-level statistics
     int expected_segments = static_cast<int>(mst_segments.size());
     int succeeded_segments = static_cast<int>(result.segments.size());
     int failed_segments = expected_segments - succeeded_segments;
@@ -375,12 +210,13 @@ RoutingResult MazeRouter::routeNet(Net* net,
     
     if (result.success) {
         total_routed_nets_++;
-        // **FIXED**: Only add result.total_* once at the net level, not at segment level
         total_wirelength_ += result.total_wirelength;
         total_vias_ += result.total_vias;
 
-        // 6. Back-annotate wire length to Net for timing analysis
-        // Convert grid units to physical units (micrometers)
+        // Global Registry Update
+        int net_id = std::hash<std::string>{}(net->getName());
+        final_routes_[net_id] = result.segments;
+
         double wire_length_um = result.total_wirelength * grid_->getPitchX();
         net->setWireLength(wire_length_um);
     } else {
@@ -396,6 +232,25 @@ bool MazeRouter::findPath(const GridPoint& start, const GridPoint& end,
     std::priority_queue<AStarNode, std::vector<AStarNode>, std::greater<AStarNode>> open_set;
     std::unordered_map<GridPoint, GridPoint, GridPointHash> came_from;
     std::unordered_map<GridPoint, double, GridPointHash> g_score;
+    
+    // **TACTICAL VICTORY**: Calculate bounding box with expansion for 2-pin networks
+    // 2-pin networks often get trapped in small boxes - give them escape routes!
+    int bbox_margin = 5;  // Default margin
+    if (current_net_segments_ == 1) {  // This is a 2-pin network (single segment)
+        bbox_margin = 15;  // Give 2-pin networks much larger search space
+    }
+    
+    // Calculate bounding box and make variables accessible in neighbor check
+    int min_x = std::max(0, std::min(start.x, end.x) - bbox_margin);
+    int max_x = std::min(grid_->getGridWidth() - 1, std::max(start.x, end.x) + bbox_margin);
+    int min_y = std::max(0, std::min(start.y, end.y) - bbox_margin);
+    int max_y = std::min(grid_->getGridHeight() - 1, std::max(start.y, end.y) + bbox_margin);
+    
+    // Clamp to grid bounds
+    min_x = std::max(0, min_x);
+    max_x = std::min(grid_->getGridWidth() - 1, max_x);
+    min_y = std::max(0, min_y);
+    max_y = std::min(grid_->getGridHeight() - 1, max_y);
     
     // Push start node
     double start_h = manhattanDistance(start, end);
@@ -417,6 +272,15 @@ bool MazeRouter::findPath(const GridPoint& start, const GridPoint& end,
         // Expand neighbors
         std::vector<GridPoint> neighbors = grid_->getNeighbors(current.gp, current_net_id_);
         for (const GridPoint& next : neighbors) {
+            // **TACTICAL VICTORY**: Check bounding box constraint
+            // For 2-pin networks, enforce the expanded bounding box
+            if (current_net_segments_ == 1) {
+                // Bounding box already calculated at function start
+                if (next.x < min_x || next.x > max_x || next.y < min_y || next.y > max_y) {
+                    continue;  // Skip outside expanded bounding box
+                }
+            }
+            
             // Legality check: allow walking into end even if it's an obstacle
             if (!(next == end) && !grid_->isFree(next, current_net_id_)) {
                 continue;  // Skip obstacles (except the target point)
@@ -512,13 +376,12 @@ void MazeRouter::updateHistoryCosts(double history_increment) {
                     grid_->addHistoryCost(x, y, z, penalty);
                     punished_count++;
                     
-                    // Debug probe for our stubborn conflict points
-                    if ((x == 4 && y == 6 && z == 1) || (x == 16 && y == 6 && z == 1)) {
-                        double new_cost = grid_->getHistoryCost(x, y, z);
-                        std::cout << "  >>> PUNISHING (" << x << "," << y << "," << z 
-                                  << "): Usage=" << usage << ", Penalty=" << penalty 
-                                  << ", New HistCost=" << new_cost << std::endl;
-                    }
+                    // 补回 new_cost 定义
+                    double new_cost = grid_->getHistoryCost(x, y, z);
+
+                    std::cout << "  Grid point (" << x << "," << y << "," << z
+                              << "): Usage=" << usage << ", Penalty=" << penalty 
+                              << ", New HistCost=" << new_cost << std::endl;
                 }
             }
         }
@@ -527,25 +390,28 @@ void MazeRouter::updateHistoryCosts(double history_increment) {
     std::cout << "  Applied penalties to " << punished_count << " congested points" << std::endl;
 }
 
+
 void MazeRouter::saveBestSolution(const std::vector<RoutingResult>& results, int iteration, int conflicts) {
+    
     if (conflicts < min_conflicts_) {
-        std::cout << ">>> NEW RECORD! Conflicts: " << conflicts << " (Saving at iteration " << iteration << ") <<<" << std::endl;
+        std::cout << ">>> NEW RECORD! Conflicts: " << conflicts 
+                  << " (Saving at iteration " << iteration << ") <<<" << std::endl;
         min_conflicts_ = conflicts;
         best_iteration_ = iteration;
         
         // Clear previous best solution
         best_solution_segments_.clear();
+        best_solution_segments_with_ids_.clear();
         
-        // Save all successful routing segments
-        for (const auto& result : results) {
-            if (result.success) {
-                for (const auto& segment : result.segments) {
-                    best_solution_segments_.push_back(segment);
+        // **OPTIMAL SOLUTION**: Save ALL networks from global registry (final_routes_)
+        for (const auto& [net_id, segments] : final_routes_) {
+            // Add all segments for each net
+            for (const auto& segment : segments) {
+                if (!segment.empty()) {
+                    best_solution_segments_with_ids_.push_back({segment, net_id});
                 }
             }
         }
-        
-        std::cout << "  Saved " << best_solution_segments_.size() << " segments from best solution" << std::endl;
     }
 }
 
@@ -561,10 +427,12 @@ void MazeRouter::restoreBestSolution() {
     // Clear current routing (but preserve history costs)
     grid_->clearRoutes();
     
-    // Restore best solution segments to grid
+    // Restore best solution segments to grid with their correct net IDs
     // This will recreate the best conflict state found during iterations
-    for (const auto& segment : best_solution_segments_) {
-        grid_->markPath(segment, 0);  // Use 0 as default net_id for visualization
+    for (const auto& [segment, net_id] : best_solution_segments_with_ids_) {
+        if (!segment.empty()) {
+            grid_->markPath(segment, net_id);  // Use the correct net_id
+        }
     }
     
     std::cout << "Best solution restored successfully! Grid now has " 
@@ -601,8 +469,6 @@ double MazeRouter::calculateMovementCost(const GridPoint& from, const GridPoint&
     // **PATHFINDER CHANGE**: Use RoutingGrid's cost calculation instead of local logic
     // This includes history costs and collision penalties
     double cost = grid_->calculateMovementCost(from, to, current_net_id_, collision_penalty_);
-    return cost;
-    
     return cost;
 }
 
@@ -672,12 +538,7 @@ bool MazeRouter::findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoi
         
         
         
-        // Original smart access logging
-        if (best_x != pin_gx || best_y != pin_gy) {
-            std::cout << "Smart Access: Net " << net_id 
-                      << " shifted from (" << pin_gx << "," << pin_gy << ") to (" 
-                      << best_x << "," << best_y << ") [Cost: " << min_cost << "]" << std::endl;
-        }
+
         return true;
     }
     
@@ -711,4 +572,48 @@ int MazeRouter::countVias(const std::vector<GridPoint>& path) const {
     return vias;
 }
 
+void MazeRouter::exportVisualization(const std::string& filename) {
+    
+    // Create directory if needed
+    size_t last_slash = filename.find_last_of('/');
+    if (last_slash != std::string::npos) {
+        std::string directory = filename.substr(0, last_slash);
+        std::string mkdir_cmd = "mkdir -p " + directory;
+        std::system(mkdir_cmd.c_str());
+    }
+    
+    std::ofstream out(filename);
+    if (!out.is_open()) {
+        std::cerr << "Error: Could not open file " << filename << std::endl;
+        return;
+    }
+    
+    // 1. Print header
+    out << "# Net_ID Start_X Start_Y Start_Layer End_X End_Y End_Layer\n";
+    
+    // 2. Export all routes from global registry (final_routes_)
+    int segments_count = 0;
+    int nets_exported = 0;
+    
+    for (auto const& [net_id, paths] : final_routes_) {
+        if (paths.empty()) continue;
+        nets_exported++;
+        
+        // Each net may have multiple paths (segments)
+        for (const auto& path : paths) {
+            if (path.size() < 2) continue;
+            
+            // Convert node list to line segments
+            for (size_t i = 0; i < path.size() - 1; ++i) {
+                // Format: x1 y1 layer1 x2 y2 layer2 net_id
+                out << path[i].x << " " << path[i].y << " " << path[i].layer << " "
+                    << path[i+1].x << " " << path[i+1].y << " " << path[i+1].layer << " "
+                    << net_id << "\n";
+                segments_count++;
+            }
+        }
+    }
+    
+    out.close();
+}
 } // namespace mini

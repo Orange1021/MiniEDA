@@ -63,7 +63,7 @@ RoutingConfig toRoutingConfig(const AppConfig& app_config) {
     routing_config.via_cost = app_config.via_cost;
     routing_config.wire_cost = app_config.wire_cost;
     routing_config.verbose = app_config.verbose;
-    routing_config.run_id = app_config.run_id + "_routing";
+    routing_config.run_id = app_config.run_id;
     return routing_config;
 }
 
@@ -148,7 +148,13 @@ std::unique_ptr<PlacerDB> runPlacement(const AppConfig& config, std::shared_ptr<
     placement_config.placement_algo = placement_algo;  // Set algorithm
     
     // Use algorithm-specific folder for comparison (avoid overwriting)
-    placement_config.run_id = config.run_id + "_" + placement_algo;
+    // Extract base run_id without _routing suffix for placement
+    std::string base_run_id = config.run_id;
+    size_t routing_pos = base_run_id.find("_routing");
+    if (routing_pos != std::string::npos) {
+        base_run_id = base_run_id.substr(0, routing_pos);
+    }
+    placement_config.run_id = base_run_id + "_" + placement_algo;
     
     // Run placement using unified interface
     auto placer_db = PlacementInterface::runPlacementWithVisualization(

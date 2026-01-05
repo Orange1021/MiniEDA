@@ -75,6 +75,14 @@ public:
      * @param routed_count Output number of successfully routed nets
      * @param failed_count Output number of failed nets
      */
+    /**
+     * @brief Get routing statistics
+     * @param results Vector of routing results
+     * @param total_wirelength Output total wirelength
+     * @param total_vias Output total vias
+     * @param routed_count Output number of successfully routed nets
+     * @param failed_count Output number of failed nets
+     */
     static void getRoutingStatistics(
         const std::vector<RoutingResult>& results,
         double& total_wirelength,

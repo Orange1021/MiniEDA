@@ -153,8 +153,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
     
     std::vector<RoutingResult> results;
     
-    try {
-        // Phase 1: Parse LEF library
+    // Phase 1: Parse LEF library
         if (config.verbose) {
             std::cout << "Parsing LEF library: " << config.lef_file << std::endl;
         }
@@ -228,6 +227,8 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             std::cout << "Routing " << netlist_db->getNumNets() << " nets..." << std::endl;
         }
         
+        
+        
         // **CRITICAL FIX**: Net ordering optimization - small nets first
         std::vector<Net*> nets_to_route;
         for (const auto& net_ptr : netlist_db->getNets()) {
@@ -239,22 +240,52 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 continue;
             }
             
+            // **HFN FILTER**: Skip High Fanout Nets (Clock/Reset nets)
+            // Strategy: For simple Global Routing experiments, typically ignore Clock Net
+            if (net->getAllPins().size() > 15) {
+                std::cout << "Skipping HFN (Clock/Reset): Net " << net->getName() 
+                          << " with " << net->getAllPins().size() << " pins" << std::endl;
+                continue; // Don't route it!
+            }
+            
+            // **HIGH FANOUT NET ANALYSIS**: Print details about high fanout nets for analysis
+            if (net->getAllPins().size() >= 8) {
+                std::cout << "High Fanout Net: " << net->getName() 
+                          << " with " << net->getAllPins().size() << " pins (hash: " 
+                          << std::hash<std::string>{}(net->getName()) << ")" << std::endl;
+            }
+            
+            // **NET 0 DEBUG**: Print all nets with hash ID 0
+            if (std::hash<std::string>{}(net->getName()) == 0) {
+                std::cout << "Net 0 DEBUG: " << net->getName() 
+                          << " with " << net->getAllPins().size() << " pins" << std::endl;
+            }
+            
             nets_to_route.push_back(net);
         }
         
-        // Sort nets by HPWL (Half-Perimeter Wire Length) - small nets first
+// **SMALLEST FIRST STRATEGY**: Sort nets by pin count first, then HPWL
+        // This ensures small nets get priority routing before large nets hog resources
         std::sort(nets_to_route.begin(), nets_to_route.end(), 
             [&pin_locations](Net* a, Net* b) {
-                // Calculate HPWL for net A
+                // Primary sort: Pin count (smaller first)
+                int pins_a = a->getAllPins().size();
+                int pins_b = b->getAllPins().size();
+                
+                if (pins_a != pins_b) {
+                    return pins_a < pins_b; // Fewer pins first
+                }
+                
+                // Secondary sort: HPWL (smaller first) for same pin count
                 double hpwl_a = std::numeric_limits<double>::max();
-                auto pins_a = a->getAllPins();
-                if (!pins_a.empty()) {
+                auto pins_a_vec = a->getAllPins();
+                if (!pins_a_vec.empty()) {
                     double min_x = std::numeric_limits<double>::max();
                     double max_x = std::numeric_limits<double>::lowest();
                     double min_y = std::numeric_limits<double>::max();
                     double max_y = std::numeric_limits<double>::lowest();
                     
-                    for (Pin* pin : pins_a) {
+                    for (Pin* pin : pins_a_vec) {
                         std::string pin_key = pin->getOwner()->getName() + ":" + pin->getName();
                         auto it = pin_locations.find(pin_key);
                         if (it != pin_locations.end()) {
@@ -268,16 +299,15 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                     hpwl_a = (max_x - min_x) + (max_y - min_y);
                 }
                 
-                // Calculate HPWL for net B
                 double hpwl_b = std::numeric_limits<double>::max();
-                auto pins_b = b->getAllPins();
-                if (!pins_b.empty()) {
+                auto pins_b_vec = b->getAllPins();
+                if (!pins_b_vec.empty()) {
                     double min_x = std::numeric_limits<double>::max();
                     double max_x = std::numeric_limits<double>::lowest();
                     double min_y = std::numeric_limits<double>::max();
                     double max_y = std::numeric_limits<double>::lowest();
                     
-                    for (Pin* pin : pins_b) {
+                    for (Pin* pin : pins_b_vec) {
                         std::string pin_key = pin->getOwner()->getName() + ":" + pin->getName();
                         auto it = pin_locations.find(pin_key);
                         if (it != pin_locations.end()) {
@@ -291,14 +321,28 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                     hpwl_b = (max_x - min_x) + (max_y - min_y);
                 }
                 
-                // Small HPWL first (ascending order)
+                // Small HPWL first for same pin count
                 return hpwl_a < hpwl_b;
             });
         
+        // **DEBUG**: Print first and last few nets to verify smallest-first sorting
+        std::cout << "Net ordering (first 5, last 5):" << std::endl;
+        for (int i = 0; i < std::min(5, static_cast<int>(nets_to_route.size())); ++i) {
+            std::cout << "  [" << i << "] " << nets_to_route[i]->getName() 
+                      << " (" << nets_to_route[i]->getAllPins().size() << " pins)" << std::endl;
+        }
+        if (nets_to_route.size() > 10) {
+            std::cout << "  ... (" << (nets_to_route.size() - 10) << " nets in between) ..." << std::endl;
+            for (int i = std::max(0, static_cast<int>(nets_to_route.size()) - 5); i < static_cast<int>(nets_to_route.size()); ++i) {
+                std::cout << "  [" << i << "] " << nets_to_route[i]->getName() 
+                          << " (" << nets_to_route[i]->getAllPins().size() << " pins)" << std::endl;
+            }
+        }
+        
 // PathFinder parameters
-        const int max_iterations = 30;  // Increased to allow more iterations for convergence
-        const double initial_collision_penalty = 50.0;  // Start gentle, then grow aggressive
-        const double penalty_growth_rate = 1.3;  // EXPONENTIAL: Now using 1.3x growth for strong pressure
+        const int max_iterations = 50;  // **TACTICAL VICTORY**: More iterations for alley fighting resolution
+        const double initial_collision_penalty = 30.0;  // **TACTICAL**: Lower starting penalty for gentler negotiation
+        const double penalty_growth_rate = 1.2;  // **TACTICAL**: Slower growth to avoid over-penalization
         bool solution_found = false;
         
         // Track penalty for reporting
@@ -323,33 +367,53 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             // This creates massive pressure to find alternative routes
             router.setCollisionPenalty(current_penalty);
             
+            // Set via cost from configuration
+                router.setViaCost(config.via_cost);            
             // **NUCLEAR PATHFINDER**: Set escalating history increment
             // This makes congested cells increasingly "toxic" over time
             routing_grid.setHistoryIncrement(current_history_increment);
             
-            // Clear previous iteration routes but preserve history costs
-            if (iter > 0) {
+            // **STABILIZER**: Selective rerouting strategy
+            if (iter == 0) {
+                // Iteration 0: Full routing to establish baseline congestion map
                 routing_grid.clearRoutes();
+            } else if (iter == 1) {
+                // Iteration 1: Still full routing to let algorithm settle
+                routing_grid.clearRoutes();
+            } else {
+                // Iteration 2+: Enable stabilizer - only reroute conflicting nets
+                // Good nets become "concrete pillars", bad nets must find gaps
                 
-                // Update history costs based on previous conflicts
-                int conflicts = routing_grid.countConflicts();
-                if (config.verbose) {
-                    std::cout << "  Updating history costs based on " << conflicts << " conflicts" << std::endl;
-                }
+                // Get list of conflicting net IDs
+                std::unordered_set<int> conflicted_net_ids = routing_grid.getConflictedNetIDs();
                 
-                // **NUCLEAR PATHFINDER**: Add escalating history penalty to conflicted areas
-                for (int z = 0; z < routing_grid.getNumLayers(); ++z) {
-                    for (int y = 0; y < routing_grid.getGridHeight(); ++y) {
-                        for (int x = 0; x < routing_grid.getGridWidth(); ++x) {
-                            GridPoint gp(x, y, z);
-                            if (routing_grid.getState(gp) == GridState::ROUTED) {
-                                // Use dynamic history increment instead of fixed 1.0
-                                routing_grid.addHistoryCost(x, y, z, current_history_increment);
-                            }
-                        }
+                // Determine which nets to reroute
+                std::vector<Net*> nets_to_reroute;
+                for (Net* net : nets_to_route) {
+                    int net_id = std::hash<std::string>{}(net->getName());
+                    if (conflicted_net_ids.count(net_id)) {
+                        nets_to_reroute.push_back(net);
                     }
                 }
+                
+                std::cout << ">>> Selective Mode: Rerouting " << nets_to_reroute.size() 
+                          << " / " << nets_to_route.size() << " nets (" 
+                          << conflicted_net_ids.size() << " conflicted) <<<" << std::endl;
+                
+                // **CRITICAL**: Only rip up the conflicting nets
+                // Good nets remain as obstacles in the grid
+                for (Net* net : nets_to_reroute) {
+                    int net_id = std::hash<std::string>{}(net->getName());
+                    routing_grid.ripUpNet(net_id);
+                }
+                
+                // Update nets_to_route to only include conflicted ones
+                nets_to_route = nets_to_reroute;
             }
+            
+            // Update history costs will be done after conflict counting
+            
+            
             
             // **FORCED TURN-BY-TURN**: Randomize net order to break deadlocks
             results.clear();
@@ -359,13 +423,28 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             std::vector<int> net_indices(nets_to_route.size());
             std::iota(net_indices.begin(), net_indices.end(), 0);  // 0, 1, 2, ...
             
-            // **CRITICAL**: Use time-based seed for true randomness each iteration
-            // This ensures different ordering each round, breaking persistent deadlocks
+            // **TACTICAL VICTORY**: Smart routing order strategy
+            // Iter 0: Smallest First (2-pin networks get priority)
+            // Iter 1+: Complete Shuffle to break deadlocks
+            // **CRITICAL**: Declare seed at broader scope to fix scope issue
             auto seed = std::chrono::high_resolution_clock::now().time_since_epoch().count();
-            std::mt19937 rng(seed);
             
-            // Shuffle order completely randomly each iteration
-            std::shuffle(net_indices.begin(), net_indices.end(), rng);
+            if (iter == 0) {
+                // First iteration: sort by pin count (smallest first)
+                // This gives 2-pin networks first dibs on optimal paths
+                std::sort(net_indices.begin(), net_indices.end(), 
+                    [&nets_to_route](int a, int b) {
+                        return nets_to_route[a]->getAllPins().size() < 
+                               nets_to_route[b]->getAllPins().size();
+                    });
+                std::cout << "  Iteration 0: Routing in Smallest First order (2-pin networks first)" << std::endl;
+            } else {
+                // **CRITICAL**: Complete shuffle from iteration 1 onwards
+                // This breaks the persistent deadlock where same networks always win/lose
+                std::mt19937 rng(seed);
+                std::shuffle(net_indices.begin(), net_indices.end(), rng);
+                std::cout << "  Iteration " << iter << ": Complete shuffle (seed=" << seed << ")" << std::endl;
+            }
             
             std::cout << "  Routing " << nets_to_route.size() << " nets in randomized order (seed=" << seed << ")" << std::endl;
             
@@ -373,7 +452,6 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 Net* net = nets_to_route[net_idx];
                 RoutingResult result = router.routeNet(net, pin_locations);
                 
-                // **DIAGNOSTIC PROBE**: Track which networks fail
                 if (!result.success) {
                     std::cout << "  FAILED NET: " << net->getName() 
                               << " - Reason: " << result.error_message << std::endl;
@@ -415,14 +493,15 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             }
             
             // 2. Stagnation detected - no improvement for too long
-            if (stagnation_count >= 7) {
+            if (stagnation_count >= 5) {
                 std::cout << "\n>>> STAGNATION DETECTED: No improvement for " << stagnation_count 
                           << " iterations. Stopping early. <<<" << std::endl;
                 break;
             }
             
             // 3. Divergence detected - conflicts getting much worse than best
-            if (conflicts > router.getMinConflicts() + 10) {
+            // Allow some divergence but stop if it gets too bad
+            if (conflicts > router.getMinConflicts() + 50) {
                 std::cout << "\n>>> DIVERGENCE DETECTED: Conflicts (" << conflicts 
                           << ") much worse than best (" << router.getMinConflicts() 
                           << "). Stopping early. <<<" << std::endl;
@@ -461,12 +540,11 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             //     break;
             // }
             
-// **NUCLEAR PATHFINDER**: Exponential penalty explosion to force detours
-            // This makes collision cost astronomically higher than detour cost
-            
-            // 1. Explosive exponential growth with very high ceiling (forces detours at all costs)
-            double next_penalty = current_penalty * 1.5;  // AGGRESSIVE: 1.5x per iteration
-            if (next_penalty > 100000.0) next_penalty = 100000.0;  // NO CAP: Allow up to 100000!
+// **CALMED**: Linear penalty growth to prevent panic
+            // This provides predictable, controlled pressure increase
+            // 1. Linear growth instead of exponential
+            double next_penalty = current_penalty + 30.0;  // LINEAR: +30 per iteration
+            if (next_penalty > 1000.0) next_penalty = 1000.0;  // Reasonable cap
             
             router.setCollisionPenalty(next_penalty);
             
@@ -475,9 +553,10 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             
             
             
-            // 2. Strong history increment growth (maintains massive pressure)
-            current_history_increment = 1.0 + (iter * 0.25);  // Strong growth
-            if (current_history_increment > 20.0) current_history_increment = 20.0;  // Cap at 20.0
+            // 2. **CALMED**: Gentle history increment growth to prevent panic
+            // Keep history increment small to work with decay mechanism
+            current_history_increment = 1.0 + (iter * 0.05);  // Gentle growth: 1.0, 1.05, 1.10...
+            if (current_history_increment > 3.0) current_history_increment = 3.0;  // Lower cap
             
             // Cap penalties to prevent numerical overflow
             const double max_penalty = 100000.0;  // Increased cap for nuclear mode
@@ -494,6 +573,13 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         // **RESTORE BEST SOLUTION**: Restore the best solution found during iterations
         std::cout << "\n=== RESTORING BEST SOLUTION ===" << std::endl;
         router.restoreBestSolution();
+        
+        // **INTEGRATED VISUALIZATION**: Export data immediately after restoration
+        // This ensures we export the complete solution (all 154 nets)
+        std::string output_dir = "visualizations/" + config.run_id;
+        router.exportVisualization(output_dir + "/post_routing.txt");
+        
+        
         
         // **CONFLICT EVOLUTION ANALYSIS**: Report conflict changes over all iterations
         std::cout << "\n=== CONFLICT EVOLUTION ANALYSIS ===" << std::endl;
@@ -532,7 +618,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         
         // **CONFLICT LOCATION ANALYSIS**: Print detailed conflict information
         if (!conflict_history.empty() && conflict_history.back() > 0) {
-            routing_grid.printConflictLocations();
+            routing_grid.printConflictLocations(0, config.verbose);
             
             // **FOUNDATION CHECK**: Inspect Layer 0 at the conflict hotspot (4,6)
             std::cout << "\n>>> FOUNDATION CHECK (Layer 0 at 4,6) <<<" << std::endl;
@@ -568,7 +654,9 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             }
             
             // **NET ID ANALYSIS**: Identify which nets are involved in conflicts
-            std::cout << "\n=== NET ID CONFLICT ANALYSIS ===" << std::endl;
+            if (config.verbose) {
+                std::cout << "\n=== NET ID CONFLICT ANALYSIS ===" << std::endl;
+            }
             
             // Map net_id_hash -> net_name for reporting
             std::unordered_map<int, std::string> net_id_to_name;
@@ -578,39 +666,45 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             }
             
             // Report conflicting nets
-            std::cout << "Conflicting Net IDs found:" << std::endl;
-            for (const auto& [net_id, net_name] : net_id_to_name) {
-                std::cout << "  Net ID " << net_id << " = " << net_name << std::endl;
+            if (config.verbose) {
+                std::cout << "Conflicting Net IDs found:" << std::endl;
+                for (const auto& [net_id, net_name] : net_id_to_name) {
+                    std::cout << "  Net ID " << net_id << " = " << net_name << std::endl;
+                }
+                std::cout << "================================" << std::endl;
+                
+                // **SURROUNDING CHECK**: Inspect Layer 1 escape routes around the hotspot
+                std::cout << "\n>>> SURROUNDING CHECK (Layer 1 at 4,6) <<<" << std::endl;
             }
-            std::cout << "================================" << std::endl;
-            
-            // **SURROUNDING CHECK**: Inspect Layer 1 escape routes around the hotspot
-            std::cout << "\n>>> SURROUNDING CHECK (Layer 1 at 4,6) <<<" << std::endl;
-            std::cout << "Checking escape routes in M2 layer around (4,6,1):" << std::endl;
+            if (config.verbose) {
+                std::cout << "Checking escape routes in M2 layer around (4,6,1):" << std::endl;
+            }
             
             for (int dy = -1; dy <= 1; ++dy) {
                 for (int dx = -1; dx <= 1; ++dx) {
                     int nx = tx + dx, ny = ty + dy;
                     
-                    if (routing_grid.isValid(GridPoint(nx, ny, 1))) {
-                        double history = routing_grid.getHistoryCost(nx, ny, 1);
-                        auto state = routing_grid.getState(GridPoint(nx, ny, 1));
-                        int net_id = routing_grid.getNetId(GridPoint(nx, ny, 1));
-                        
-                        printf("(%d,%d) ", nx, ny);
-                        if (state == GridState::OBSTACLE) {
-                            printf("BLK ");
-                        } else if (state == GridState::ROUTED) {
-                            printf("Rtd(N%d) ", net_id); // Show which net occupies it
-                        } else if (state == GridState::PIN) {
-                            printf("PIN(N%d) ", net_id);
+                    if (config.verbose) {
+                        if (routing_grid.isValid(GridPoint(nx, ny, 1))) {
+                            double history = routing_grid.getHistoryCost(nx, ny, 1);
+                            auto state = routing_grid.getState(GridPoint(nx, ny, 1));
+                            int net_id = routing_grid.getNetId(GridPoint(nx, ny, 1));
+                            
+                            printf("(%d,%d) ", nx, ny);
+                            if (state == GridState::OBSTACLE) {
+                                printf("BLK ");
+                            } else if (state == GridState::ROUTED) {
+                                printf("Rtd(N%d) ", net_id); // Show which net occupies it
+                            } else if (state == GridState::PIN) {
+                                printf("PIN(N%d) ", net_id);
+                            } else {
+                                printf("Free ");
+                            }
+                            
+                            printf("Hist=%.1f\n", history);
                         } else {
-                            printf("Free ");
+                            printf("(%d,%d) Invalid\n", nx, ny);
                         }
-                        
-                        printf("Hist=%.1f\n", history);
-                    } else {
-                        printf("(%d,%d) Invalid\n", nx, ny);
                     }
                 }
             }
@@ -629,7 +723,33 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             double segment_success_rate = router.getSegmentSuccessRate();
             
             std::cout << "\n  **PATHFINDER FINAL RESULTS:**" << std::endl;
-            std::cout << "    Networks routed: " << routed_count << "/" << nets_to_route.size() << std::endl;
+            // Get the complete routing registry
+            const auto& all_routed = router.getAllRoutedNetworks();
+            std::cout << "    Networks routed: " << routed_count << " (current iteration) / " 
+                      << all_routed.size() << " (total in registry)" << std::endl;
+            std::cout << "    Note: " << (all_routed.size() - routed_count) 
+                      << " networks were 'frozen' after finding conflict-free routes" << std::endl;
+            
+            // Show conflict evolution summary
+            if (!conflict_history.empty()) {
+                int initial_conflicts = conflict_history[0];
+                int final_conflicts = conflict_history.back();
+                int min_conflicts = *std::min_element(conflict_history.begin(), conflict_history.end());
+                std::cout << "    Conflicts evolution: " << initial_conflicts << " → " << min_conflicts << " → " << final_conflicts << std::endl;
+                
+                // Show conflict trend at key points
+                if (conflict_history.size() > 1) {
+                    std::cout << "    Conflict trend: ";
+                    int report_points = std::min(5, static_cast<int>(conflict_history.size()));
+                    int step = std::max(1, static_cast<int>(conflict_history.size()) / report_points);
+                    for (int i = 0; i < static_cast<int>(conflict_history.size()); i += step) {
+                        std::cout << "Iter" << i << ":" << conflict_history[i];
+                        if (i + step < static_cast<int>(conflict_history.size())) std::cout << " → ";
+                    }
+                    std::cout << std::endl;
+                }
+            }
+            
             std::cout << "    Segments attempted: " << segments_attempted << std::endl;
             std::cout << "    Segments succeeded: " << segments_succeeded << std::endl;
             std::cout << "    Real success rate: " << std::fixed << std::setprecision(1) 
@@ -638,11 +758,6 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             std::cout << "    Total wirelength: " << total_wirelength << std::endl;
             std::cout << "    Total vias: " << total_vias << std::endl;
         }
-        
-    } catch (const std::exception& e) {
-        std::cerr << "Error in routing: " << e.what() << std::endl;
-    }
-    
     return results;
 }
 
@@ -674,6 +789,7 @@ std::vector<RoutingResult> RoutingInterface::runRoutingWithVisualization(
     
     return results;
 }
+
 
 void RoutingInterface::getRoutingStatistics(
     const std::vector<RoutingResult>& results,

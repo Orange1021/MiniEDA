@@ -11,6 +11,7 @@
 #include <functional>
 #include <algorithm>
 #include <cmath>
+#include <unordered_set>
 #include "../../lib/include/geometry.h"
 
 namespace mini {
@@ -182,16 +183,30 @@ public:
     void clearRoutes();
     
     /**
+     * @brief Rip up (remove) routes for a specific net only
+     * @details Used for selective rerouting - removes ROUTED states for specified net
+     *          while preserving routes of other nets as obstacles
+     * @param net_id ID of the net to rip up
+     */
+    void ripUpNet(int net_id);
+    
+    /**
      * @brief Count total conflicts (overlaps) in current routing
      * @return Number of grid points with multiple net assignments
      */
-    int countConflicts() const;
+    int countConflicts(bool verbose = false) const;
+    
+    /**
+     * @brief Get set of net IDs involved in conflicts
+     * @return Set of net IDs that have conflicts
+     */
+    std::unordered_set<int> getConflictedNetIDs() const;
     
     /**
      * @brief Print detailed conflict locations for debugging
      * @param current_net_id Current net ID being routed (for enemy/friend identification)
      */
-    void printConflictLocations(int current_net_id = 0) const;
+    void printConflictLocations(int current_net_id = 0, bool verbose = false) const;
     
     /**
      * @brief Calculate movement cost for PathFinder algorithm

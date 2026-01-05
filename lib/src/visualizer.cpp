@@ -208,7 +208,9 @@ void Visualizer::generateRoutedPythonScript(const std::string& script_filename,
         
         // Draw each segment
         for (const auto& path : result.segments) {
-
+            // Skip empty paths
+            if (path.empty()) continue;
+            
         // Draw segments in this path
             for (size_t i = 0; i < path.size() - 1; ++i) {
                 const GridPoint& curr = path[i];
