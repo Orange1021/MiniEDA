@@ -142,7 +142,13 @@ void DetailedPlacer::detailedReordering() {
         // Smaller window = faster, larger window = better solution space
         int window_size = 3; 
         
+        // Skip rows with fewer cells than window size
+        if (row_cells.size() < static_cast<size_t>(window_size)) {
+            continue;
+        }
+        
         for (size_t i = 0; i <= row_cells.size() - window_size; ++i) {
+            
             // Try pairwise swaps within window
             // Window range: [i, i + window_size - 1]
             

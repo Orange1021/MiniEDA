@@ -23,8 +23,13 @@
 
 namespace mini {
 
-PlacerEngine::PlacerEngine(PlacerDB* db)
-    : db_(db), viz_(nullptr), current_hpwl_(0.0), global_placer_(nullptr), leg_algo_(LegalizationAlgorithm::ABACUS) {
+PlacerEngine::PlacerEngine(PlacerDB* db, double target_density, double initial_lambda, 
+                           double lambda_growth_rate, double learning_rate, 
+                           double momentum, double convergence_threshold, 
+                           double density_margin, double max_gradient_ratio, double max_displacement_ratio)
+    : db_(db), viz_(nullptr), current_hpwl_(0.0), hpwl_convergence_ratio_(0.0001), density_margin_(density_margin), max_gradient_ratio_(max_gradient_ratio), max_displacement_ratio_(max_displacement_ratio), global_placer_(nullptr), leg_algo_(LegalizationAlgorithm::ABACUS),      target_density_(target_density), initial_lambda_(initial_lambda), 
+      lambda_growth_rate_(lambda_growth_rate), learning_rate_(learning_rate),
+      momentum_(momentum), convergence_threshold_(convergence_threshold) {
 }
 PlacerEngine::~PlacerEngine() {
     delete global_placer_;
@@ -100,7 +105,7 @@ void PlacerEngine::runGlobalPlacement() {
         
         // Check convergence
         double improvement = current_hpwl_ - new_hpwl;
-        if (std::abs(improvement) < current_hpwl_ * 0.0001) {  // 0.01% improvement threshold
+        if (std::abs(improvement) < current_hpwl_ * hpwl_convergence_ratio_) {
             std::cout << "Converged at iteration " << iter << std::endl;
             break;
         }
@@ -339,7 +344,7 @@ void PlacerEngine::runBasicStrategy() {
         }
         
         double improvement = current_hpwl_ - new_hpwl;
-        if (std::abs(improvement) < current_hpwl_ * 0.0001) {
+        if (std::abs(improvement) < current_hpwl_ * hpwl_convergence_ratio_) {
             std::cout << "  Converged at iteration " << iter << std::endl;
             break;
         }
@@ -355,20 +360,19 @@ void PlacerEngine::runElectrostaticStrategy() {
     
     if (!global_placer_) {
         global_placer_ = new GlobalPlacer(db_, db_->getNetlistDB());
+        global_placer_->setDensityMargin(density_margin_);
+        global_placer_->setMaxGradientRatio(max_gradient_ratio_);
+        global_placer_->setMaxDisplacementRatio(max_displacement_ratio_);
         
         const int grid_size = 64;
-        const double target_density = 0.7;
         
-        if (!global_placer_->initialize(grid_size, target_density)) {
+        if (!global_placer_->initialize(grid_size, target_density_, initial_lambda_, lambda_growth_rate_, 
+                                       learning_rate_, momentum_, convergence_threshold_)) {
             std::cerr << "  Error: Failed to initialize GlobalPlacer" << std::endl;
             return;
         }
         
         global_placer_->setMaxIterations(200);
-        global_placer_->setInitialLambda(0.0001);
-        global_placer_->setLambdaGrowthRate(1.05);
-        global_placer_->setLearningRate(0.1);
-        global_placer_->setMomentum(0.9);
         global_placer_->setVerbose(true);
         
         if (viz_) {
@@ -432,20 +436,20 @@ void PlacerEngine::runHybridStrategy() {
     
     if (!global_placer_) {
         global_placer_ = new GlobalPlacer(db_, db_->getNetlistDB());
+        global_placer_->setDensityMargin(density_margin_);
+        global_placer_->setMaxGradientRatio(max_gradient_ratio_);
+        global_placer_->setMaxDisplacementRatio(max_displacement_ratio_);
         
         const int grid_size = 64;
-        const double target_density = 0.7;
         
-        if (!global_placer_->initialize(grid_size, target_density)) {
+        if (!global_placer_->initialize(grid_size, target_density_, initial_lambda_, lambda_growth_rate_, 
+                                       learning_rate_, momentum_, convergence_threshold_)) {
             std::cerr << "  Error: Failed to initialize GlobalPlacer" << std::endl;
             return;
         }
         
         global_placer_->setMaxIterations(200);
         global_placer_->setVerbose(true);
-        
-        // === Apply gentle parameters (gas diffusion mode) ===
-        global_placer_->setAggressiveParameters();
         
         if (viz_) {
             global_placer_->setVisualizer(viz_);

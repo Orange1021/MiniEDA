@@ -314,7 +314,7 @@ After successful compilation, executables will be in the `build/bin/` directory.
 - `-v <file>`        : Verilog netlist file (required)
 - `-lib <file>`      : Liberty library file (required)
 - `-lef <file>`      : LEF physical library file (required)
-- `-via_cost <val>`  : Via cost multiplier (default: 10.0)
+- `-via_cost <val>`  : Via cost multiplier (default: 5.0)
 - `-help`            : Show help message
 
 ### MiniFlow - Integrated EDA Flow

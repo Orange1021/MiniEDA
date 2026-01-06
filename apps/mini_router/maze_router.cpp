@@ -20,7 +20,8 @@ namespace mini {
 // ============================================================================
 
 MazeRouter::MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper, PlacerDB* placer_db)
-    : grid_(grid), pin_mapper_(pin_mapper), placer_db_(placer_db) {
+    : grid_(grid), pin_mapper_(pin_mapper), placer_db_(placer_db), 
+      via_cost_(0.0), wire_cost_per_unit_(0.0), decay_factor_(0.9), distance_weight_(2.0) {
     if (!grid_) {
         throw std::invalid_argument("RoutingGrid cannot be null");
     }
@@ -342,7 +343,6 @@ void MazeRouter::updateHistoryCosts(double history_increment) {
     const int capacity = 1;  // Default capacity per grid point
     
     // **HISTORY COST DECAY**: First apply decay to existing costs
-    const double decay_factor = 0.9;  // Decay factor for cooling down hotspots
     int decayed_count = 0;
     
     for (int z = 0; z < layers; ++z) {
@@ -351,7 +351,7 @@ void MazeRouter::updateHistoryCosts(double history_increment) {
                 double current = grid_->getHistoryCost(x, y, z);
                 if (current > 1.0) {
                     // Cool down hotspots gradually
-                    double decayed = 1.0 + (current - 1.0) * decay_factor;
+                    double decayed = 1.0 + (current - 1.0) * decay_factor_;
                     grid_->setHistoryCost(x, y, z, decayed);
                     decayed_count++;
                 }
@@ -520,7 +520,7 @@ bool MazeRouter::findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoi
         double current_hist = grid_->getHistoryCost(nx, ny, 1);
         
         // 3. Distance penalty (Manhattan distance from pin center)
-        double dist_penalty = (abs(dx) + abs(dy)) * 2.0;
+        double dist_penalty = (abs(dx) + abs(dy)) * distance_weight_;
         
         // 4. Combined score - lower is better
         double total_score = current_hist + dist_penalty;

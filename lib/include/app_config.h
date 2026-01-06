@@ -39,15 +39,44 @@ struct AppConfig {
     double utilization = 0.7;                                ///< Target core utilization (0.1-1.0)
     double row_height = 1.4;                                 ///< Standard cell row height (micrometers)
     double routing_pitch = 0.19;                             ///< Routing grid pitch (micrometers)
+    double routing_grid_fine_factor = 0.5;                  ///< Fine grid factor for routing (0.5 = half pitch)
+    double site_width = 0.19;                               ///< Standard cell site width (micrometers)
+    double default_cell_area = 10.0;                        ///< Default cell area when not found in library (square micrometers)
     
     // ========================================================================
     // Algorithm Parameters
     // ========================================================================
     double clock_period = 10.0;                              ///< Clock period in nanoseconds (STA)
-    double via_cost = 10.0;                                  ///< Via penalty cost multiplier (Routing)
+    double via_cost = 5.0;                                   ///< Via penalty cost multiplier (Routing)
     double wire_cost = 1.0;                                  ///< Wire cost per unit length (Routing)
     double wire_cap_per_unit = 0.0002;                       ///< Wire capacitance per unit length (pF/μm, default: 0.2 fF/μm for 45nm)
     double wire_resistance_per_unit = 0.005;                 ///< Wire resistance per unit length (kΩ/μm, default: 5 Ω/μm for 45nm)
+    
+    // ========================================================================
+    // [NEW] Placement Algorithm Parameters
+    // ========================================================================
+    double placement_target_density = 0.7;                   ///< Target utilization for global placement
+    double placement_initial_lambda = 0.0001;                ///< Initial density penalty factor
+    double placement_lambda_growth_rate = 1.05;              ///< Lambda growth rate per iteration
+    double placement_learning_rate = 0.1;                    ///< Learning rate (step size)
+    double placement_momentum = 0.9;                         ///< Momentum factor
+    double placement_convergence_threshold = 0.001;          ///< Convergence threshold
+    double placement_hpwl_convergence_ratio = 0.0001;       ///< HPWL convergence ratio (0.01% improvement threshold)
+    double placement_density_margin = 0.1;                  ///< Density margin for target density calculation
+    double placement_max_gradient_ratio = 0.01;            ///< Maximum gradient as ratio of core width
+    double placement_max_displacement_ratio = 0.02;       ///< Maximum displacement as ratio of core width
+    
+    // ========================================================================
+    // [NEW] Routing Algorithm Parameters
+    // ========================================================================
+    double initial_collision_penalty = 50.0;                 ///< Initial collision penalty for PathFinder
+    double penalty_growth_rate = 1.5; ///< Penalty growth rate per iteration
+    double max_penalty = 1000.0;                             ///< Maximum collision penalty cap
+    double initial_history_increment = 1.0;                  ///< Initial history increment
+    double max_history_increment = 50.0;                     ///< Maximum history increment cap
+    double decay_factor = 0.9;                               ///< History decay factor for cooling hotspots
+    double distance_weight = 2.0;                             ///< Distance weight for pin access scoring
+    double history_increment_growth_rate = 0.05;             ///< History increment growth rate per iteration
     
     // ========================================================================
     // [NEW] Industrial-Grade Timing Constraints
@@ -56,6 +85,10 @@ struct AppConfig {
     double default_input_delay = 0.0;                        ///< Default input delay for all PI ports (ns)
     double default_output_delay = 0.0;                       ///< Default output delay for all PO ports (ns)
     double max_transition = 0.5;                             ///< Maximum transition time constraint (ns)
+    double default_input_slew_max = 0.05;                    ///< Default maximum input slew (ns)
+    double default_input_slew_min = 0.01;                    ///< Default minimum input slew (ns)
+    double default_pin_capacitance = 0.002;                  ///< Default pin capacitance (pF)
+    double min_wire_length = 0.01;                           ///< Minimum wire length for estimation (μm)
     std::vector<std::string> input_delay_ports;              ///< Specific ports with custom input delays
     std::vector<double> input_delay_values;                  ///< Corresponding input delay values
     std::vector<std::string> output_delay_ports;             ///< Specific ports with custom output delays  

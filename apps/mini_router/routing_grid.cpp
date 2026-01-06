@@ -15,7 +15,7 @@ namespace mini {
 // ============================================================================
 
 RoutingGrid::RoutingGrid() 
-    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(3), history_increment_(1.0) {
+    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(3), history_increment_(0.0) {
     // Grid will be initialized in init() method
 }
 

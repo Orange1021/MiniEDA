@@ -213,7 +213,7 @@ Physical Design Constraints:
 
 Algorithm Parameters:
   -clk <period>          Clock period in nanoseconds (default: 10.0)
-  -via_cost <value>      Via penalty cost multiplier (default: 10.0)
+  -via_cost <value>      Via penalty cost multiplier (default: 5.0)
   -wire_cost <value>     Wire cost per unit length (default: 1.0)
 
 Industrial-Grade Timing Constraints:

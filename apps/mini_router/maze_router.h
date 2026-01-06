@@ -79,8 +79,10 @@ private:
     PlacerDB* placer_db_;       ///< Placement database for Steiner tree building
     
     // --- Cost Parameters ---
-    double via_cost_ = 10.0;              ///< Via cost (expensive, minimize usage)
-    double wire_cost_per_unit_ = 1.0;     ///< Wire cost per unit length
+    double via_cost_;                     ///< Via cost (expensive, minimize usage)
+    double wire_cost_per_unit_;            ///< Wire cost per unit length
+    double decay_factor_;                  ///< History decay factor for cooling hotspots
+    double distance_weight_;               ///< Distance weight for pin access scoring
     
     // --- PathFinder Parameters ---
     double collision_penalty_ = 50.0;      ///< Penalty for short circuits (increases with iterations)
@@ -150,6 +152,8 @@ public:
     void setViaCost(double cost) { via_cost_ = cost; }
     void setWireCostPerUnit(double cost) { wire_cost_per_unit_ = cost; }
     void setCollisionPenalty(double penalty) { collision_penalty_ = penalty; }
+    void setDecayFactor(double factor) { decay_factor_ = factor; }
+    void setDistanceWeight(double weight) { distance_weight_ = weight; }
     
     // --- Statistics ---
     int getTotalRoutedNets() const { return total_routed_nets_; }

@@ -34,6 +34,16 @@ public:
      * @param delay_model Pointer to the delay model (must be valid)
      */
     STAEngine(TimingGraph* graph, std::shared_ptr<DelayModel> delay_model);
+    
+    /**
+     * @brief Set physical parameters from configuration
+     * @param wire_resistance_per_unit Wire resistance per unit length (kΩ/μm)
+     * @param wire_cap_per_unit Wire capacitance per unit length (pF/μm)
+     * @param default_input_slew_max Default maximum input slew (seconds)
+     * @param default_input_slew_min Default minimum input slew (seconds)
+     */
+    void setPhysicalParameters(double wire_resistance_per_unit, double wire_cap_per_unit,
+                              double default_input_slew_max, double default_input_slew_min);
 
     // ============ Core Analysis Flow ============
 
@@ -72,6 +82,12 @@ private:
     TimingGraph* graph_;                      ///< Pointer to timing graph (non-owning)
     std::shared_ptr<DelayModel> delay_model_; ///< Shared ownership of delay model
     TimingConstraints* constraints_ = nullptr; ///< Pointer to timing constraints (non-owning)
+    
+    // Physical parameters from configuration
+    double wire_resistance_per_unit_;         ///< Wire resistance per unit length (kΩ/μm)
+    double wire_cap_per_unit_;                 ///< Wire capacitance per unit length (pF/μm)
+    double default_input_slew_max_;            ///< Default maximum input slew (seconds)
+    double default_input_slew_min_;            ///< Default minimum input slew (seconds)
 
     // ============ Internal Algorithm Steps ============
 

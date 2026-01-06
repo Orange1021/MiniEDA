@@ -181,7 +181,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         // Phase 4: Initialize routing grid
         RoutingGrid routing_grid;
         Rect core_area = placer_db->getCoreArea();
-        double pitch = 0.095;  // Standard pitch
+        double pitch = config.routing_pitch * config.routing_grid_fine_factor;  // Use configured fine grid
         routing_grid.init(core_area, pitch, pitch);
         
         if (config.verbose) {
@@ -222,6 +222,8 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         MazeRouter router(&routing_grid, &pin_mapper, placer_db.get());
         router.setViaCost(config.via_cost);
         router.setWireCostPerUnit(config.wire_cost);
+        router.setDecayFactor(config.decay_factor);
+        router.setDistanceWeight(config.distance_weight);
         
         if (config.verbose) {
             std::cout << "Routing " << netlist_db->getNumNets() << " nets..." << std::endl;
@@ -341,12 +343,10 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         
 // PathFinder parameters
         const int max_iterations = 50;  // **TACTICAL VICTORY**: More iterations for alley fighting resolution
-        const double initial_collision_penalty = 30.0;  // **TACTICAL**: Lower starting penalty for gentler negotiation
-        const double penalty_growth_rate = 1.2;  // **TACTICAL**: Slower growth to avoid over-penalization
         bool solution_found = false;
         
         // Track penalty for reporting
-        double current_penalty = initial_collision_penalty;
+        double current_penalty = config.initial_collision_penalty;
         
         // Track conflict history for final analysis
         std::vector<int> conflict_history;
@@ -356,7 +356,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         int last_conflicts = INT_MAX;
         
         // **NUCLEAR PATHFINDER**: Track history increment for escalating congestion pressure
-        double current_history_increment = 1.0;
+        double current_history_increment = config.initial_history_increment;
         
         for (int iter = 0; iter < max_iterations && !solution_found; ++iter) {
             std::cout << "\n>>> PathFinder Iteration " << iter << " <<<" << std::endl;
@@ -368,7 +368,9 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             router.setCollisionPenalty(current_penalty);
             
             // Set via cost from configuration
-                router.setViaCost(config.via_cost);            
+                router.setViaCost(config.via_cost);
+            router.setDecayFactor(config.decay_factor);
+            router.setDistanceWeight(config.distance_weight);            
             // **NUCLEAR PATHFINDER**: Set escalating history increment
             // This makes congested cells increasingly "toxic" over time
             routing_grid.setHistoryIncrement(current_history_increment);
@@ -543,8 +545,8 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
 // **CALMED**: Linear penalty growth to prevent panic
             // This provides predictable, controlled pressure increase
             // 1. Linear growth instead of exponential
-            double next_penalty = current_penalty + 30.0;  // LINEAR: +30 per iteration
-            if (next_penalty > 1000.0) next_penalty = 1000.0;  // Reasonable cap
+            double next_penalty = current_penalty + config.penalty_growth_rate * config.initial_collision_penalty;
+            if (next_penalty > config.max_penalty) next_penalty = config.max_penalty;  // Configurable cap
             
             router.setCollisionPenalty(next_penalty);
             
@@ -555,18 +557,17 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             
             // 2. **CALMED**: Gentle history increment growth to prevent panic
             // Keep history increment small to work with decay mechanism
-            current_history_increment = 1.0 + (iter * 0.05);  // Gentle growth: 1.0, 1.05, 1.10...
-            if (current_history_increment > 3.0) current_history_increment = 3.0;  // Lower cap
-            
-            // Cap penalties to prevent numerical overflow
-            const double max_penalty = 100000.0;  // Increased cap for nuclear mode
-            if (current_penalty > max_penalty) {
-                current_penalty = max_penalty;
+            current_history_increment = config.initial_history_increment + (iter * config.history_increment_growth_rate);  // Use configured growth rate
+            if (current_history_increment > config.max_history_increment) {
+                current_history_increment = config.max_history_increment;  // Configurable cap
             }
             
-            const double max_history_increment = 50.0;  // Cap history increment
-            if (current_history_increment > max_history_increment) {
-                current_history_increment = max_history_increment;
+            // Cap penalties to prevent numerical overflow
+            if (current_penalty > config.max_penalty) {
+                current_penalty = config.max_penalty;
+            }
+            if (current_history_increment > config.max_history_increment) {
+                current_history_increment = config.max_history_increment;
             }
         }
         
@@ -779,7 +780,7 @@ std::vector<RoutingResult> RoutingInterface::runRoutingWithVisualization(
         if (lef_lib) {
             RoutingGrid routing_grid;
             Rect core_area = placer_db->getCoreArea();
-            double pitch = 0.095;
+            double pitch = config.routing_pitch * config.routing_grid_fine_factor;
             routing_grid.init(core_area, pitch, pitch);
             
             std::string output_name = "visualizations/" + config.run_id + "/post_routing";

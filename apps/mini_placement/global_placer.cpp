@@ -18,7 +18,7 @@ namespace mini {
 // ============================================================================
 
 GlobalPlacer::GlobalPlacer(PlacerDB* placer_db, NetlistDB* netlist_db)
-    : placer_db_(placer_db), netlist_db_(netlist_db) {
+    : placer_db_(placer_db), netlist_db_(netlist_db), density_margin_(0.1), max_gradient_ratio_(0.01), max_displacement_ratio_(0.02) {
     
     if (!placer_db_ || !netlist_db_) {
         throw std::invalid_argument("PlacerDB and NetlistDB must be valid");
@@ -27,7 +27,8 @@ GlobalPlacer::GlobalPlacer(PlacerDB* placer_db, NetlistDB* netlist_db)
     debugLog("GlobalPlacer initialized - ready for electrostatic placement!");
 }
 
-bool GlobalPlacer::initialize(int grid_size, double target_density) {
+bool GlobalPlacer::initialize(int grid_size, double target_density, double initial_lambda, double lambda_growth_rate, 
+                               double learning_rate, double momentum, double convergence_threshold) {
     debugLog("Initializing global placer...");
     
     // Validate grid size (must be power of 2 for FFT)
@@ -41,7 +42,12 @@ bool GlobalPlacer::initialize(int grid_size, double target_density) {
     
     grid_size_ = grid_size;
     target_density_ = target_density;
-    current_lambda_ = initial_lambda_;
+    initial_lambda_ = initial_lambda;
+    lambda_growth_rate_ = lambda_growth_rate;
+    learning_rate_ = learning_rate;
+    momentum_ = momentum;
+    convergence_threshold_ = convergence_threshold;
+    current_lambda_ = initial_lambda;
     
     // Get core area from placer database
     const Rect& core_area = placer_db_->getCoreArea();
@@ -236,7 +242,7 @@ void GlobalPlacer::runPlacement() {
         }
         double total_core_area = core_area.width() * core_area.height();
         double utilization = total_cell_area / total_core_area;
-        double target_density = utilization + 0.1;  // Give some margin
+        double target_density = utilization + density_margin_;  // Use configured margin
         if (target_density > 1.0) target_density = 1.0;
         
         debugLog(">>> OVERFLOW-ONLY MODE: target_density=" + std::to_string(target_density) + 
@@ -637,7 +643,7 @@ double GlobalPlacer::momentumUpdate(int iteration) {
         // [Industrial Stabilizer] Gradient Clipping
             // Prevent huge gradients in central area from blowing up cells
         const Rect& core_area = placer_db_->getCoreArea();
-        double max_gradient = core_area.width() * 0.01;  // No more than 1% of core width (more conservative)
+        double max_gradient = core_area.width() * max_gradient_ratio_;  // Use configured ratio
             
             // Simple clipping logic
         if (total_grad_x > max_gradient) total_grad_x = max_gradient;
@@ -654,8 +660,8 @@ double GlobalPlacer::momentumUpdate(int iteration) {
         double dy = velocities_[i].y;
         double dist = std::sqrt(dx*dx + dy*dy);
         
-        // Set upper limit: 2% of chip width (more conservative for small circuits)
-        double max_dist = core_area.width() * 0.02;
+        // Set upper limit: use configured ratio of chip width
+        double max_dist = core_area.width() * max_displacement_ratio_;
         
         // Truncate movement distance and velocity
         if (dist > max_dist) {
@@ -732,8 +738,8 @@ void GlobalPlacer::clampToCoreArea() {
 
 void GlobalPlacer::updateLambda() {
     // [Slow Climb Strategy] Lambda grows slowly to prevent "explosion"
-    // Grow by 5% each time, giving wire force enough time to organize topology
-    double lambda_growth = 1.05;  // Slow growth 5%
+    // Use configured lambda growth rate
+    double lambda_growth = lambda_growth_rate_;
     
     if (current_lambda_ < max_lambda_) {
         current_lambda_ *= lambda_growth;
@@ -852,21 +858,7 @@ void GlobalPlacer::debugLog(const std::string& message) const {
     }
 }
 
-void GlobalPlacer::setAggressiveParameters() {
-    // === Gentle Parameter Adjustment (Gas Diffusion Mode) ===
-    learning_rate_ = 0.05;        // Reduce step size: adapt to fixed force calculation
-    initial_lambda_ = 0.01;       // Keep moderate: let auto-tuning take effect
-    lambda_growth_rate_ = 1.02;    // Gentle growth: avoid over-compensation
-    momentum_ = 0.9;              // Standard momentum: smooth convergence
-    convergence_threshold_ = 0.001; // Precise convergence: pursue high-quality placement
-    
-    debugLog("Applied gentle parameters for momentum optimization:");
-    debugLog("  Learning Rate: " + std::to_string(learning_rate_));
-    debugLog("  Initial Lambda: " + std::to_string(initial_lambda_));
-    debugLog("  Lambda Growth Rate: " + std::to_string(lambda_growth_rate_));
-    debugLog("  Momentum Factor: " + std::to_string(momentum_));
-    debugLog("  Convergence Threshold: " + std::to_string(convergence_threshold_));
-}
+
 
 void GlobalPlacer::exportDensityVisualization() const {
     if (!density_grid_ || !initialized_) {

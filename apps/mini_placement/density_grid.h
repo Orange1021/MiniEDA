@@ -36,7 +36,7 @@ struct Bin {
      * @param target_density Target utilization (e.g., 0.7)
      * @return true if density exceeds target
      */
-    bool isOvercrowded(double target_density = 0.7) const {
+    bool isOvercrowded(double target_density) const {
         return density > target_density;
     }
     
@@ -45,7 +45,7 @@ struct Bin {
      * @param target_density Target utilization
      * @return Amount by which density exceeds target (0 if not overcrowded)
      */
-    double getOverflow(double target_density = 0.7) const {
+    double getOverflow(double target_density) const {
         return std::max(0.0, density - target_density);
     }
 };
@@ -158,14 +158,14 @@ public:
      * @brief Print density statistics
      * @param target_density Target utilization for comparison
      */
-    void printDensityStats(double target_density = 0.7) const;
+    void printDensityStats(double target_density) const;
 
     /**
      * @brief Get total overflow area
      * @param target_density Target utilization
      * @return Total area exceeding target density
      */
-    double getTotalOverflow(double target_density = 0.7) const;
+    double getTotalOverflow(double target_density) const;
 
     /**
      * @brief Get maximum density in the grid

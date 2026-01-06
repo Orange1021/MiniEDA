@@ -55,6 +55,24 @@ public:
      * @brief Destructor
      */
     ~GlobalPlacer() = default;
+    
+    /**
+     * @brief Set density margin for target density calculation
+     * @param margin Density margin (e.g., 0.1 for 10% margin)
+     */
+    void setDensityMargin(double margin) { density_margin_ = margin; }
+    
+    /**
+     * @brief Set maximum gradient ratio
+     * @param ratio Maximum gradient as ratio of core width (e.g., 0.01 for 1%)
+     */
+    void setMaxGradientRatio(double ratio) { max_gradient_ratio_ = ratio; }
+    
+    /**
+     * @brief Set maximum displacement ratio
+     * @param ratio Maximum displacement as ratio of core width (e.g., 0.02 for 2%)
+     */
+    void setMaxDisplacementRatio(double ratio) { max_displacement_ratio_ = ratio; }
 
     // Disable copy, enable move
     GlobalPlacer(const GlobalPlacer&) = delete;
@@ -68,7 +86,8 @@ public:
      * @param target_density Target utilization (e.g., 0.7)
      * @return true if initialization successful
      */
-    bool initialize(int grid_size = 64, double target_density = 0.7);
+    bool initialize(int grid_size, double target_density, double initial_lambda, double lambda_growth_rate, 
+                   double learning_rate, double momentum, double convergence_threshold);
 
     /**
      * @brief Run the global placement optimization
@@ -101,11 +120,7 @@ public:
     void setMomentum(double momentum) { momentum_ = momentum; }
     void setConvergenceThreshold(double threshold) { convergence_threshold_ = threshold; }
     
-    /**
-     * @brief [New] Apply aggressive parameters for better convergence
-     * @details Shock therapy: high learning rate, high lambda, high momentum
-     */
-    void setAggressiveParameters();
+    
     void setVerbose(bool verbose) { verbose_ = verbose; }
     
     // Visualization support
@@ -137,17 +152,20 @@ private:
 
     // Configuration parameters
     int grid_size_ = 64;                     ///< Density grid size (power of 2)
-    double target_density_ = 0.7;            ///< Target utilization
+    double target_density_;                  ///< Target utilization
     int max_iterations_ = 500;               ///< Maximum optimization iterations
-    double initial_lambda_ = 0.0001;         ///< Initial density penalty factor
-    double lambda_growth_rate_ = 1.05;       ///< Lambda growth rate per iteration
-    double learning_rate_ = 0.1;            ///< Learning rate (step size)
-    double momentum_ = 0.9;                  ///< Momentum factor
-    double convergence_threshold_ = 0.001;   ///< Convergence threshold (much smaller for better convergence)
+    double initial_lambda_;                  ///< Initial density penalty factor
+    double density_margin_;                  ///< Density margin for target density calculation
+    double max_gradient_ratio_;              ///< Maximum gradient as ratio of core width
+    double max_displacement_ratio_;          ///< Maximum displacement as ratio of core width
+    double lambda_growth_rate_;              ///< Lambda growth rate per iteration
+    double learning_rate_;                   ///< Learning rate (step size)
+    double momentum_;                        ///< Momentum factor
+    double convergence_threshold_;           ///< Convergence threshold (much smaller for better convergence)
     bool verbose_ = true;                    ///< Verbose output
 
     // Current optimization state
-    double current_lambda_ = 0.0001;         ///< Current density penalty factor
+    double current_lambda_;                  ///< Current density penalty factor
     double current_hpwl_ = 0.0;              ///< Current HPWL
     bool initialized_ = false;               ///< Initialization flag
     bool is_warmup_mode_ = false;            ///< Warm-up mode flag for conservative tuning

@@ -28,8 +28,20 @@ struct RoutingConfig {
     std::string liberty_file;       // Liberty timing library file
     double via_cost;                // Via penalty cost multiplier (from AppConfig)
     double wire_cost;                // Wire cost per unit length (from AppConfig)
+    double routing_pitch;            // Routing grid pitch (from AppConfig)
+    double routing_grid_fine_factor; // Fine grid factor for routing (from AppConfig)
     bool verbose = false;           // Enable verbose output
     std::string run_id = "routing";  // Run identifier for output files
+    
+    // Routing algorithm parameters (from AppConfig)
+    double initial_collision_penalty;   ///< Initial collision penalty for PathFinder
+    double penalty_growth_rate;          ///< Penalty growth rate per iteration
+    double max_penalty;                  ///< Maximum collision penalty cap
+    double initial_history_increment;    ///< Initial history increment
+    double max_history_increment;       ///< Maximum history increment cap
+    double history_increment_growth_rate; ///< History increment growth rate per iteration
+    double decay_factor;                 ///< History decay factor for cooling hotspots
+    double distance_weight;              ///< Distance weight for pin access scoring
 };
 
 /**

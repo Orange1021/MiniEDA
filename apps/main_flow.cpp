@@ -50,6 +50,23 @@ PlacementConfig toPlacementConfig(const AppConfig& app_config) {
     placement_config.row_height = app_config.row_height;
     placement_config.verbose = app_config.verbose;
     placement_config.run_id = app_config.run_id + "_placement";
+    
+    // Transfer placement algorithm parameters
+    placement_config.target_density = app_config.placement_target_density;
+    placement_config.initial_lambda = app_config.placement_initial_lambda;
+    placement_config.lambda_growth_rate = app_config.placement_lambda_growth_rate;
+    placement_config.learning_rate = app_config.placement_learning_rate;
+    placement_config.momentum = app_config.placement_momentum;
+    placement_config.convergence_threshold = app_config.placement_convergence_threshold;
+    
+    // Transfer additional parameters
+    placement_config.default_cell_area = app_config.default_cell_area;
+    placement_config.site_width = app_config.site_width;
+    placement_config.density_margin = app_config.placement_density_margin;
+    placement_config.max_gradient_ratio = app_config.placement_max_gradient_ratio;
+    placement_config.max_displacement_ratio = app_config.placement_max_displacement_ratio;
+    placement_config.placement_hpwl_convergence_ratio = app_config.placement_hpwl_convergence_ratio;
+    
     return placement_config;
 }
 
@@ -62,8 +79,21 @@ RoutingConfig toRoutingConfig(const AppConfig& app_config) {
     routing_config.liberty_file = app_config.liberty_file;
     routing_config.via_cost = app_config.via_cost;
     routing_config.wire_cost = app_config.wire_cost;
+    routing_config.routing_pitch = app_config.routing_pitch;
+    routing_config.routing_grid_fine_factor = app_config.routing_grid_fine_factor;
     routing_config.verbose = app_config.verbose;
     routing_config.run_id = app_config.run_id;
+    
+    // Routing algorithm parameters
+    routing_config.initial_collision_penalty = app_config.initial_collision_penalty;
+    routing_config.penalty_growth_rate = app_config.penalty_growth_rate;
+    routing_config.max_penalty = app_config.max_penalty;
+    routing_config.initial_history_increment = app_config.initial_history_increment;
+    routing_config.max_history_increment = app_config.max_history_increment;
+    routing_config.history_increment_growth_rate = app_config.history_increment_growth_rate;
+    routing_config.decay_factor = app_config.decay_factor;
+    routing_config.distance_weight = app_config.distance_weight;
+    
     return routing_config;
 }
 
@@ -249,9 +279,28 @@ void runPostRoutingSTA(const AppConfig& config, std::shared_ptr<NetlistDB> netli
     // Initialize STA engine
     STAEngine sta_engine(timing_graph.get(), delay_model);
     
+    // Set physical parameters from config
+    sta_engine.setPhysicalParameters(config.wire_resistance_per_unit, config.wire_cap_per_unit,
+                                     config.default_input_slew_max * 1e-9, config.default_input_slew_min * 1e-9);
+    
     // Setup timing constraints
     TimingConstraints constraints;
     constraints.createClock("main_clk", "CK", config.clock_period);
+    
+    // Set timing constraints from config
+    constraints.setClockUncertainty(config.clock_uncertainty);
+    constraints.setMaxTransition(config.max_transition);
+    constraints.setDefaultInputDelay(config.default_input_delay);
+    constraints.setDefaultOutputDelay(config.default_output_delay);
+    
+    // Set port-specific delays if configured
+    for (size_t i = 0; i < config.input_delay_ports.size(); ++i) {
+        constraints.setInputDelay(config.input_delay_ports[i], config.input_delay_values[i]);
+    }
+    for (size_t i = 0; i < config.output_delay_ports.size(); ++i) {
+        constraints.setOutputDelay(config.output_delay_ports[i], config.output_delay_values[i]);
+    }
+    
     sta_engine.setConstraints(&constraints);
     
     // Run STA analysis

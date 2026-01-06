@@ -29,7 +29,20 @@ namespace mini {
 STAEngine::STAEngine(TimingGraph* graph, std::shared_ptr<DelayModel> delay_model)
     : graph_(graph),
       delay_model_(std::move(delay_model)),
-      constraints_(nullptr) {
+      constraints_(nullptr),
+      wire_resistance_per_unit_(0.005),  // Default: 5 Ω/μm = 0.005 kΩ/μm
+      wire_cap_per_unit_(0.0002),        // Default: 0.2 fF/μm = 0.0002 pF/μm
+      default_input_slew_max_(0.05e-9),  // Default: 50ps
+      default_input_slew_min_(0.01e-9)   // Default: 10ps
+{
+}
+
+void STAEngine::setPhysicalParameters(double wire_resistance_per_unit, double wire_cap_per_unit,
+                                     double default_input_slew_max, double default_input_slew_min) {
+    wire_resistance_per_unit_ = wire_resistance_per_unit;
+    wire_cap_per_unit_ = wire_cap_per_unit;
+    default_input_slew_max_ = default_input_slew_max;
+    default_input_slew_min_ = default_input_slew_min;
 }
 
 /**
@@ -117,12 +130,12 @@ void STAEngine::updateArcDelays() {
                     // Get input slew from driver (both min and max)
                     double input_slew_max = from_node->getSlewMax();
                     double input_slew_min = from_node->getSlewMin();
-                    if (input_slew_max <= 0.0) input_slew_max = 0.05 * 1e-9;  // Default: 50ps
-                    if (input_slew_min <= 0.0) input_slew_min = 0.01 * 1e-9;  // Default: 10ps
+                    if (input_slew_max <= 0.0) input_slew_max = default_input_slew_max_;  // Use configured default
+                    if (input_slew_min <= 0.0) input_slew_min = default_input_slew_min_;  // Use configured default
                     
-                    // Physical parameters (from config or defaults)
-                    double wire_r_per_unit = 0.005;  // 5 Ω/μm = 0.005 kΩ/μm
-                    double wire_c_per_unit = 0.0002; // 0.2 fF/μm = 0.0002 pF/μm
+                    // Physical parameters from configuration
+                    double wire_r_per_unit = wire_resistance_per_unit_;
+                    double wire_c_per_unit = wire_cap_per_unit_;
                     
                     // Calculate Elmore delay and slew degradation for max path
                     auto [interconnect_delay_max, output_slew_max] = delay_model_->calculateInterconnectDelay(
@@ -154,16 +167,15 @@ void STAEngine::updateArcDelays() {
                         // Get input slew from previous node (this is the key!)
                         double input_slew = from_node->getSlew();
                         if (input_slew <= 0.0) {
-                            input_slew = 0.05 * 1e-9;  // Default: 50ps if not set
-                        }
-
+                                    input_slew = default_input_slew_max_;  // Use configured default
+                                }
                         // Calculate realistic load capacitance (Pin Cap + Wire Cap)
                         // Uses Liberty library for pin capacitance and physical wire length
-                        double wire_cap_per_unit = 0.0002;  // 0.2 fF/μm (Nangate 45nm default)
+                        double wire_cap_per_unit = wire_cap_per_unit_;  // Use configured value
                         double load_cap = calculateNetLoadCapacitance(to_node, wire_cap_per_unit);
 
                         // [FIXED] Calculate delay using correct timing arc from the graph
-                        double output_slew = 0.01 * 1e-9;  // Default fallback (Nangate 45nm typical)
+                        double output_slew = default_input_slew_min_;  // Use configured default
                         
                         if (arc->getLibTiming()) {
                             // Use the pre-bound LibTiming pointer - O(1) access!
@@ -191,14 +203,14 @@ void STAEngine::updateArcDelays() {
                                 if (delay_table && delay_table->isValid()) {
                                     delay = delay_table->lookup(input_slew, load_cap) * 1e-9;
                                 } else {
-                                    delay = 0.01 * 1e-9;  // Default: 10ps
+                                    delay = default_input_slew_min_;  // Use configured default
                                 }
                                 
                                 // Calculate output slew using the correct NLDM table
                                 output_slew = table_model->calculateOutputSlewWithEdge(
                                     lib_timing, input_slew, load_cap, output_edge);
                             } else {
-                                delay = 0.01 * 1e-9;  // Default: 10ps
+                                delay = default_input_slew_min_;  // Use configured default
                             }
                         } else {
                             // Fallback for NET_ARC or missing Liberty data
@@ -356,9 +368,8 @@ void STAEngine::updateArrivalTimes() {
                             // Fallback: use previous node's max slew
                             best_slew_max = prev_node->getSlewMax();
                             if (best_slew_max <= 0.0) {
-                                best_slew_max = 0.01 * 1e-9;  // Default: 10ps (Nangate 45nm typical)
-                            }
-                        }
+                                                        best_slew_max = default_input_slew_min_;  // Use configured default
+                                                    }                        }
                         break;
                     }
                 }
@@ -434,8 +445,8 @@ void STAEngine::updateRequiredTimes() {
     std::vector<TimingNode*> end_points = graph_->getEndPoints();
     std::cout << "  End points: " << end_points.size() << std::endl;
 
-    // Get clock period from constraints or use default
-    double clock_period = 10.0;  // Default
+    // Get clock period from constraints
+    double clock_period = 0.0;
     if (constraints_) {
         clock_period = constraints_->getMainClockPeriod();
     }
@@ -573,8 +584,8 @@ void STAEngine::updateSlacks() {
 void STAEngine::reportSummary() const {
     std::cout << "\n========== Timing Summary ==========" << std::endl;
 
-    // Get clock period from constraints or use default
-    double clock_period = 10.0;  // Default
+    // Get clock period from constraints
+    double clock_period = 0.0;
     if (constraints_) {
         clock_period = constraints_->getMainClockPeriod();
     }

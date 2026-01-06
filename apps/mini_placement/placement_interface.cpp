@@ -134,7 +134,7 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
         
         // Final fallback to default size
         if (cell_area == 0.0) {
-            cell_area = 10.0;  // 10 square micrometers
+            cell_area = config.default_cell_area;  // Use configured default
             double size = std::sqrt(cell_area);
             cell_width = size;
             cell_height = size;
@@ -164,8 +164,8 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     double core_area_needed = total_cell_area / config.utilization;
     double core_width = std::sqrt(core_area_needed);
     
-    // Get site width for alignment (Nangate 45nm standard)
-    double site_width = 0.19;  // Standard site width for Nangate 45nm
+    // Get site width for alignment
+    double site_width = config.site_width;
     placer_db->setSiteWidth(site_width);
     
     // Align core width to site grid: ceil(width / site_width) * site_width
@@ -238,7 +238,10 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     if (config.verbose) {
         std::cout << "\nSetting up Placement Engine..." << std::endl;
     }
-    PlacerEngine engine(placer_db.get());
+    PlacerEngine engine(placer_db.get(), config.target_density, config.initial_lambda,
+                       config.lambda_growth_rate, config.learning_rate,
+                       config.momentum, config.convergence_threshold, config.density_margin, config.max_gradient_ratio, config.max_displacement_ratio);
+    engine.setHPWLConvergenceRatio(config.placement_hpwl_convergence_ratio);
     if (visualizer) {
         engine.setVisualizer(visualizer);
     }

@@ -29,13 +29,28 @@ public:
     /**
      * @brief Constructor
      * @param db Pointer to the placement database
+     * @param target_density Target utilization for global placement
+     * @param initial_lambda Initial density penalty factor
+     * @param lambda_growth_rate Lambda growth rate per iteration
+     * @param learning_rate Learning rate (step size)
+     * @param momentum Momentum factor
+     * @param convergence_threshold Convergence threshold
      */
-    explicit PlacerEngine(PlacerDB* db);
+    PlacerEngine(PlacerDB* db, double target_density, double initial_lambda, 
+                 double lambda_growth_rate, double learning_rate, 
+                 double momentum, double convergence_threshold, 
+                 double density_margin = 0.1, double max_gradient_ratio = 0.01, double max_displacement_ratio = 0.02);
 
     /**
      * @brief Destructor
      */
     ~PlacerEngine();
+    
+    /**
+     * @brief Set HPWL convergence ratio
+     * @param ratio HPWL convergence ratio (e.g., 0.0001 for 0.01%)
+     */
+    void setHPWLConvergenceRatio(double ratio) { hpwl_convergence_ratio_ = ratio; }
 
     /**
      * @brief Calculate Half-Perimeter Wire Length (HPWL)
@@ -97,10 +112,22 @@ private:
     PlacerDB* db_;                    // Placement database
     Visualizer* viz_;                 // Visualizer for debugging
     double current_hpwl_;             // Current HPWL value
+    double hpwl_convergence_ratio_;   ///< HPWL convergence ratio
+    double density_margin_;           ///< Density margin for target density calculation
+    double max_gradient_ratio_;       ///< Maximum gradient as ratio of core width
+    double max_displacement_ratio_;   ///< Maximum displacement as ratio of core width
     std::string run_id_;              // Run ID for file naming
     GlobalPlacer* global_placer_;     // Pointer to advanced global placer
     LegalizationAlgorithm leg_algo_;  // Legalization algorithm selection
-std::unique_ptr<DetailedPlacer> detailed_placer_;  // Detailed placement optimizer
+    std::unique_ptr<DetailedPlacer> detailed_placer_;  // Detailed placement optimizer
+    
+    // Placement algorithm parameters
+    double target_density_;           // Target utilization for global placement
+    double initial_lambda_;           // Initial density penalty factor
+    double lambda_growth_rate_;       // Lambda growth rate per iteration
+    double learning_rate_;            // Learning rate (step size)
+    double momentum_;                 // Momentum factor
+    double convergence_threshold_;    // Convergence threshold
 
     /**
      * @brief Single iteration of force-directed algorithm

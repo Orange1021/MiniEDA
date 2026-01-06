@@ -24,12 +24,28 @@ class Visualizer;
 struct PlacementConfig {
     std::string lef_file;           // LEF physical library file
     std::string liberty_file;       // Liberty timing library file
-    double utilization = 0.7;       // Target core utilization
-    double row_height = 3.0;        // Standard cell row height (micrometers)
+    double utilization;             // Target core utilization
+    double row_height;              // Standard cell row height (micrometers)
     bool verbose = false;           // Enable verbose output
     std::string run_id = "placement"; // Run identifier for output files
     std::string placement_algo = "basic"; // Algorithm selection: "basic" or "nesterov"
     LegalizationAlgorithm leg_algo = LegalizationAlgorithm::ABACUS; // Legalization algorithm selection
+    
+    // Global placement algorithm parameters
+    double target_density;                          // Target utilization for global placement
+    double initial_lambda;                          // Initial density penalty factor
+    double lambda_growth_rate;                      // Lambda growth rate per iteration
+    double learning_rate;                           // Learning rate (step size)
+    double momentum;                                // Momentum factor
+    double convergence_threshold;                   // Convergence threshold
+    
+    // Additional parameters
+    double default_cell_area;                       // Default cell area when not found in library
+    double site_width;                              // Standard cell site width
+    double density_margin;                          // Density margin for overflow handling
+    double max_gradient_ratio;                      // Maximum gradient as ratio of core width
+    double max_displacement_ratio;                  // Maximum displacement as ratio of core width
+    double placement_hpwl_convergence_ratio;        // HPWL convergence threshold
 };
 
 /**
