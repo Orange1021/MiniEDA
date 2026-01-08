@@ -178,5 +178,19 @@ std::vector<std::vector<Cell*>> PlacerDB::getCellsByRow() {
     return rows;
 }
 
+bool PlacerDB::compareByX(PlacerDB* db, const Cell* a, const Cell* b) {
+    return db->getCellX(const_cast<Cell*>(a)) < db->getCellX(const_cast<Cell*>(b));
+}
+
+bool PlacerDB::isSiteAligned(double value, double site_width, double epsilon) {
+    if (site_width <= 0.0) return false;
+
+    double ratio = value / site_width;
+    double rounded_ratio = std::round(ratio);
+    double aligned_value = rounded_ratio * site_width;
+
+    return std::abs(value - aligned_value) < epsilon * site_width;
+}
+
 } // namespace mini
 

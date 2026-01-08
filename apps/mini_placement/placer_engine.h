@@ -57,13 +57,6 @@ public:
     void setDetailedIterations(int iterations) { detailed_iterations_ = iterations; }
 
     /**
-     * @brief Calculate Half-Perimeter Wire Length (HPWL)
-     * @return Total HPWL for all nets
-     * @details HPWL = Sum((max_x - min_x) + (max_y - min_y)) for all nets
-     */
-    double calculateHPWL() const;
-
-    /**
      * @brief Run complete global placement (default: basic force-directed)
      * @details Force-directed algorithm with iterative optimization
      */
@@ -169,12 +162,6 @@ private:
     void calculateNetBoundingBox(const Net* net, 
                                double& min_x, double& max_x,
                                double& min_y, double& max_y) const;
-
-    /**
-     * @brief Check if placement has overlaps
-     * @return True if there are overlapping cells
-     */
-    bool hasOverlaps() const;
 
     /**
      * @brief Calculate total overlap area

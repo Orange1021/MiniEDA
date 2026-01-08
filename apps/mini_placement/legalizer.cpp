@@ -4,49 +4,44 @@
  */
 
 #include "legalizer.h"
+#include "overlap_detector.h"
 #include <iostream>
 #include <fstream>
 #include "../../lib/include/hpwl_calculator.h"
 
 namespace mini {
 
-double Legalizer::calculateHPWL() const {
-    if (!db_) return 0.0;
-
-    NetlistDB* netlist_db = db_->getNetlistDB();
-    if (!netlist_db) return 0.0;
-
-    return HPWLCalculator::calculateHPWL(netlist_db, db_);
-}
-
 bool Legalizer::hasOverlaps() const {
     if (!db_) return false;
+    OverlapDetector detector(db_);
+    return detector.hasOverlaps();
+}
 
-    auto cells = db_->getAllCells();
-    
-    for (size_t i = 0; i < cells.size(); ++i) {
-        const auto& info_i = db_->getCellInfo(cells[i]);
-        if (info_i.fixed) continue;
+void Legalizer::reportOverlapCheck() const {
+    bool has_overlaps = hasOverlaps();
+    std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
+}
 
-        for (size_t j = i + 1; j < cells.size(); ++j) {
-            const auto& info_j = db_->getCellInfo(cells[j]);
-            if (info_j.fixed) continue;
+void Legalizer::reportFinalStatistics() const {
+    // Calculate and report final HPWL
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    double final_hpwl = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
+    std::cout << "  Final HPWL: " << final_hpwl << std::endl;
 
-            // Check for rectangle overlap
-            bool x_overlap = (info_i.x < info_j.x + info_j.width) && 
-                            (info_i.x + info_i.width > info_j.x);
-            bool y_overlap = (info_i.y < info_j.y + info_j.height) && 
-                            (info_i.y + info_i.height > info_j.y);
+    // Check for overlaps
+    reportOverlapCheck();
+}
 
-            if (x_overlap && y_overlap) {
-                return true;
-            }
+std::vector<Cell*> Legalizer::collectMovableCells() const {
+    std::vector<Cell*> movable_cells;
+
+    for (Cell* cell : db_->getAllCells()) {
+        if (!db_->isCellFixed(cell)) {
+            movable_cells.push_back(cell);
         }
     }
 
-    return false;
+    return movable_cells;
 }
-
-
 
 } // namespace mini

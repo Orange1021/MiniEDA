@@ -4,6 +4,7 @@
  */
 
 #include "abacus_legalizer.h"
+#include "../../lib/include/hpwl_calculator.h"
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
@@ -67,15 +68,10 @@ void AbacusLegalizer::run() {
     // Phase 3: Snap to site grid (final alignment)
     debugLog("Phase 3: Site alignment (snap to grid)");
     snapToSiteGrid();
-    
-    // Calculate and report final statistics
-    double final_hpwl = calculateHPWL();
-    std::cout << "  Final HPWL: " << final_hpwl << std::endl;
-    
-    // Check for overlaps
-    bool has_overlaps = hasOverlaps();
-    std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
-    
+
+    // Report final statistics
+    reportFinalStatistics();
+
     debugLog("Abacus legalization completed (Phase 1 + Phase 2 + Phase 3)");
 }
 
@@ -88,18 +84,12 @@ void AbacusLegalizer::distributeCellsToRows() {
     double core_width = db_->getCoreArea().width();
     
     // Get movable cells
-    auto all_cells = db_->getAllCells();
-    std::vector<Cell*> movable_cells;
-    for (Cell* cell : all_cells) {
-        if (!db_->getCellInfo(cell).fixed) {
-            movable_cells.push_back(cell);
-        }
-    }
-    
+    auto movable_cells = collectMovableCells();
+
     // Sort by X for better capacity distribution
-    std::sort(movable_cells.begin(), movable_cells.end(), 
+    std::sort(movable_cells.begin(), movable_cells.end(),
         [this](Cell* a, Cell* b) {
-            return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+            return PlacerDB::compareByX(db_, a, b);
         });
     
     // Smart allocation with capacity awareness
@@ -143,9 +133,9 @@ void AbacusLegalizer::distributeCellsToRows() {
     
     // Re-sort by X for Abacus
     for (auto& row : rows_) {
-        std::sort(row.cells.begin(), row.cells.end(), 
+        std::sort(row.cells.begin(), row.cells.end(),
             [this](Cell* a, Cell* b) {
-                return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+                return PlacerDB::compareByX(db_, a, b);
             });
     }
 }
@@ -181,11 +171,9 @@ void AbacusLegalizer::snapCellToRow(Cell* cell, int row_idx) {
     // Get current X position, keep it unchanged for now
     const auto& cell_info = db_->getCellInfo(cell);
     double current_x = cell_info.x;
-    
+
     // Update cell position (snap Y to row, keep X)
-    cell->setPosition(current_x, row_y);
-    
-    // Also update PlacerDB to maintain consistency
+    // Note: placeCell() internally calls cell->setPosition()
     db_->placeCell(cell, current_x, row_y);
     
     debugLog("Snapped cell " + cell->getName() + 
@@ -366,10 +354,10 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
         // Place sequentially (boundary handled above)
         for (Cell* cell : cluster.cells) {
             const auto& cell_info = db_->getCellInfo(cell);
-            
-            cell->setPosition(current_x, row.y_coordinate);
+
+            // Note: placeCell() internally calls cell->setPosition()
             db_->placeCell(cell, current_x, row.y_coordinate);
-            
+
             current_x += cell_info.width;
         }
     }
@@ -406,9 +394,9 @@ void AbacusLegalizer::snapToSiteGrid() {
         double current_x_limit = row.min_x;
         
         // Sort cells in each row by their current X coordinate
-        std::sort(row.cells.begin(), row.cells.end(), 
+        std::sort(row.cells.begin(), row.cells.end(),
                  [this](Cell* a, Cell* b) {
-                     return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+                     return PlacerDB::compareByX(db_, a, b);
                  });
         
         // Left-to-right scan with site alignment
@@ -424,7 +412,7 @@ void AbacusLegalizer::snapToSiteGrid() {
             double snapped_x;
             
             // Check if the cell is already effectively aligned (considering floating-point errors)
-            if (isSiteAligned(raw_x, site_width, 1e-9)) {
+            if (PlacerDB::isSiteAligned(raw_x, site_width, 1e-9)) {
                 // Cell is already effectively aligned, keep original position to avoid unnecessary movement
                 snapped_x = raw_x;
             } else {
@@ -435,7 +423,7 @@ void AbacusLegalizer::snapToSiteGrid() {
             }
             
             // If snapped position would cause overlap, move to next available site
-            if (!isEqual(snapped_x, current_x_limit) && snapped_x < current_x_limit) {
+            if (std::abs(snapped_x - current_x_limit) > 1e-9 && snapped_x < current_x_limit) {
                 double limit_ratio = current_x_limit / site_width;
                 snapped_x = std::ceil(limit_ratio) * site_width;
             }
@@ -455,21 +443,6 @@ void AbacusLegalizer::snapToSiteGrid() {
     }
     
     std::cout << "  Site alignment completed" << std::endl;
-}
-
-// ============================================================================
-// Utility Functions Implementation
-// ============================================================================
-
-bool AbacusLegalizer::isEqual(double a, double b, double epsilon) const {
-    return std::abs(a - b) < epsilon;
-}
-
-bool AbacusLegalizer::isSiteAligned(double value, double site_width, double epsilon) const {
-    double ratio = value / site_width;
-    double rounded_ratio = std::round(ratio);
-    double aligned_value = rounded_ratio * site_width;
-    return isEqual(value, aligned_value, epsilon * site_width);
 }
 
 } // namespace mini

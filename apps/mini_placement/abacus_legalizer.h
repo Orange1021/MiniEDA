@@ -107,28 +107,10 @@ private:
     // Utility Functions for Floating-Point Comparison
     // ============================================================================
     
-    /**
-     * @brief Compare two floating-point numbers with epsilon tolerance
-     * @param a First number
-     * @param b Second number
-     * @param epsilon Tolerance value (default: relative epsilon)
-     * @return True if |a - b| < epsilon
-     */
-    bool isEqual(double a, double b, double epsilon = 1e-10) const;
-    
-    /**
-     * @brief Check if a number is effectively an integer multiple of site_width
-     * @param value The value to check
-     * @param site_width The site width
-     * @param epsilon Tolerance for floating-point comparison
-     * @return True if value is effectively aligned to site grid
-     */
-    bool isSiteAligned(double value, double site_width, double epsilon = 1e-10) const;
-    
     // ============================================================================
     // Phase 1: Cell Distribution to Rows (Projection)
     // ============================================================================
-    
+
     /**
      * @brief Distribute cells to their nearest rows
      * @details Projects cells from 2D to 1D row-based problem

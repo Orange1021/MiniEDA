@@ -36,11 +36,7 @@ public:
     std::string getAlgorithmName() const override { return "GreedyTetris"; }
 
 private:
-    /**
-     * @brief Collect all movable cells
-     * @return Vector of movable cell pointers
-     */
-    std::vector<Cell*> collectMovableCells() const;
+
 
     /**
      * @brief Sort cells by Y then X coordinates

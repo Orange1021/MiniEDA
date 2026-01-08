@@ -128,20 +128,6 @@ private:
      * @return True if cells have equal width
      */
     /**
-     * @brief Calculate HPWL for a single net
-     * @param net Net to calculate HPWL for
-     * @return HPWL value for the net
-     */
-    double calculateNetHPWL(Net* net);
-    /**
-     * @brief Check if a coordinate is aligned to site grid
-     * @param x X coordinate to check
-     * @param site_width Site width for alignment
-     * @return True if aligned, false otherwise
-     */
-    bool isSiteAligned(double x, double site_width) const;
-
-    /**
      * @brief Verify site alignment for all cells
      * @return Alignment statistics (aligned_count, total_count)
      */

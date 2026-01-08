@@ -74,7 +74,7 @@ bool GlobalPlacer::initialize(int grid_size, double target_density, double initi
     cells_ = placer_db_->getAllCells();
     cells_.erase(
         std::remove_if(cells_.begin(), cells_.end(), 
-                      [this](const Cell* cell) { return placer_db_->getCellInfo(const_cast<Cell*>(cell)).fixed; }),
+                      [this](const Cell* cell) { return placer_db_->isCellFixed(const_cast<Cell*>(cell)); }),
         cells_.end()
     );
     
@@ -165,7 +165,7 @@ void GlobalPlacer::runPlacement() {
     int active_cells = 0;
     
     for (int i = 0; i < cells_.size(); ++i) {
-        if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
+        if (placer_db_->isCellFixed(cells_[i])) continue;
         
         // Wire Force
         sum_wire_gradient += std::abs(wire_gradients_[i].x) + std::abs(wire_gradients_[i].y);
@@ -296,7 +296,7 @@ void GlobalPlacer::runPlacement() {
             int active_cells = 0;
             
             for (size_t i = 0; i < cells_.size(); ++i) {
-                if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
+                if (placer_db_->isCellFixed(cells_[i])) continue;
                 
                 // Calculate wire force magnitude
                 double wire_gradient_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
@@ -427,11 +427,11 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
         
         // 1. Check if this Net connects to Fixed Pin (IO Pin)
         bool has_fixed_pin = false;
-        if (driver && placer_db_->getCellInfo(driver->getOwner()).fixed) {
+        if (driver && placer_db_->isCellFixed(driver->getOwner())) {
             has_fixed_pin = true;
         }
         for (Pin* load : loads) {
-            if (load && placer_db_->getCellInfo(load->getOwner()).fixed) {
+            if (load && placer_db_->isCellFixed(load->getOwner())) {
                 has_fixed_pin = true;
                 break;
             }
@@ -450,7 +450,7 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
         // Apply gradient to driver pin
         if (driver) {
             Cell* driver_cell = driver->getOwner();
-            if (driver_cell && !placer_db_->getCellInfo(driver_cell).fixed) {
+            if (driver_cell && !placer_db_->isCellFixed(driver_cell)) {
                 // Find cell index
                 auto it = std::find(cells_.begin(), cells_.end(), driver_cell);
                 if (it != cells_.end()) {
@@ -467,7 +467,7 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
         for (Pin* load : loads) {
             if (!load) continue;
             Cell* load_cell = load->getOwner();
-            if (load_cell && !placer_db_->getCellInfo(load_cell).fixed) {
+            if (load_cell && !placer_db_->isCellFixed(load_cell)) {
                 // Find cell index
                 auto it = std::find(cells_.begin(), cells_.end(), load_cell);
                 if (it != cells_.end()) {
@@ -587,7 +587,7 @@ double GlobalPlacer::momentumUpdate(int iteration) {
         int active_cells = 0;
         
         for (size_t i = 0; i < cells_.size(); ++i) {
-            if (placer_db_->getCellInfo(cells_[i]).fixed) continue;
+            if (placer_db_->isCellFixed(cells_[i])) continue;
             
             // Calculate wire force magnitude
             double wire_gradient_mag = std::sqrt(wire_gradients_[i].x * wire_gradients_[i].x + 
@@ -631,7 +631,7 @@ double GlobalPlacer::momentumUpdate(int iteration) {
     
     for (size_t i = 0; i < cells_.size(); ++i) {
         Cell* cell = cells_[i];
-        if (placer_db_->getCellInfo(cell).fixed) continue;
+        if (placer_db_->isCellFixed(cell)) continue;
         
         // Get density gradient
         Point density_grad = getDensityGradient(cell);
@@ -678,10 +678,8 @@ double GlobalPlacer::momentumUpdate(int iteration) {
         
         double new_x = old_x + dx;
         double new_y = old_y + dy;
-        
-        cell->setPosition(new_x, new_y);
-        
-        // Also update PlacerDB to maintain consistency with visualization
+
+        // Update PlacerDB (internally calls cell->setPosition())
         placer_db_->placeCell(cell, new_x, new_y);
         
         // Clamp to core area
@@ -707,7 +705,7 @@ void GlobalPlacer::clampToCoreArea() {
     double core_y_max = core_area.y_min + core_area.height();
     
     for (Cell* cell : cells_) {
-        if (placer_db_->getCellInfo(cell).fixed) continue;
+        if (placer_db_->isCellFixed(cell)) continue;
         
         const auto& cell_info = placer_db_->getCellInfo(cell);
         
@@ -724,10 +722,8 @@ void GlobalPlacer::clampToCoreArea() {
         // Clamp position
         x = std::max(min_x, std::min(max_x, x));
         y = std::max(min_y, std::min(max_y, y));
-        
-        cell->setPosition(x, y);
-        
-        // Also update PlacerDB to maintain consistency with visualization
+
+        // Update PlacerDB (internally calls cell->setPosition())
         placer_db_->placeCell(cell, x, y);
     }
 }
@@ -752,15 +748,11 @@ void GlobalPlacer::updateLambda() {
 // Utility Functions
 // ============================================================================
 
-double GlobalPlacer::calculateHPWL() const {
-    return HPWLCalculator::calculateHPWL(netlist_db_, placer_db_);
-}
-
 void GlobalPlacer::updateStatistics(int iteration, double total_movement, double step_time_ms) {
     OptimizationStats stats;
     stats.iteration = iteration;
     stats.total_movement = total_movement;
-    stats.hpwl = calculateHPWL();
+    stats.hpwl = HPWLCalculator::calculateHPWL(netlist_db_, placer_db_);
     stats.max_density = density_grid_->getMaxDensity();
     stats.total_overflow = density_grid_->getTotalOverflow(target_density_);
     stats.lambda = current_lambda_;

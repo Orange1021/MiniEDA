@@ -4,6 +4,7 @@
  */
 
 #include "greedy_legalizer.h"
+#include "../../lib/include/hpwl_calculator.h"
 #include <algorithm>
 #include <iostream>
 
@@ -13,7 +14,7 @@ void GreedyLegalizer::run() {
     debugLog("Starting Greedy (Tetris) legalization...");
     
     // 1. Collect all movable cells
-    auto movable_cells = collectMovableCells();
+    auto movable_cells = Legalizer::collectMovableCells();
     debugLog("Collected " + std::to_string(movable_cells.size()) + " movable cells");
     
     // 2. Sort cells by Y then X coordinates
@@ -38,44 +39,26 @@ void GreedyLegalizer::run() {
     rows_used = std::min(rows_used, max_rows);
     
     printStatistics(cells_placed, rows_used, max_rows);
-    
-    // 5. Calculate and report final HPWL
-    double final_hpwl = calculateHPWL();
-    std::cout << "  Final HPWL: " << final_hpwl << std::endl;
-    
-    // 6. Check for overlaps
-    bool has_overlaps = hasOverlaps();
-    std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
-    
+
+    // Report final statistics
+    reportFinalStatistics();
+
     debugLog("Greedy legalization completed");
 }
 
-std::vector<Cell*> GreedyLegalizer::collectMovableCells() const {
-    std::vector<Cell*> movable_cells;
-    
-    for (Cell* cell : db_->getAllCells()) {
-        const auto& info = db_->getCellInfo(cell);
-        if (!info.fixed) {  // Only process movable cells
-            movable_cells.push_back(cell);
-        }
-    }
-    
-    return movable_cells;
-}
-
 void GreedyLegalizer::sortCells(std::vector<Cell*>& cells) const {
-    std::sort(cells.begin(), cells.end(), 
+    std::sort(cells.begin(), cells.end(),
              [this](Cell* a, Cell* b) {
                  const auto& info_a = db_->getCellInfo(a);
                  const auto& info_b = db_->getCellInfo(b);
-                 
+
                  // Primary sort: Y coordinate (center of cell)
                  double y_a = info_a.y + info_a.height / 2.0;
                  double y_b = info_b.y + info_b.height / 2.0;
                  if (std::abs(y_a - y_b) > 1e-9) {
                      return y_a < y_b;
                  }
-                 
+
                  // Secondary sort: X coordinate
                  return info_a.x < info_b.x;
              });

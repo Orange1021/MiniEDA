@@ -224,12 +224,6 @@ private:
     // ========================================================================
 
     /**
-     * @brief Calculate current HPWL
-     * @return Half-perimeter wire length
-     */
-    double calculateHPWL() const;
-
-    /**
      * @brief Get net center of gravity
      * @param net Net pointer
      * @return Center point of all pins in the net

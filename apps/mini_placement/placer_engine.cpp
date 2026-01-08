@@ -37,15 +37,6 @@ PlacerEngine::~PlacerEngine() {
     delete global_placer_;
 }
 
-double PlacerEngine::calculateHPWL() const {
-    if (!db_) return 0.0;
-
-    NetlistDB* netlist_db = db_->getNetlistDB();
-    if (!netlist_db) return 0.0;
-    
-    return HPWLCalculator::calculateHPWL(netlist_db, db_);
-}
-
 void PlacerEngine::runGlobalPlacementWithAlgorithm(const std::string& algorithm) {
     if (!db_) return;
     
@@ -81,7 +72,8 @@ void PlacerEngine::runGlobalPlacement() {
     std::cout << "Starting Global Placement (Quadratic Wirelength Optimization)..." << std::endl;
     
     // Initialize with current HPWL
-    current_hpwl_ = calculateHPWL();
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    current_hpwl_ = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
     std::cout << "Initial HPWL: " << current_hpwl_ << std::endl;
     
     // Force-directed placement iterations
@@ -92,7 +84,7 @@ void PlacerEngine::runGlobalPlacement() {
         solveForceDirectedIteration(iter);
         
         // Calculate new HPWL
-        double new_hpwl = calculateHPWL();
+        double new_hpwl = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
         
         // Print progress
         if (iter % 5 == 0) {
@@ -114,7 +106,7 @@ void PlacerEngine::runGlobalPlacement() {
     }
     
     std::cout << "Global Placement completed. Final HPWL: " << current_hpwl_ << std::endl;
-    std::cout << "Improvement: " << (calculateHPWL() - current_hpwl_) << std::endl;
+    std::cout << "Improvement: " << (netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0 - current_hpwl_) << std::endl;
 }
 
 void PlacerEngine::runLegalization() {
@@ -142,7 +134,8 @@ void PlacerEngine::runLegalization() {
     }
     
     // Calculate and report final HPWL
-    double final_hpwl = calculateHPWL();
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    double final_hpwl = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
     std::cout << "  Final HPWL: " << final_hpwl << std::endl;
     
     // Update cached HPWL to maintain consistency
@@ -303,13 +296,6 @@ void PlacerEngine::calculateNetBoundingBox(const Net* net,
     }
 }
 
-bool PlacerEngine::hasOverlaps() const {
-    if (!db_) return false;
-    
-    OverlapDetector detector(db_);
-    return detector.hasOverlaps();
-}
-
 double PlacerEngine::calculateTotalOverlap() const {
     if (!db_) return 0.0;
     
@@ -320,7 +306,8 @@ double PlacerEngine::calculateTotalOverlap() const {
 void PlacerEngine::runBasicStrategy() {
     std::cout << "  Running Basic Force-Directed Algorithm..." << std::endl;
     
-    current_hpwl_ = calculateHPWL();
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    current_hpwl_ = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
     std::cout << "  Initial HPWL: " << current_hpwl_ << std::endl;
     
     const int max_iterations = 50;
@@ -328,7 +315,7 @@ void PlacerEngine::runBasicStrategy() {
     for (int iter = 0; iter < max_iterations; ++iter) {
         solveForceDirectedIteration(iter);
         
-        double new_hpwl = calculateHPWL();
+        double new_hpwl = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
         
         if (iter % 5 == 0) {
             std::cout << "  Iteration " << iter << ": HPWL = " << new_hpwl << std::endl;
@@ -374,7 +361,8 @@ void PlacerEngine::runElectrostaticStrategy() {
     
     global_placer_->runPlacement();
     
-    current_hpwl_ = calculateHPWL();
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    current_hpwl_ = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
     std::cout << "  Electrostatic strategy completed. Final HPWL: " << current_hpwl_ << std::endl;
 }
 
@@ -384,14 +372,15 @@ void PlacerEngine::runHybridStrategy() {
     std::cout << "\n  === Phase 1: Warm-up (Basic Force-Directed) ===" << std::endl;
     const int max_warmup_iterations = 15;  // Reduce maximum iterations
     
-    current_hpwl_ = calculateHPWL();
+    NetlistDB* netlist_db = db_->getNetlistDB();
+    current_hpwl_ = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
     double initial_hpwl = current_hpwl_;
     std::cout << "  Initial HPWL: " << current_hpwl_ << std::endl;
     
     for (int iter = 0; iter < max_warmup_iterations; ++iter) {
         solveForceDirectedIteration(iter);
         
-        double new_hpwl = calculateHPWL();
+        double new_hpwl = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
         double current_ratio = new_hpwl / initial_hpwl;
         
         if (iter % 5 == 0 || iter == max_warmup_iterations - 1) {
@@ -445,7 +434,7 @@ void PlacerEngine::runHybridStrategy() {
     
     global_placer_->runPlacement();
     
-    current_hpwl_ = calculateHPWL();
+    current_hpwl_ = netlist_db ? HPWLCalculator::calculateHPWL(netlist_db, db_) : 0.0;
     std::cout << "  Hybrid strategy completed. Final HPWL: " << current_hpwl_ << std::endl;
 }
 

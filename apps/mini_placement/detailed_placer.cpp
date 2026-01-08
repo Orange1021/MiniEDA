@@ -4,6 +4,7 @@
  */
 
 #include "detailed_placer.h"
+#include "../../lib/include/hpwl_calculator.h"
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
@@ -67,7 +68,7 @@ void DetailedPlacer::globalSwap() {
     // Group cells by width for efficient equal-width swapping
     std::unordered_map<double, std::vector<Cell*>> width_groups;
     for (Cell* cell : all_cells) {
-        double width = db_->getCellInfo(cell).width;
+        double width = db_->getCellWidth(cell);
         width_groups[width].push_back(cell);
     }
     
@@ -91,10 +92,10 @@ void DetailedPlacer::globalSwap() {
 
 bool DetailedPlacer::trySwap(Cell* c1, Cell* c2) {
     // 1. Store original coordinates
-    double x1 = db_->getCellInfo(c1).x;
-    double y1 = db_->getCellInfo(c1).y;
-    double x2 = db_->getCellInfo(c2).x;
-    double y2 = db_->getCellInfo(c2).y;
+    double x1 = db_->getCellX(c1);
+    double y1 = db_->getCellY(c1);
+    double x2 = db_->getCellX(c2);
+    double y2 = db_->getCellY(c2);
     
     // 2. Calculate local wirelength before swap (Cost Before)
     // Only need to calculate nets connected to c1 and c2
@@ -133,9 +134,9 @@ void DetailedPlacer::detailedReordering() {
         
         // [Critical Step] Force sort by physical X coordinate before processing each row
         // Ensure vector order matches physical positions in DB
-        std::sort(row_cells.begin(), row_cells.end(), 
+        std::sort(row_cells.begin(), row_cells.end(),
             [this](Cell* a, Cell* b) {
-                return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+                return PlacerDB::compareByX(db_, a, b);
             });
 
         // 2. Sliding window (Window Size = 3)
@@ -190,22 +191,12 @@ void DetailedPlacer::detailedReordering() {
 
 
 
-bool DetailedPlacer::isSiteAligned(double x, double site_width) const {
-    if (site_width <= 0.0) return false;
-    
-    // Use relative epsilon for robustness
-    const double EPSILON = 1e-10;
-    double quotient = x / site_width;
-    double rounded_quotient = std::round(quotient);
-    return std::abs(quotient - rounded_quotient) < EPSILON;
-}
-
 double DetailedPlacer::calculateLocalHPWL(const std::vector<Cell*>& cells) {
     if (cells.empty()) return 0.0;
-    
+
     // For local optimization, we consider nets connected to these cells
     std::unordered_set<Net*> connected_nets;
-    
+
     for (Cell* cell : cells) {
         for (const auto& pin_ptr : cell->getPins()) {
             Pin* pin = pin_ptr.get();
@@ -214,54 +205,17 @@ double DetailedPlacer::calculateLocalHPWL(const std::vector<Cell*>& cells) {
             }
         }
     }
-    
-    // Calculate HPWL for connected nets
+
+    // Calculate HPWL for connected nets using HPWLCalculator
     double total_hpwl = 0.0;
     for (Net* net : connected_nets) {
-        total_hpwl += calculateNetHPWL(net);
+        total_hpwl += HPWLCalculator::calculateNetHPWL(net, db_);
     }
-    
+
     return total_hpwl;
 }
 
-double DetailedPlacer::calculateNetHPWL(Net* net) {
-    double min_x = std::numeric_limits<double>::max();
-    double max_x = std::numeric_limits<double>::lowest();
-    double min_y = std::numeric_limits<double>::max();
-    double max_y = std::numeric_limits<double>::lowest();
-    
-    bool has_pins = false;
-    
-    // Consider driver pin
-    if (net->getDriver()) {
-        Cell* driver_cell = net->getDriver()->getOwner();
-        if (driver_cell && driver_cell->isPlaced()) {
-            double x = driver_cell->getX();
-            double y = driver_cell->getY();
-            min_x = max_x = x;
-            min_y = max_y = y;
-            has_pins = true;
-        }
-    }
-    
-    // Consider load pins
-    for (Pin* load_pin : net->getLoads()) {
-        Cell* load_cell = load_pin->getOwner();
-        if (load_cell && load_cell->isPlaced()) {
-            double x = load_cell->getX();
-            double y = load_cell->getY();
-            min_x = std::min(min_x, x);
-            max_x = std::max(max_x, x);
-            min_y = std::min(min_y, y);
-            max_y = std::max(max_y, y);
-            has_pins = true;
-        }
-    }
-    
-    if (!has_pins) return 0.0;
-    
-    return (max_x - min_x) + (max_y - min_y);
-}
+
 
 void DetailedPlacer::debugLog(const std::string& message) const {
     if (verbose_) {
@@ -276,18 +230,18 @@ std::vector<std::vector<Cell*>> DetailedPlacer::getCellsByRow() {
     auto all_cells = db_->getAllCells();
     for (Cell* cell : all_cells) {
         // [FIX 3] Must exclude fixed cells!
-        if (db_->getCellInfo(cell).fixed) continue;
+        if (db_->isCellFixed(cell)) continue;
         
-        double y = db_->getCellInfo(cell).y;
+        double y = db_->getCellY(cell);
         row_map[y].push_back(cell);
     }
     
     // Convert to vector and sort each row by X coordinate
     std::vector<std::vector<Cell*>> rows;
     for (auto& [y, cells] : row_map) {
-        std::sort(cells.begin(), cells.end(), 
+        std::sort(cells.begin(), cells.end(),
                  [this](Cell* a, Cell* b) {
-                     return db_->getCellInfo(a).x < db_->getCellInfo(b).x;
+                     return PlacerDB::compareByX(db_, a, b);
                  });
         rows.push_back(cells);
     }
@@ -295,15 +249,15 @@ std::vector<std::vector<Cell*>> DetailedPlacer::getCellsByRow() {
     // Sort rows by Y coordinate
     std::sort(rows.begin(), rows.end(),
              [this](const std::vector<Cell*>& row1, const std::vector<Cell*>& row2) {
-                 return db_->getCellInfo(row1[0]).y < db_->getCellInfo(row2[0]).y;
+                 return db_->getCellY(row1[0]) < db_->getCellY(row2[0]);
              });
     
     return rows;
 }
 
 bool DetailedPlacer::hasEqualWidth(Cell* c1, Cell* c2) const {
-    double w1 = db_->getCellInfo(c1).width;
-    double w2 = db_->getCellInfo(c2).width;
+    double w1 = db_->getCellWidth(c1);
+    double w2 = db_->getCellWidth(c2);
     return std::abs(w1 - w2) < 1e-9;  // Use epsilon for floating point comparison
 }
 
@@ -319,7 +273,7 @@ std::pair<int, int> DetailedPlacer::verifySiteAlignment() const {
         if (info.fixed) continue;  // Skip fixed cells
         
         total_count++;
-        if (isSiteAligned(info.x, site_width)) {
+        if (PlacerDB::isSiteAligned(info.x, site_width)) {
             aligned_count++;
         }
     }
@@ -335,8 +289,8 @@ bool DetailedPlacer::isContiguous(const std::vector<Cell*>& cells) const {
         Cell* current = cells[i];
         Cell* next = cells[i+1];
         
-        double curr_end = db_->getCellInfo(current).x + db_->getCellInfo(current).width;
-        double next_start = db_->getCellInfo(next).x;
+        double curr_end = db_->getCellX(current) + db_->getCellWidth(current);
+        double next_start = db_->getCellX(next);
         
         // Allow tiny floating point error
         if (std::abs(next_start - curr_end) > 1e-4) {

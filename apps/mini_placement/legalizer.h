@@ -72,16 +72,26 @@ protected:
     }
 
     /**
-     * @brief Calculate HPWL after legalization
-     * @return Total HPWL value
-     */
-    double calculateHPWL() const;
-
-    /**
      * @brief Check for overlaps after legalization
      * @return True if overlaps exist
      */
     bool hasOverlaps() const;
+
+    /**
+     * @brief Report overlap check result with standard format
+     */
+    void reportOverlapCheck() const;
+
+    /**
+     * @brief Report final statistics with standard format
+     */
+    void reportFinalStatistics() const;
+
+    /**
+     * @brief Collect all movable (non-fixed) cells
+     * @return Vector of movable cell pointers
+     */
+    std::vector<Cell*> collectMovableCells() const;
 };
 
 } // namespace mini
