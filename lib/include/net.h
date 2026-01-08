@@ -45,6 +45,13 @@ public:
     // ============ Basic Accessors ============
     const std::string& getName() const { return name_; }
 
+    /**
+     * @brief Get the cached hash ID of this net
+     * @return Hash ID (computed once during construction)
+     * @note This provides O(1) access to the net's hash value without recomputing
+     */
+    int getHashId() const { return hash_id_; }
+
     // ============ Pin Connection Management ============
     /**
      * @brief Set the driver pin (output pin)
@@ -202,6 +209,7 @@ public:
 
 private:
     std::string name_;                  ///< Net name
+    int hash_id_;                       ///< Cached hash ID of net name (computed once)
 
     // Pin connectivity
     Pin* driver_;                       ///< Driver pin (output)

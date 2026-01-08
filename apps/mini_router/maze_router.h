@@ -250,15 +250,7 @@ private:
     std::vector<GridPoint> backtrack(
         const std::unordered_map<GridPoint, GridPoint, GridPointHash>& came_from,
         const GridPoint& current) const;
-    
-    /**
-     * @brief Calculate movement cost between two adjacent grid points
-     * @param from Source grid point
-     * @param to Destination grid point
-     * @return Movement cost
-     */
-    double calculateMovementCost(const GridPoint& from, const GridPoint& to) const;
-    
+
     /**
      * @brief Calculate Manhattan distance heuristic
      * @param from Source grid point

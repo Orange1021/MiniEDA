@@ -12,6 +12,8 @@
 #include <algorithm>
 #include <cmath>
 #include <unordered_set>
+#include <string>
+#include <stdexcept>
 #include "../../lib/include/geometry.h"
 
 namespace mini {
@@ -47,6 +49,17 @@ struct GridPoint {
     bool operator==(const GridPoint& other) const {
         return x == other.x && y == other.y && layer == other.layer;
     }
+
+    // ============ Convenience Methods ============
+    /**
+     * @brief Create a new GridPoint with the same x,y but different layer
+     * @param new_layer New layer value
+     * @return New GridPoint with specified layer
+     * @note This is a const method, does not modify the original object
+     */
+    GridPoint withLayer(int new_layer) const {
+        return GridPoint(x, y, new_layer);
+    }
 };
 
 // Hash function for GridPoint (required for std::unordered_map keys)
@@ -71,10 +84,77 @@ struct GridNode {
     GridState state;      ///< Current state of the cell
     int net_id;          ///< Owner net ID (0 = unowned, >0 = net ID)
     int usage_count;     ///< Number of different nets that used this cell (for conflict detection)
-    
+
     // Constructor
     GridNode() : state(GridState::FREE), net_id(0), usage_count(0) {}
     GridNode(GridState s, int id = 0) : state(s), net_id(id), usage_count(0) {}
+
+    // ============ State Check Methods ============
+    /**
+     * @brief Check if the cell is in FREE state
+     */
+    bool isFree() const { return state == GridState::FREE; }
+
+    /**
+     * @brief Check if the cell is an OBSTACLE
+     */
+    bool isObstacle() const { return state == GridState::OBSTACLE; }
+
+    /**
+     * @brief Check if the cell is ROUTED (occupied by a net)
+     */
+    bool isRouted() const { return state == GridState::ROUTED; }
+
+    /**
+     * @brief Check if the cell is a VIA
+     */
+    bool isVia() const { return state == GridState::VIA; }
+
+    /**
+     * @brief Check if the cell is a PIN
+     */
+    bool isPin() const { return state == GridState::PIN; }
+
+    // ============ Combined State Check Methods ============
+    /**
+     * @brief Check if the cell is accessible (FREE or PIN)
+     * @details These states allow routing even in PathFinder mode
+     */
+    bool isAccessible() const {
+        return state == GridState::FREE || state == GridState::PIN;
+    }
+
+    /**
+     * @brief Check if the cell is blocked (OBSTACLE or ROUTED)
+     * @details These states prevent normal routing
+     */
+    bool isBlocked() const {
+        return state == GridState::OBSTACLE || state == GridState::ROUTED;
+    }
+
+    /**
+     * @brief Check if this grid node has conflicts
+     * @return true if routed and used by multiple different nets
+     */
+    bool isConflicted() const {
+        return isRouted() && usage_count > 0;
+    }
+
+    // ============ State Conversion Methods ============
+    /**
+     * @brief Convert state to string representation
+     * @return String representation of the state
+     */
+    std::string toString() const {
+        switch (state) {
+            case GridState::FREE: return "FREE";
+            case GridState::OBSTACLE: return "OBSTACLE";
+            case GridState::ROUTED: return "ROUTED";
+            case GridState::VIA: return "VIA";
+            case GridState::PIN: return "PIN";
+            default: return "UNKNOWN";
+        }
+    }
 };
 
 // ============================================================================
@@ -125,6 +205,16 @@ public:
     void setState(const GridPoint& gp, GridState state, int net_id = 0);
     bool isFree(const GridPoint& gp, int current_net_id = 0) const;
     int getNetId(const GridPoint& gp) const;
+    
+    /**
+     * @brief Mark a grid point as a PIN
+     * @param gp Grid point to mark
+     * @param net_id Net ID that owns this pin
+     * @details Convenience method for setting PIN state with net ID
+     */
+    void markPin(const GridPoint& gp, int net_id) {
+        setState(gp, GridState::PIN, net_id);
+    }
     
     // Utility Methods
     bool isValid(const GridPoint& gp) const;
@@ -234,6 +324,32 @@ private:
     // Helper Methods
     int clamp(int value, int min_val, int max_val) const {
         return std::max(min_val, std::min(value, max_val));
+    }
+
+    /**
+     * @brief Get grid node with bounds checking (const version)
+     * @param gp Grid point
+     * @return Const reference to grid node
+     * @throws std::out_of_range if point is out of bounds
+     */
+    const GridNode& getGridNode(const GridPoint& gp) const {
+        if (!isValid(gp)) {
+            throw std::out_of_range("Grid point out of bounds");
+        }
+        return grid_[gp.layer][gp.y][gp.x];
+    }
+
+    /**
+     * @brief Get grid node with bounds checking (non-const version)
+     * @param gp Grid point
+     * @return Reference to grid node
+     * @throws std::out_of_range if point is out of bounds
+     */
+    GridNode& getGridNode(const GridPoint& gp) {
+        if (!isValid(gp)) {
+            throw std::out_of_range("Grid point out of bounds");
+        }
+        return grid_[gp.layer][gp.y][gp.x];
     }
 };
 

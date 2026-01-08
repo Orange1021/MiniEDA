@@ -79,11 +79,26 @@ public:
     bool isOutput() const { return direction_ == PinDirection::OUTPUT; }
     bool isConnected() const { return net_ != nullptr; }
 
+    // ============ Pin Key Caching ============
+    /**
+     * @brief Get the cached pin key
+     * @return Reference to the cached pin key
+     * @note The key must be set before calling this method
+     */
+    const std::string& getPinKey() const { return pin_key_; }
+
+    /**
+     * @brief Set the pin key (for caching)
+     * @param key The pin key to cache
+     */
+    void setPinKey(const std::string& key) { pin_key_ = key; }
+
 private:
     std::string name_;              ///< Pin name
     PinDirection direction_;        ///< Pin direction
     Cell* owner_;                   ///< Owning Cell
     Net* net_;                      ///< Connected Net (may be null)
+    std::string pin_key_;           ///< Cached pin key for efficient lookup
 };
 
 /**

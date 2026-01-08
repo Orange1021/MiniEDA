@@ -96,7 +96,7 @@ void RoutingGrid::clearRoutes() {
     for (int z = 0; z < num_layers_; ++z) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].state == GridState::ROUTED) {
+                if (grid_[z][y][x].isRouted()) {
                     grid_[z][y][x].state = GridState::FREE;
                     grid_[z][y][x].net_id = 0;
                 }
@@ -110,16 +110,16 @@ void RoutingGrid::clearRoutes() {
 void RoutingGrid::ripUpNet(int net_id) {
     // **STABILIZER**: Remove routes for a specific net while preserving others as obstacles
     // This is the key to selective rerouting - good nets become "concrete pillars"
-    
+
     for (int z = 0; z < num_layers_; ++z) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].state == GridState::ROUTED && 
+                if (grid_[z][y][x].isRouted() &&
                     grid_[z][y][x].net_id == net_id) {
                     // Clear this specific net's route
                     grid_[z][y][x].state = GridState::FREE;
                     grid_[z][y][x].net_id = 0;
-                    
+
                     // Decrease usage count for this location
                     if (grid_[z][y][x].usage_count > 0) {
                         grid_[z][y][x].usage_count--;
@@ -132,73 +132,70 @@ void RoutingGrid::ripUpNet(int net_id) {
 
 int RoutingGrid::countConflicts(bool verbose) const {
     int conflicts = 0;
-    
+
     // Count actual conflicts: grid points used by multiple different nets
     // This is the real PathFinder conflict metric, not self-collision
     for (int z = 0; z < num_layers_; ++z) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].state == GridState::ROUTED && 
-                    grid_[z][y][x].usage_count > 0) {
+                if (grid_[z][y][x].isConflicted()) {
                     // This point was used by multiple different nets (true conflict)
                     conflicts++;
                 }
             }
         }
     }
-    
+
     return conflicts;
 }
 
 std::unordered_set<int> RoutingGrid::getConflictedNetIDs() const {
     std::unordered_set<int> conflicted_nets;
-    
+
     // Find all nets that are involved in conflicts
     for (int z = 0; z < num_layers_; ++z) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].state == GridState::ROUTED && 
-                    grid_[z][y][x].usage_count > 0) {
+                if (grid_[z][y][x].isConflicted()) {
                     // This point has conflicts, add the net ID to our set
                     conflicted_nets.insert(grid_[z][y][x].net_id);
                 }
             }
         }
     }
-    
+
     return conflicted_nets;
 }
 
 void RoutingGrid::printConflictLocations(int current_net_id, bool verbose) const {
     int conflict_count = 0;
-    
+
     for (int z = 0; z < num_layers_; ++z) {
         for (int y = 0; y < grid_height_; ++y) {
             for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].state == GridState::ROUTED && 
-                    grid_[z][y][x].usage_count > 0) {
-                    
+                if (grid_[z][y][x].isConflicted()) {
+
                     // **CONFLICT DETECTED**: Print detailed information
                     conflict_count++;
-                    
+
                     // Always print conflict info (not just verbose mode)
                     std::cout << "\n>>> CONFLICT #" << conflict_count << " <<<" << std::endl;
                     std::cout << "  Location: (" << x << ", " << y << ", " << z << ")" << std::endl;
                     std::cout << "  Usage Count: " << (grid_[z][y][x].usage_count + 1) << std::endl;
-                    
+
                     // **CRITICAL**: Show that this is a multi-net conflict
                     if (grid_[z][y][x].usage_count > 0) {
-                        std::cout << "  >>> MULTI-NET CONFLICT: " << (grid_[z][y][x].usage_count + 1) 
+                        std::cout << "  >>> MULTI-NET CONFLICT: " << (grid_[z][y][x].usage_count + 1)
                                   << " nets competing for this location!" << std::endl;
                     }
-                    
+
                     if (verbose) {
                         std::cout << "  (Additional verbose info would follow...)" << std::endl;
                     }
-                    
+
                     // Check if this is a Pin Access bottleneck
-                    bool below_is_pin = (z > 0 && isValid(GridPoint(x, y, z-1)) && 
-                                       grid_[z-1][y][x].state == GridState::PIN);
+                    bool below_is_pin = (z > 0 && isValid(GridPoint(x, y, z-1)) &&
+                                       grid_[z-1][y][x].isPin());
                     std::cout << "  Is Pin Access? " << (below_is_pin ? "YES" : "NO") << std::endl;
                     
                     if (below_is_pin) {
@@ -248,24 +245,24 @@ void RoutingGrid::printConflictLocations(int current_net_id, bool verbose) const
     std::cout << "===============================" << std::endl;
 }
 
-double RoutingGrid::calculateMovementCost(const GridPoint& from, const GridPoint& to, 
+double RoutingGrid::calculateMovementCost(const GridPoint& from, const GridPoint& to,
                                            int current_net_id, double collision_penalty) const {
     // Base movement cost
     double base_cost = 1.0;
-    
+
     // Get history cost for destination
     double history_cost = getHistoryCost(to.x, to.y, to.layer);
-    
+
     // Check for collision penalty (short circuit cost)
     double collision_cost = 0.0;
     if (isValid(to)) {
         const GridNode& node = grid_[to.layer][to.y][to.x];
-        if (node.state == GridState::ROUTED && node.net_id != current_net_id) {
+        if (node.isRouted() && node.net_id != current_net_id) {
             // This is a short circuit - add collision penalty
             collision_cost = collision_penalty;
         }
     }
-    
+
     // Total cost = base * history + collision
     return base_cost * history_cost + collision_cost;
 }
@@ -372,22 +369,22 @@ void RoutingGrid::addObstacle(const Rect& phys_rect, int layer) {
     if (layer < 0 || layer >= num_layers_) {
         throw std::out_of_range("Layer index out of range");
     }
-    
+
     // Convert physical rectangle to grid coordinates
     GridPoint start_gp = physToGrid(phys_rect.x_min, phys_rect.y_min, layer);
     GridPoint end_gp = physToGrid(phys_rect.x_max, phys_rect.y_max, layer);
-    
+
     // Ensure start <= end
     int min_x = std::min(start_gp.x, end_gp.x);
     int max_x = std::max(start_gp.x, end_gp.x);
     int min_y = std::min(start_gp.y, end_gp.y);
     int max_y = std::max(start_gp.y, end_gp.y);
-    
+
     // Mark all cells in range as OBSTACLE
     // Don't override ROUTED cells with OBSTACLE (improvement)
     for (int y = min_y; y <= max_y; ++y) {
         for (int x = min_x; x <= max_x; ++x) {
-            if (grid_[layer][y][x].state != GridState::ROUTED) {
+            if (!grid_[layer][y][x].isRouted()) {
                 grid_[layer][y][x].state = GridState::OBSTACLE;
                 grid_[layer][y][x].net_id = 0;
             }
@@ -400,47 +397,39 @@ void RoutingGrid::addObstacle(const Rect& phys_rect, int layer) {
 // ============================================================================
 
 GridState RoutingGrid::getState(const GridPoint& gp) const {
-    if (!isValid(gp)) {
-        throw std::out_of_range("Grid point out of bounds");
-    }
-    return grid_[gp.layer][gp.y][gp.x].state;
+    return getGridNode(gp).state;
 }
 
 int RoutingGrid::getNetId(const GridPoint& gp) const {
-    if (!isValid(gp)) {
-        throw std::out_of_range("Grid point out of bounds");
-    }
-    return grid_[gp.layer][gp.y][gp.x].net_id;
+    return getGridNode(gp).net_id;
 }
 
 void RoutingGrid::setState(const GridPoint& gp, GridState state, int net_id) {
-    if (!isValid(gp)) {
-        throw std::out_of_range("Grid point out of bounds");
-    }
-    grid_[gp.layer][gp.y][gp.x].state = state;
-    grid_[gp.layer][gp.y][gp.x].net_id = net_id;
+    GridNode& node = getGridNode(gp);
+    node.state = state;
+    node.net_id = net_id;
 }
 
 bool RoutingGrid::isFree(const GridPoint& gp, int current_net_id) const {
     if (!isValid(gp)) {
         return false;  // Out of bounds is not free
     }
-    
-    const GridNode& node = grid_[gp.layer][gp.y][gp.x];
-    
+
+    const GridNode& node = getGridNode(gp);
+
     // Always allow access to FREE and PIN
-    if (node.state == GridState::FREE || node.state == GridState::PIN) {
+    if (node.isAccessible()) {
         return true;
     }
-    
+
     // **PATHFINDER CHANGE**: Allow short circuits for congestion negotiation
     // Enemy nets can still use this point, but A* algorithm will add cost penalty
-    if (node.state == GridState::ROUTED) {
+    if (node.isRouted()) {
         // Friend: same net_id -> allow access
         // Enemy: different net_id -> also allow access (but with penalty in A*)
         return true;
     }
-    
+
     // OBSTACLE cells are never free
     return false;
 }
@@ -471,18 +460,19 @@ void RoutingGrid::clear() {
 void RoutingGrid::markPath(const std::vector<GridPoint>& path, int net_id) {
     for (const auto& gp : path) {
         if (isValid(gp)) {
+            GridNode& node = grid_[gp.layer][gp.y][gp.x];
+
             // Don't override PIN states, but mark everything else as ROUTED
-            if (grid_[gp.layer][gp.y][gp.x].state != GridState::PIN) {
+            if (!node.isPin()) {
                 // Check for conflicts and update usage count
-                if (grid_[gp.layer][gp.y][gp.x].state == GridState::ROUTED && 
-                    grid_[gp.layer][gp.y][gp.x].net_id != net_id) {
+                if (node.isRouted() && node.net_id != net_id) {
                     // This point is being used by a different net - increment usage count
-                    grid_[gp.layer][gp.y][gp.x].usage_count++;
+                    node.usage_count++;
                 }
-                
+
                 // Set state and net_id
-                grid_[gp.layer][gp.y][gp.x].state = GridState::ROUTED;
-                grid_[gp.layer][gp.y][gp.x].net_id = net_id;
+                node.state = GridState::ROUTED;
+                node.net_id = net_id;
             }
         }
     }

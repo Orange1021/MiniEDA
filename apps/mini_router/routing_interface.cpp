@@ -119,6 +119,9 @@ std::unordered_map<std::string, Point> buildPinLocations(
                 // Generate unified key using the unified method
                 std::string key = pin_mapper->getPinKey(cell, pin);
 
+                // Cache the key in the Pin object for efficient reuse
+                pin->setPinKey(key);
+
                 // Calculate pin center offset from macro origin using LEF data
                 Point pin_offset = Point(0, 0);  // Default offset
 
@@ -252,14 +255,14 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             
             // **HIGH FANOUT NET ANALYSIS**: Print details about high fanout nets for analysis
             if (net->getAllPins().size() >= 8) {
-                std::cout << "High Fanout Net: " << net->getName() 
-                          << " with " << net->getAllPins().size() << " pins (hash: " 
-                          << std::hash<std::string>{}(net->getName()) << ")" << std::endl;
+                std::cout << "High Fanout Net: " << net->getName()
+                          << " with " << net->getAllPins().size() << " pins (hash: "
+                          << net->getHashId() << ")" << std::endl;
             }
-            
+
             // **NET 0 DEBUG**: Print all nets with hash ID 0
-            if (std::hash<std::string>{}(net->getName()) == 0) {
-                std::cout << "Net 0 DEBUG: " << net->getName() 
+            if (net->getHashId() == 0) {
+                std::cout << "Net 0 DEBUG: " << net->getName()
                           << " with " << net->getAllPins().size() << " pins" << std::endl;
             }
             
@@ -392,20 +395,20 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 // Determine which nets to reroute
                 std::vector<Net*> nets_to_reroute;
                 for (Net* net : nets_to_route) {
-                    int net_id = std::hash<std::string>{}(net->getName());
+                    int net_id = net->getHashId();
                     if (conflicted_net_ids.count(net_id)) {
                         nets_to_reroute.push_back(net);
                     }
                 }
-                
-                std::cout << ">>> Selective Mode: Rerouting " << nets_to_reroute.size() 
-                          << " / " << nets_to_route.size() << " nets (" 
+
+                std::cout << ">>> Selective Mode: Rerouting " << nets_to_reroute.size()
+                          << " / " << nets_to_route.size() << " nets ("
                           << conflicted_net_ids.size() << " conflicted) <<<" << std::endl;
-                
+
                 // **CRITICAL**: Only rip up the conflicting nets
                 // Good nets remain as obstacles in the grid
                 for (Net* net : nets_to_reroute) {
-                    int net_id = std::hash<std::string>{}(net->getName());
+                    int net_id = net->getHashId();
                     routing_grid.ripUpNet(net_id);
                 }
                 
@@ -618,24 +621,44 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         std::cout << "=====================================" << std::endl;
         
         // **CONFLICT LOCATION ANALYSIS**: Print detailed conflict information
-        if (!conflict_history.empty() && conflict_history.back() > 0) {
-            routing_grid.printConflictLocations(0, config.verbose);
-            
-            // **FOUNDATION CHECK**: Inspect Layer 0 at the conflict hotspot (4,6)
-            std::cout << "\n>>> FOUNDATION CHECK (Layer 0 at 4,6) <<<" << std::endl;
-            int tx = 4, ty = 6;
-            
-            auto state_m0 = routing_grid.getState(GridPoint(tx, ty, 0));
-            std::cout << "State at (4,6,0): ";
-            if (state_m0 == GridState::PIN) {
-                int pin_net_id = routing_grid.getNetId(GridPoint(tx, ty, 0));
-                std::cout << "PIN (Net " << pin_net_id << ")";
-            } else if (state_m0 == GridState::OBSTACLE) {
-                std::cout << "OBSTACLE";
-            } else {
-                std::cout << "FREE/OTHER";
-            }
-            std::cout << std::endl;
+        
+                if (!conflict_history.empty() && conflict_history.back() > 0) {
+        
+                    routing_grid.printConflictLocations(0, config.verbose);
+        
+        
+        
+                    // **FOUNDATION CHECK**: Inspect Layer 0 at the conflict hotspot (4,6)
+        
+                    std::cout << "\n>>> FOUNDATION CHECK (Layer 0 at 4,6) <<<" << std::endl;
+        
+                    int tx = 4, ty = 6;
+        
+        
+        
+                    auto state_m0 = routing_grid.getState(GridPoint(tx, ty, 0));
+        
+                    std::cout << "State at (4,6,0): ";
+        
+                    if (state_m0 == GridState::PIN) {
+        
+                        int pin_net_id = routing_grid.getNetId(GridPoint(tx, ty, 0));
+        
+                        std::cout << "PIN (Net " << pin_net_id << ")";
+        
+                    } else if (state_m0 == GridState::OBSTACLE) {
+        
+                        std::cout << "OBSTACLE";
+        
+                    } else {
+        
+        
+        
+                        std::cout << "FREE/OTHER";
+        
+                    }
+        
+                    std::cout << std::endl;
             
             // Check surrounding area for other pins
             std::cout << "Neighbors at Layer 0:" << std::endl;
@@ -647,7 +670,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                         auto neighbor_state = routing_grid.getState(GridPoint(nx, ny, 0));
                         if (neighbor_state == GridState::PIN) {
                             int neighbor_net_id = routing_grid.getNetId(GridPoint(nx, ny, 0));
-                            std::cout << "  (" << nx << "," << ny << ") is PIN (Net " 
+                            std::cout << "  (" << nx << "," << ny << ") is PIN (Net "
                                       << neighbor_net_id << ")" << std::endl;
                         }
                     }
@@ -662,7 +685,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             // Map net_id_hash -> net_name for reporting
             std::unordered_map<int, std::string> net_id_to_name;
             for (Net* net : nets_to_route) {
-                int net_id_hash = std::hash<std::string>{}(net->getName());
+                int net_id_hash = net->getHashId();
                 net_id_to_name[net_id_hash] = net->getName();
             }
             
@@ -684,13 +707,13 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             for (int dy = -1; dy <= 1; ++dy) {
                 for (int dx = -1; dx <= 1; ++dx) {
                     int nx = tx + dx, ny = ty + dy;
-                    
+
                     if (config.verbose) {
                         if (routing_grid.isValid(GridPoint(nx, ny, 1))) {
                             double history = routing_grid.getHistoryCost(nx, ny, 1);
                             auto state = routing_grid.getState(GridPoint(nx, ny, 1));
                             int net_id = routing_grid.getNetId(GridPoint(nx, ny, 1));
-                            
+
                             printf("(%d,%d) ", nx, ny);
                             if (state == GridState::OBSTACLE) {
                                 printf("BLK ");
@@ -701,7 +724,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                             } else {
                                 printf("Free ");
                             }
-                            
+
                             printf("Hist=%.1f\n", history);
                         } else {
                             printf("(%d,%d) Invalid\n", nx, ny);

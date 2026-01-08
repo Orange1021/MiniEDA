@@ -37,12 +37,12 @@ MazeRouter::MazeRouter(RoutingGrid* grid, LefPinMapper* pin_mapper, PlacerDB* pl
 // Public Methods
 // ============================================================================
 
-RoutingResult MazeRouter::routeNet(Net* net, 
+RoutingResult MazeRouter::routeNet(Net* net,
                                  const std::unordered_map<std::string, Point>& pin_locations) {
     RoutingResult result;
-    
+
     // Set current net ID
-    current_net_id_ = std::hash<std::string>{}(net->getName());
+    current_net_id_ = net->getHashId();
     
     // Calculate segment count
     current_net_segments_ = net->getAllPins().size() - 1;
@@ -64,9 +64,8 @@ RoutingResult MazeRouter::routeNet(Net* net,
     
     // 2. Get Driver coordinates
     Pin* driver = net->getDriver();
-    Cell* driver_cell = driver->getOwner();
-    std::string driver_key = pin_mapper_->getPinKey(driver_cell, driver);
-    
+    std::string driver_key = driver->getPinKey();  // Use cached key
+
     auto driver_it = pin_locations.find(driver_key);
     if (driver_it == pin_locations.end()) {
         result.error_message = "Driver pin not found: " + driver_key;
@@ -75,9 +74,9 @@ RoutingResult MazeRouter::routeNet(Net* net,
     
     Point driver_phys = driver_it->second;
     GridPoint source_gp = grid_->physToGrid(driver_phys.x, driver_phys.y, 0);
-    
+
     // Mark driver pin as PIN state
-    grid_->setState(source_gp, GridState::PIN, current_net_id_);
+    grid_->markPin(source_gp, current_net_id_);
     
     // 3. Build MST topology
     std::vector<Segment> mst_segments;
@@ -94,7 +93,7 @@ RoutingResult MazeRouter::routeNet(Net* net,
         
         std::vector<Pin*> loads = net->getLoads();
         for (Pin* load : loads) {
-            std::string load_key = pin_mapper_->getPinKey(load->getOwner(), load);
+            std::string load_key = load->getPinKey();  // Use cached key
             auto load_it = pin_locations.find(load_key);
             if (load_it != pin_locations.end()) {
                 pin_points.push_back(load_it->second);
@@ -146,23 +145,23 @@ RoutingResult MazeRouter::routeNet(Net* net,
         
         GridPoint start_gp_m1 = grid_->physToGrid(start_phys.x, start_phys.y, 0);
         GridPoint end_gp_m1 = grid_->physToGrid(end_phys.x, end_phys.y, 0);
-        
-        grid_->setState(start_gp_m1, GridState::PIN, current_net_id_);
-        grid_->setState(end_gp_m1, GridState::PIN, current_net_id_);
-        
+
+        grid_->markPin(start_gp_m1, current_net_id_);
+        grid_->markPin(end_gp_m1, current_net_id_);
+
         GridPoint start_gp = start_gp_m1;
         GridPoint end_gp = end_gp_m1;
-        
+
         // Smart Access
         if (!findBestAccessPoint(start_gp.x, start_gp.y, current_net_id_, start_gp)) {
-            if (grid_->isFree(GridPoint(start_gp.x, start_gp.y, 1), current_net_id_)) {
-                start_gp = GridPoint(start_gp.x, start_gp.y, 1);
+            if (grid_->isFree(start_gp.withLayer(1), current_net_id_)) {
+                start_gp = start_gp.withLayer(1);
             }
         }
-        
+
         if (!findBestAccessPoint(end_gp.x, end_gp.y, current_net_id_, end_gp)) {
-            if (grid_->isFree(GridPoint(end_gp.x, end_gp.y, 1), current_net_id_)) {
-                end_gp = GridPoint(end_gp.x, end_gp.y, 1);
+            if (grid_->isFree(end_gp.withLayer(1), current_net_id_)) {
+                end_gp = end_gp.withLayer(1);
             }
         }
         
@@ -182,14 +181,14 @@ RoutingResult MazeRouter::routeNet(Net* net,
 
             result.total_wirelength += wirelength;
             result.total_vias += vias;
-            
-            grid_->setState(start_gp_m1, GridState::PIN, current_net_id_);
-            grid_->setState(end_gp_m1, GridState::PIN, current_net_id_);
-            
+
+            grid_->markPin(start_gp_m1, current_net_id_);
+            grid_->markPin(end_gp_m1, current_net_id_);
+
         } else {
             // FAILURE
-            grid_->setState(start_gp_m1, GridState::PIN, current_net_id_);
-            grid_->setState(end_gp_m1, GridState::PIN, current_net_id_);
+            grid_->markPin(start_gp_m1, current_net_id_);
+            grid_->markPin(end_gp_m1, current_net_id_);
             
             // Log simple failure message (Probes removed)
             // std::cout << "Failed to route segment for net " << net->getName() << std::endl;
@@ -215,7 +214,7 @@ RoutingResult MazeRouter::routeNet(Net* net,
         total_vias_ += result.total_vias;
 
         // Global Registry Update
-        int net_id = std::hash<std::string>{}(net->getName());
+        int net_id = net->getHashId();
         final_routes_[net_id] = result.segments;
 
         double wire_length_um = result.total_wirelength * grid_->getPitchX();
@@ -286,10 +285,10 @@ bool MazeRouter::findPath(const GridPoint& start, const GridPoint& end,
             if (!(next == end) && !grid_->isFree(next, current_net_id_)) {
                 continue;  // Skip obstacles (except the target point)
             }
-            
+
             // Calculate G value
-            double new_g = current.g_cost + calculateMovementCost(current.gp, next);
-            
+            double new_g = current.g_cost + grid_->calculateMovementCost(current.gp, next, current_net_id_, collision_penalty_);
+
             // Update if this path is better
             auto it = g_score.find(next);
             if (it == g_score.end() || new_g < it->second) {
@@ -449,27 +448,20 @@ void MazeRouter::restoreBestSolution() {
 std::vector<GridPoint> MazeRouter::backtrack(
     const std::unordered_map<GridPoint, GridPoint, GridPointHash>& came_from,
     const GridPoint& current) const {
-    
+
     std::vector<GridPoint> path;
     GridPoint curr = current;
-    
+
     // Trace back from end to start
     while (came_from.find(curr) != came_from.end()) {
         path.push_back(curr);
         curr = came_from.at(curr);
     }
     path.push_back(curr);  // Add start point
-    
+
     // Reverse to get start-to-end order
     std::reverse(path.begin(), path.end());
     return path;
-}
-
-double MazeRouter::calculateMovementCost(const GridPoint& from, const GridPoint& to) const {
-    // **PATHFINDER CHANGE**: Use RoutingGrid's cost calculation instead of local logic
-    // This includes history costs and collision penalties
-    double cost = grid_->calculateMovementCost(from, to, current_net_id_, collision_penalty_);
-    return cost;
 }
 
 double MazeRouter::manhattanDistance(const GridPoint& from, const GridPoint& to) const {
@@ -493,11 +485,11 @@ void MazeRouter::markPath(const std::vector<GridPoint>& path, int net_id) {
 }
 
 bool MazeRouter::findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoint& out_gp) const {
-    
+
     int best_x = -1, best_y = -1;
     double min_cost = 1e9;
     bool found = false;
-    
+
     // Search around pin location for best access point
     //扩大搜索范围：5x5区域，可以跳过整个拥塞团块
     int search_radius = 2;
@@ -507,42 +499,43 @@ bool MazeRouter::findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoi
         {-1, 0}, {1, 0}, {0, -1}, {0, 1},  // Adjacent cells
         {-1, -1}, {-1, 1}, {1, -1}, {1, 1}  // Diagonal cells - lower priority
     };
-    
+
     for (const auto& [dx, dy] : search_offsets) {
-        int nx = pin_gx + dx;
-        int ny = pin_gy + dy;
-        
-        // 1. Basic validity checks
-        if (!grid_->isValid(GridPoint(nx, ny, 1))) continue;
-        if (grid_->getState(GridPoint(nx, ny, 1)) == GridState::OBSTACLE) continue;
-        
-        // 2. [Core] Check congestion cost (History Cost)
-        double current_hist = grid_->getHistoryCost(nx, ny, 1);
-        
-        // 3. Distance penalty (Manhattan distance from pin center)
-        double dist_penalty = (abs(dx) + abs(dy)) * distance_weight_;
-        
-        // 4. Combined score - lower is better
-        double total_score = current_hist + dist_penalty;
-        
-        if (total_score < min_cost) {
-            min_cost = total_score;
-            best_x = nx;
-            best_y = ny;
-            found = true;
-        }
-    }
+            int nx = pin_gx + dx;
+            int ny = pin_gy + dy;
     
-    if (found) {
-        out_gp = GridPoint(best_x, best_y, 1);
-        
-        
-        
+            // 1. Basic validity checks
+            GridPoint check_point = GridPoint(nx, ny, 1);
+            if (!grid_->isValid(check_point)) continue;
+            if (grid_->getState(check_point) == GridState::OBSTACLE) continue;
+    
+            // 2. [Core] Check congestion cost (History Cost)
+            double current_hist = grid_->getHistoryCost(nx, ny, 1);
+    
+            // 3. Distance penalty (Manhattan distance from pin center)
+            double dist_penalty = (abs(dx) + abs(dy)) * distance_weight_;
+    
+            // 4. Combined score - lower is better
+            double total_score = current_hist + dist_penalty;
+    
+            if (total_score < min_cost) {
+                min_cost = total_score;
+                best_x = nx;
+                best_y = ny;
+                found = true;
+            }
+        }
+    
+        if (found) {
+            out_gp = GridPoint(best_x, best_y, 1);
+
+
+
 
         return true;
     }
-    
-    std::cout << "Smart Access: FAILED for Net " << net_id 
+
+    std::cout << "Smart Access: FAILED for Net " << net_id
               << " at (" << pin_gx << "," << pin_gy << ")" << std::endl;
     return false;
 }
