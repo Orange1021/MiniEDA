@@ -10,7 +10,7 @@
 #include "legalizer.h"
 #include "overlap_detector.h"
 #include "../../lib/include/hpwl_calculator.h"
-#include "../../lib/include/visualizer.h"
+#include "../../lib/include/csv_exporter.h"
 #include <iostream>
 #include <algorithm>
 #include <memory>
@@ -20,6 +20,8 @@
 #include <map>
 #include <chrono>
 #include <iomanip>
+#include <fstream>
+#include <sstream>
 
 namespace mini {
 
@@ -27,7 +29,7 @@ PlacerEngine::PlacerEngine(PlacerDB* db, double target_density, double initial_l
                            double lambda_growth_rate, double learning_rate, 
                            double momentum, double convergence_threshold, 
                            double density_margin, double max_gradient_ratio, double max_displacement_ratio)
-    : db_(db), viz_(nullptr), current_hpwl_(0.0), hpwl_convergence_ratio_(0.0001), density_margin_(density_margin), max_gradient_ratio_(max_gradient_ratio), max_displacement_ratio_(max_displacement_ratio), global_placer_(nullptr), leg_algo_(LegalizationAlgorithm::ABACUS),      target_density_(target_density), initial_lambda_(initial_lambda), 
+    : db_(db), current_hpwl_(0.0), hpwl_convergence_ratio_(0.0001), density_margin_(density_margin), max_gradient_ratio_(max_gradient_ratio), max_displacement_ratio_(max_displacement_ratio), detailed_iterations_(3), warmup_stop_ratio_(0.3), global_placer_(nullptr), leg_algo_(LegalizationAlgorithm::ABACUS),      target_density_(target_density), initial_lambda_(initial_lambda), 
       lambda_growth_rate_(lambda_growth_rate), learning_rate_(learning_rate),
       momentum_(momentum), convergence_threshold_(convergence_threshold) {
 }
@@ -96,11 +98,9 @@ void PlacerEngine::runGlobalPlacement() {
         if (iter % 5 == 0) {
             std::cout << "Iteration " << iter << ": HPWL = " << new_hpwl << std::endl;
             
-            // Visualize every 5 iterations if visualizer is available
-            if (viz_) {
-                std::string filename = "quadratic_iter_" + std::to_string(iter);
-                viz_->drawPlacementWithRunId(filename, run_id_);
-            }
+            // Visualize every 5 iterations
+            std::string filename = "quadratic_iter_" + std::to_string(iter);
+            exportAndVisualize(filename);
         }
         
         // Check convergence
@@ -154,9 +154,7 @@ void PlacerEngine::runLegalization() {
     std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
     
     // Visualize the result
-    if (viz_) {
-        viz_->drawPlacementWithRunId("legalized", run_id_);
-    }
+    exportAndVisualize("legalized");
     
     std::cout << "Legalization completed!" << std::endl;
 }
@@ -169,7 +167,7 @@ void PlacerEngine::runDetailedPlacement() {
     // Initialize detailed placer with verbose mode
     detailed_placer_ = std::make_unique<DetailedPlacer>(db_, db_->getNetlistDB());
     detailed_placer_->setVerbose(true);
-    detailed_placer_->setIterations(3);
+    detailed_placer_->setIterations(detailed_iterations_);
     
     // Run detailed placement optimization
     detailed_placer_->run();
@@ -184,9 +182,7 @@ void PlacerEngine::runDetailedPlacement() {
     detector.generateReport("DETAILED PLACEMENT OVERLAP ANALYSIS", false);
     
     // Visualize final result
-    if (viz_) {
-        viz_->drawPlacementWithRunId("detailed", run_id_);
-    }
+    exportAndVisualize("detailed");
 }
 
 void PlacerEngine::solveForceDirectedIteration(int iter) {
@@ -337,10 +333,8 @@ void PlacerEngine::runBasicStrategy() {
         if (iter % 5 == 0) {
             std::cout << "  Iteration " << iter << ": HPWL = " << new_hpwl << std::endl;
             
-            if (viz_) {
-                std::string filename = "quadratic_iter_" + std::to_string(iter);
-                viz_->drawPlacementWithRunId(filename, run_id_);
-            }
+            std::string filename = "quadratic_iter_" + std::to_string(iter);
+            exportAndVisualize(filename);
         }
         
         double improvement = current_hpwl_ - new_hpwl;
@@ -375,10 +369,7 @@ void PlacerEngine::runElectrostaticStrategy() {
         global_placer_->setMaxIterations(200);
         global_placer_->setVerbose(true);
         
-        if (viz_) {
-            global_placer_->setVisualizer(viz_);
-            global_placer_->setRunId(run_id_);
-        }
+        global_placer_->setRunId(run_id_);
     }
     
     global_placer_->runPlacement();
@@ -392,7 +383,6 @@ void PlacerEngine::runHybridStrategy() {
     
     std::cout << "\n  === Phase 1: Warm-up (Basic Force-Directed) ===" << std::endl;
     const int max_warmup_iterations = 15;  // Reduce maximum iterations
-    const double stop_hpwl_ratio = 0.3;   // Stop when HPWL drops to 30% of initial value
     
     current_hpwl_ = calculateHPWL();
     double initial_hpwl = current_hpwl_;
@@ -408,16 +398,13 @@ void PlacerEngine::runHybridStrategy() {
             std::cout << "  Warmup iteration " << iter << ": HPWL = " << new_hpwl 
                       << " (ratio: " << std::fixed << std::setprecision(3) << current_ratio << ")" << std::endl;
             
-            if (viz_) {
-                std::string filename = "warmup_iter_" + std::to_string(iter);
-                viz_->drawPlacementWithRunId(filename, run_id_);
-            }
-        }
+            std::string filename = "warmup_iter_" + std::to_string(iter);
+                    exportAndVisualize(filename);        }
         
         current_hpwl_ = new_hpwl;
         
         // [Safety Valve #2] Gentle stop condition: avoid over-compression
-        if (current_ratio <= stop_hpwl_ratio) {
+        if (current_ratio <= warmup_stop_ratio_) {
             std::cout << "  Warm-up stopped early: HPWL ratio reached " << current_ratio << std::endl;
             break;
         }
@@ -451,18 +438,30 @@ void PlacerEngine::runHybridStrategy() {
         global_placer_->setMaxIterations(200);
         global_placer_->setVerbose(true);
         
-        if (viz_) {
-            global_placer_->setVisualizer(viz_);
-            global_placer_->setRunId(run_id_);
-            // Set warm-up mode flag, enable conservative Lambda tuning
-            global_placer_->setWarmupMode(true);
-        }
+        global_placer_->setRunId(run_id_);
+        // Set warm-up mode flag, enable conservative Lambda tuning
+        global_placer_->setWarmupMode(true);
     }
     
     global_placer_->runPlacement();
     
     current_hpwl_ = calculateHPWL();
     std::cout << "  Hybrid strategy completed. Final HPWL: " << current_hpwl_ << std::endl;
+}
+
+void PlacerEngine::exportAndVisualize(const std::string& filename) const {
+    if (!db_) return;
+    
+    // Export CSV using CSVExporter
+    std::string csv_path = "visualizations/" + run_id_ + "/" + filename + ".csv";
+    if (CSVExporter::exportPlacement(db_, csv_path)) {
+        // Generate visualization using Python script
+        std::string plot_cmd = "cd visualizations && python3 plot_placement.py " + 
+                              run_id_ + "/" + filename + ".csv " +
+                              run_id_ + "/" + filename + ".png " +
+                              "--title \"Placement - " + filename + "\"";
+        std::system(plot_cmd.c_str());
+    }
 }
 
 } // namespace mini

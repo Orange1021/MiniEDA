@@ -82,12 +82,6 @@ protected:
      * @return True if overlaps exist
      */
     bool hasOverlaps() const;
-
-    /**
-     * @brief Export legalization result for visualization
-     * @param filename Output filename
-     */
-    void exportResult(const std::string& filename) const;
 };
 
 } // namespace mini

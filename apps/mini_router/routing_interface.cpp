@@ -9,7 +9,7 @@
 #include "../../lib/include/lef_parser.h"
 #include "../../lib/include/liberty_parser.h"
 #include "../../lib/include/lef_pin_mapper.h"
-#include "../../lib/include/visualizer.h"
+
 #include "../../lib/include/placer_db.h"
 #include "../../apps/mini_placement/macro_mapper.h"
 #include <iostream>
@@ -578,7 +578,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         // **INTEGRATED VISUALIZATION**: Export data immediately after restoration
         // This ensures we export the complete solution (all 154 nets)
         std::string output_dir = "visualizations/" + config.run_id;
-        router.exportVisualization(output_dir + "/post_routing.txt");
+        router.exportVisualization(output_dir + "/post_routing.txt", placer_db.get());
         
         
         
@@ -783,8 +783,21 @@ std::vector<RoutingResult> RoutingInterface::runRoutingWithVisualization(
             double pitch = config.routing_pitch * config.routing_grid_fine_factor;
             routing_grid.init(core_area, pitch, pitch);
             
-            std::string output_name = "visualizations/" + config.run_id + "/post_routing";
-            visualizer->drawRoutedPlacement(output_name, results, &routing_grid);
+std::string output_name = "visualizations/" + config.run_id + "/post_routing";
+            
+            // Remove old visualization files
+            std::string old_py = output_name + ".py";
+            std::string old_png = output_name + ".png";
+            std::remove(old_py.c_str());
+            std::remove(old_png.c_str());
+            
+            // Call plot_routing.py to generate correct visualization
+            std::string plot_cmd = "cd visualizations && python3 plot_routing.py " + 
+                                config.run_id + "/post_routing.txt";
+            int result = std::system(plot_cmd.c_str());
+            if (result != 0) {
+                std::cerr << "Warning: Failed to run plot_routing.py" << std::endl;
+            }
         }
     }
     

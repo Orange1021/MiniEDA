@@ -178,7 +178,7 @@ public:
      * @brief Export visualization data to file
      * @param filename Output file path
      */
-    void exportVisualization(const std::string& filename);
+    void exportVisualization(const std::string& filename, class PlacerDB* placer_db = nullptr);
     double getSegmentSuccessRate() const { 
         return (total_segments_attempted_ > 0) ? 
             (double)total_segments_succeeded_ / total_segments_attempted_ * 100.0 : 0.0; 

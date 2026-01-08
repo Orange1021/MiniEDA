@@ -7,7 +7,7 @@
 #ifndef MINI_PLACER_ENGINE_H
 #define MINI_PLACER_ENGINE_H
 
-#include "../../lib/include/visualizer.h"
+
 #include "../../lib/include/placer_db.h"
 #include "placement_interface.h"
 #include "detailed_placer.h"
@@ -28,19 +28,22 @@ class PlacerEngine {
 public:
     /**
      * @brief Constructor
-     * @param db Pointer to the placement database
-     * @param target_density Target utilization for global placement
-     * @param initial_lambda Initial density penalty factor
-     * @param lambda_growth_rate Lambda growth rate per iteration
-     * @param learning_rate Learning rate (step size)
+     * @param db Pointer to placement database
+     * @param target_density Target placement density
+     * @param initial_lambda Initial lambda for electrostatic forces
+     * @param lambda_growth_rate Lambda growth rate
+     * @param learning_rate Learning rate for optimization
      * @param momentum Momentum factor
      * @param convergence_threshold Convergence threshold
+     * @param density_margin Density margin for overflow handling
+     * @param max_gradient_ratio Maximum gradient ratio for safety
+     * @param max_displacement_ratio Maximum displacement ratio
      */
     PlacerEngine(PlacerDB* db, double target_density, double initial_lambda, 
                  double lambda_growth_rate, double learning_rate, 
                  double momentum, double convergence_threshold, 
-                 double density_margin = 0.1, double max_gradient_ratio = 0.01, double max_displacement_ratio = 0.02);
-
+                 double density_margin, double max_gradient_ratio, double max_displacement_ratio);
+    
     /**
      * @brief Destructor
      */
@@ -51,6 +54,7 @@ public:
      * @param ratio HPWL convergence ratio (e.g., 0.0001 for 0.01%)
      */
     void setHPWLConvergenceRatio(double ratio) { hpwl_convergence_ratio_ = ratio; }
+    void setDetailedIterations(int iterations) { detailed_iterations_ = iterations; }
 
     /**
      * @brief Calculate Half-Perimeter Wire Length (HPWL)
@@ -84,11 +88,7 @@ public:
      */
     void runDetailedPlacement();
 
-    /**
-     * @brief Set visualizer for debugging
-     * @param viz Pointer to visualizer
-     */
-    void setVisualizer(Visualizer* viz) { viz_ = viz; }
+
 
     /**
      * @brief Set run ID for file naming
@@ -109,13 +109,14 @@ public:
     double getCurrentHPWL() const { return current_hpwl_; }
 
 private:
-    PlacerDB* db_;                    // Placement database
-    Visualizer* viz_;                 // Visualizer for debugging
+    PlacerDB* db_;  // Placement database
     double current_hpwl_;             // Current HPWL value
     double hpwl_convergence_ratio_;   ///< HPWL convergence ratio
     double density_margin_;           ///< Density margin for target density calculation
     double max_gradient_ratio_;       ///< Maximum gradient as ratio of core width
     double max_displacement_ratio_;   ///< Maximum displacement as ratio of core width
+    int detailed_iterations_;         ///< Number of iterations for detailed placement
+    double warmup_stop_ratio_;         ///< Stop warmup when HPWL drops to this ratio of initial value
     std::string run_id_;              // Run ID for file naming
     GlobalPlacer* global_placer_;     // Pointer to advanced global placer
     LegalizationAlgorithm leg_algo_;  // Legalization algorithm selection
@@ -180,6 +181,12 @@ private:
      * @return Total overlapping area
      */
     double calculateTotalOverlap() const;
+
+    /**
+     * @brief Export placement to CSV and generate visualization using Python script
+     * @param filename Base filename (without extension)
+     */
+    void exportAndVisualize(const std::string& filename) const;
 };
 
 } // namespace mini

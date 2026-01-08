@@ -47,9 +47,6 @@ void GreedyLegalizer::run() {
     bool has_overlaps = hasOverlaps();
     std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
     
-    // 7. Export result
-    exportResult("greedy_legalization.csv");
-    
     debugLog("Greedy legalization completed");
 }
 

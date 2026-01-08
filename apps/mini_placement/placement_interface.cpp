@@ -7,7 +7,7 @@
 #include "../../lib/include/placer_db.h"
 #include "placer_engine.h"
 #include "macro_mapper.h"
-#include "../../lib/include/visualizer.h"
+#include "../../lib/include/csv_exporter.h"
 #include "../../lib/include/lef_parser.h"
 #include "../../lib/include/liberty_parser.h"
 
@@ -212,24 +212,28 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
         std::cout << "  Site alignment: " << (aligned_core_width / site_width) << " sites" << std::endl;
     }
     
-    // Initialize Visualizer (after PlacerDB is created)
-    std::unique_ptr<Visualizer> internal_visualizer;
-    if (!visualizer) {
-        if (config.verbose) {
-            std::cout << "\nSetting up Visualizer..." << std::endl;
-        }
-        internal_visualizer = std::make_unique<Visualizer>(placer_db.get());
-        visualizer = internal_visualizer.get();
-    }
+    
     
     // Initialize random placement
     if (config.verbose) {
         std::cout << "\nInitializing Random Placement..." << std::endl;
     }
     placer_db->initializeRandom();
-    if (visualizer) {
-        visualizer->drawPlacementWithRunId("00_random.png", config.run_id);
+    
+    // Export random placement CSV and generate visualization
+    std::string run_dir = "visualizations/" + config.run_id;
+    std::string csv_path = run_dir + "/00_random.csv";
+    
+    // Export CSV using CSVExporter
+    if (CSVExporter::exportPlacement(placer_db.get(), csv_path)) {
+        // Generate visualization using Python script
+        std::string plot_cmd = "cd visualizations && python3 plot_placement.py " + 
+                              config.run_id + "/00_random.csv " +
+                              config.run_id + "/00_random.png " +
+                              "--title \"Random Placement\"";
+        std::system(plot_cmd.c_str());
     }
+    
     if (config.verbose) {
         std::cout << "  Random placement completed" << std::endl;
     }
@@ -242,9 +246,7 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
                        config.lambda_growth_rate, config.learning_rate,
                        config.momentum, config.convergence_threshold, config.density_margin, config.max_gradient_ratio, config.max_displacement_ratio);
     engine.setHPWLConvergenceRatio(config.placement_hpwl_convergence_ratio);
-    if (visualizer) {
-        engine.setVisualizer(visualizer);
-    }
+    engine.setDetailedIterations(config.placement_detailed_iterations);
     engine.setRunId(config.run_id);
     
     if (config.verbose) {

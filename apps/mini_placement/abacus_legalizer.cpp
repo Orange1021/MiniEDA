@@ -76,9 +76,6 @@ void AbacusLegalizer::run() {
     bool has_overlaps = hasOverlaps();
     std::cout << "  Overlap check: " << (has_overlaps ? "FOUND OVERLAPS!" : "No overlaps") << std::endl;
     
-    // Export result for visualization
-    Legalizer::exportResult("abacus_complete.csv");
-    
     debugLog("Abacus legalization completed (Phase 1 + Phase 2 + Phase 3)");
 }
 

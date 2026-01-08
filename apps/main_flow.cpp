@@ -15,7 +15,6 @@
 #include "../lib/include/verilog_parser.h"
 #include "../lib/include/liberty_parser.h"
 #include "../lib/include/lef_parser.h"
-#include "../lib/include/visualizer.h"
 
 // NEW: Unified configuration management
 #include "../lib/include/app_config.h"
@@ -66,6 +65,8 @@ PlacementConfig toPlacementConfig(const AppConfig& app_config) {
     placement_config.max_gradient_ratio = app_config.placement_max_gradient_ratio;
     placement_config.max_displacement_ratio = app_config.placement_max_displacement_ratio;
     placement_config.placement_hpwl_convergence_ratio = app_config.placement_hpwl_convergence_ratio;
+    placement_config.placement_detailed_iterations = app_config.placement_detailed_iterations;
+    placement_config.placement_warmup_stop_ratio = app_config.placement_warmup_stop_ratio;
     
     return placement_config;
 }
@@ -177,14 +178,13 @@ std::unique_ptr<PlacerDB> runPlacement(const AppConfig& config, std::shared_ptr<
     placement_config.row_height = actual_row_height;  // Use detected height
     placement_config.placement_algo = placement_algo;  // Set algorithm
     
-    // Use algorithm-specific folder for comparison (avoid overwriting)
     // Extract base run_id without _routing suffix for placement
     std::string base_run_id = config.run_id;
     size_t routing_pos = base_run_id.find("_routing");
     if (routing_pos != std::string::npos) {
         base_run_id = base_run_id.substr(0, routing_pos);
     }
-    placement_config.run_id = base_run_id + "_" + placement_algo;
+    placement_config.run_id = base_run_id;
     
     // Run placement using unified interface
     auto placer_db = PlacementInterface::runPlacementWithVisualization(
@@ -227,12 +227,9 @@ bool runRouting(const AppConfig& config, std::shared_ptr<NetlistDB> netlist_db,
     // Convert to routing configuration
     RoutingConfig routing_config = toRoutingConfig(config);
     
-    // Run routing with visualization
-    auto visualizer = config.enable_visualization ? 
-        std::make_unique<Visualizer>(placer_db.get()) : nullptr;
-    
-    auto routing_results = RoutingInterface::runRoutingWithVisualization(
-        routing_config, netlist_db, placer_db, visualizer.get());
+    // Run routing
+    auto routing_results = RoutingInterface::runRouting(
+        routing_config, netlist_db, placer_db);
     
     // Get and report routing statistics
     double total_wirelength;

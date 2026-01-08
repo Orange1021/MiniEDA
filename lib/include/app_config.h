@@ -65,6 +65,8 @@ struct AppConfig {
     double placement_density_margin = 0.1;                  ///< Density margin for target density calculation
     double placement_max_gradient_ratio = 0.01;            ///< Maximum gradient as ratio of core width
     double placement_max_displacement_ratio = 0.02;       ///< Maximum displacement as ratio of core width
+    int placement_detailed_iterations = 3;                   ///< Number of iterations for detailed placement
+    double placement_warmup_stop_ratio = 0.3;              ///< Stop warmup when HPWL drops to this ratio of initial value
     
     // ========================================================================
     // [NEW] Routing Algorithm Parameters

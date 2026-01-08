@@ -9,7 +9,7 @@
 #include <algorithm>
 #include <chrono>
 #include "../../lib/include/hpwl_calculator.h"
-#include "../../lib/include/visualizer.h"
+#include "../../lib/include/csv_exporter.h"
 
 namespace mini {
 
@@ -781,50 +781,35 @@ void GlobalPlacer::exportPlacementImage(int iteration) const {
     std::string csv_filename = "placement_iter_" + std::to_string(iteration) + ".csv";
     exportPlacement(csv_filename);
     
-    // If visualizer is available, generate PNG image
-    if (visualizer_) {
-        std::string filename = "electro_iter_" + std::to_string(iteration);
-        visualizer_->drawPlacementWithRunId(filename, run_id_);
+    // Generate PNG image using Python script
+    std::string run_dir = "visualizations/" + run_id_;
+    std::string csv_path = run_dir + "/" + csv_filename;
+    std::string png_filename = "electro_iter_" + std::to_string(iteration) + ".png";
+    std::string png_path = run_dir + "/" + png_filename;
+    
+    // Call Python script to generate visualization
+    std::string plot_cmd = "cd visualizations && python3 plot_placement.py " + 
+                          run_id_ + "/" + csv_filename + " " + 
+                          run_id_ + "/" + png_filename +
+                          " --title \"Global Placement - Iteration " + std::to_string(iteration) + "\"";
+    
+    int result = std::system(plot_cmd.c_str());
+    if (result == 0) {
         std::cout << "  Global placement iteration " << iteration << " PNG exported" << std::endl;
     } else {
-        std::cout << "  Global placement iteration " << iteration << " CSV exported (no visualizer)" << std::endl;
+        std::cout << "  Global placement iteration " << iteration << " CSV exported (visualization failed)" << std::endl;
     }
 }
 
 void GlobalPlacer::exportPlacement(const std::string& filename) const {
     // Create full path to visualization directory
-    std::string run_dir = "visualizations/" + run_id_;
-    std::string mkdir_cmd = "mkdir -p " + run_dir;
-    std::system(mkdir_cmd.c_str());
+    std::string full_path = "visualizations/" + run_id_ + "/" + filename;
     
-    // Full path for CSV file
-    std::string full_path = run_dir + "/" + filename;
-    std::ofstream file(full_path);
-    if (!file.is_open()) {
-        std::cerr << "Error: Cannot open file " << full_path << " for writing" << std::endl;
-        return;
-    }
-    
-    file << "cell_name,x,y,width,height,fixed\n";
-    
-    for (const auto& cell_ptr : netlist_db_->getCells()) {
-        const Cell* cell = cell_ptr.get();
-        if (!cell) continue;
-        
-        const auto& cell_info = placer_db_->getCellInfo(const_cast<Cell*>(cell));
-        
-        file << cell->getName() << ","
-             << cell->getX() << ","
-             << cell->getY() << ","
-             << cell_info.width << ","
-             << cell_info.height << ","
-             << (cell_info.fixed ? "1" : "0") << "\n";
-    }
-    
-    file.close();
-    
-    if (verbose_) {
-        std::cout << "[GlobalPlacer] Placement exported to " << filename << std::endl;
+    // Export using CSVExporter
+    if (CSVExporter::exportPlacement(placer_db_, full_path)) {
+        if (verbose_) {
+            std::cout << "[GlobalPlacer] Placement exported to " << filename << std::endl;
+        }
     }
 }
 
@@ -877,7 +862,7 @@ void GlobalPlacer::exportDensityVisualization() const {
     
     // Generate heatmap using Python script
     std::string png_filename = run_dir + "/density_heatmap.png";
-    std::string python_cmd = "python3 visualize_density.py " + csv_filename + " " + png_filename + " 2>/dev/null";
+    std::string python_cmd = "python3 visualizations/visualize_density.py " + csv_filename + " " + png_filename + " 2>/dev/null";
     
     int result = std::system(python_cmd.c_str());
     if (result == 0) {

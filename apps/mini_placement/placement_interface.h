@@ -45,7 +45,9 @@ struct PlacementConfig {
     double density_margin;                          // Density margin for overflow handling
     double max_gradient_ratio;                      // Maximum gradient as ratio of core width
     double max_displacement_ratio;                  // Maximum displacement as ratio of core width
-    double placement_hpwl_convergence_ratio;        // HPWL convergence threshold
+double placement_hpwl_convergence_ratio;        ///< HPWL convergence threshold
+    int placement_detailed_iterations;              ///< Number of iterations for detailed placement
+    double placement_warmup_stop_ratio;            ///< Stop warmup when HPWL drops to this ratio of initial value
 };
 
 /**

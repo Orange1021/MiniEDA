@@ -52,11 +52,6 @@ public:
      * @param verbose Enable verbose output
      */
     void setVerbose(bool verbose) { verbose_ = verbose; }
-
-    /**
-     * @brief Set number of reordering iterations
-     * @param iterations Number of iterations to run
-     */
     void setIterations(int iterations) { iterations_ = iterations; }
 
     /**

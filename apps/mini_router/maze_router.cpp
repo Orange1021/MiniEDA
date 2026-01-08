@@ -572,7 +572,7 @@ int MazeRouter::countVias(const std::vector<GridPoint>& path) const {
     return vias;
 }
 
-void MazeRouter::exportVisualization(const std::string& filename) {
+void MazeRouter::exportVisualization(const std::string& filename, PlacerDB* placer_db) {
     
     // Create directory if needed
     size_t last_slash = filename.find_last_of('/');
@@ -588,10 +588,35 @@ void MazeRouter::exportVisualization(const std::string& filename) {
         return;
     }
     
-    // 1. Print header
-    out << "# Net_ID Start_X Start_Y Start_Layer End_X End_Y End_Layer\n";
+    // 1. Print header for enhanced format
+    out << "# Enhanced routing data format for plot_routing.py\n";
+    out << "# Cell format: CELL x y width height cell_name\n";
     
-    // 2. Export all routes from global registry (final_routes_)
+    // 2. Export cell positions if placer_db is available
+    if (placer_db && grid_) {
+        // Convert physical coordinates to grid coordinates for consistency
+        for (auto* cell : placer_db->getAllCells()) {
+            const auto& info = placer_db->getCellInfo(cell);
+            
+            // Convert cell position and size to grid coordinates
+            GridPoint bottom_left = grid_->physToGrid(info.x, info.y, 0);
+            GridPoint top_right = grid_->physToGrid(info.x + info.width, info.y + info.height, 0);
+            
+            // Calculate grid coordinates
+            int grid_x = bottom_left.x;
+            int grid_y = bottom_left.y;
+            int grid_width = top_right.x - bottom_left.x;
+            int grid_height = top_right.y - bottom_left.y;
+            
+            out << "CELL " << grid_x << " " << grid_y << " "
+                << grid_width << " " << grid_height << " "
+                << cell->getName() << "\n";
+        }
+    }
+    
+    out << "\n# Routing format: x1 y1 z1 x2 y2 z2 net_id\n";
+    
+    // 3. Export all routes from global registry (final_routes_)
     int segments_count = 0;
     int nets_exported = 0;
     
@@ -615,5 +640,7 @@ void MazeRouter::exportVisualization(const std::string& filename) {
     }
     
     out.close();
+    std::cout << "Exported " << nets_exported << " nets, " << segments_count 
+              << " segments to " << filename << std::endl;
 }
 } // namespace mini
