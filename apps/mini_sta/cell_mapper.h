@@ -41,6 +41,25 @@ public:
     const LibCell* mapType(const std::string& cell_type) const;
 
     /**
+     * @brief Find cell with warning message
+     * @param cell_type Logical cell type from netlist
+     * @param context Optional context string for warning message
+     * @return Pointer to matched LibCell, nullptr if no match found
+     * @details Prints warning to stderr if cell not found
+     */
+    const LibCell* findWithWarning(const std::string& cell_type,
+                                   const std::string& context = "") const;
+
+    /**
+     * @brief Find cell with fallback to library direct lookup
+     * @param cell_type Logical cell type from netlist
+     * @return Pointer to matched LibCell, nullptr if no match found
+     * @details Tries CellMapper first, then falls back to direct library lookup
+     */
+    const LibCell* findWithLibraryFallback(const std::string& cell_type, 
+                                           const Library* library) const;
+
+    /**
      * @brief Enable/disable debug output for mapping process
      * @param enabled True to enable debug logging
      */

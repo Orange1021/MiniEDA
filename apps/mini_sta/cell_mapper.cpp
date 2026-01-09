@@ -242,4 +242,32 @@ void CellMapper::debugLog(const std::string& message) const {
     }
 }
 
+const LibCell* CellMapper::findWithWarning(const std::string& cell_type,
+                                           const std::string& context) const {
+    const LibCell* lib_cell = mapType(cell_type);
+    if (!lib_cell) {
+        std::cerr << "Warning: Cell type '" << cell_type << "' not found in library";
+        if (!context.empty()) {
+            std::cerr << " (" << context << ")";
+        }
+        std::cerr << std::endl;
+    }
+    return lib_cell;
+}
+
+const LibCell* CellMapper::findWithLibraryFallback(const std::string& cell_type,
+                                                    const Library* library) const {
+    // Try CellMapper first
+    const LibCell* lib_cell = mapType(cell_type);
+    if (lib_cell) {
+        return lib_cell;
+    }
+
+    // Fallback to direct library lookup
+    if (library) {
+        lib_cell = library->getCell(cell_type);
+    }
+    return lib_cell;
+}
+
 } // namespace mini

@@ -17,6 +17,7 @@ namespace mini {
 class TimingGraph;
 class DelayModel;
 class TimingNode;
+class TimingArc;
 class NetlistDB;
 class TimingConstraints;
 
@@ -132,6 +133,27 @@ private:
      * @return Total load capacitance in farads
      */
     double calculateNetLoadCapacitance(TimingNode* node, double wire_cap_per_unit) const;
+
+    /**
+     * @brief Get valid input slew with default fallback
+     * @param input_slew Input slew value to validate
+     * @param is_max True for max path (setup), False for min path (hold)
+     * @return Valid input slew (original if > 0, otherwise default)
+     */
+    double getValidInputSlew(double input_slew, bool is_max) const;
+
+    /**
+     * @brief Get best slew from critical path
+     * @param incoming_arcs Incoming timing arcs to the current node
+     * @param target_arrival Target arrival time (max for setup, min for hold)
+     * @param is_max True for max path (setup), False for min path (hold)
+     * @return Best slew value from the critical path
+     * @details Finds the arc that produces the target_arrival and returns its output slew,
+     *          with fallback to previous node's slew if needed
+     */
+    double getBestSlewFromCriticalPath(const std::vector<TimingArc*>& incoming_arcs,
+                                       double target_arrival,
+                                       bool is_max) const;
 
     /**
      * @brief [NEW] Check Setup/Hold constraints using Liberty lookup tables

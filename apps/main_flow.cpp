@@ -51,7 +51,8 @@ PlacementConfig toPlacementConfig(const AppConfig& app_config) {
     placement_config.run_id = app_config.run_id + "_placement";
     
     // Transfer placement algorithm parameters
-    placement_config.target_density = app_config.placement_target_density;
+    // Note: target_density should match utilization for consistent placement
+    placement_config.target_density = app_config.utilization;
     placement_config.initial_lambda = app_config.placement_initial_lambda;
     placement_config.lambda_growth_rate = app_config.placement_lambda_growth_rate;
     placement_config.learning_rate = app_config.placement_learning_rate;

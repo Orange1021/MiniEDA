@@ -250,6 +250,35 @@ private:
     const LibTiming* findTimingArc(const LibCell* lib_cell, 
                                    const std::string& from_pin, 
                                    const std::string& to_pin) const;
+
+    /**
+     * @brief Get the first timing arc from the first output pin
+     * @param lib_cell Liberty cell pointer
+     * @return Pointer to the first timing arc, or nullptr if not found
+     * @details Iterates through pins to find the first output pin with timing arcs
+     *          and returns its first timing arc. Used as a fallback when specific
+     *          pin matching is not required.
+     */
+    const LibTiming* getFirstTimingArc(const LibCell* lib_cell) const;
+
+    /**
+     * @brief Safe lookup with boundary checking
+     * @param table Pointer to lookup table
+     * @param x X-axis value (e.g., input_slew)
+     * @param y Y-axis value (e.g., load_cap)
+     * @param x_min Minimum X value (default: 0.001)
+     * @param x_max Maximum X value (default: 2.0)
+     * @param y_min Minimum Y value (default: 0.001)
+     * @param y_max Maximum Y value (default: 2.0)
+     * @param default_value Default value if lookup fails
+     * @return Lookup result or default value
+     * @details Clamps input values to reasonable ranges to avoid lookup errors
+     */
+    double safeLookup(const LookupTable* table,
+                     double x, double y,
+                     double x_min = 0.001, double x_max = 2.0,
+                     double y_min = 0.001, double y_max = 2.0,
+                     double default_value = 0.01) const;
 };
 
 } // namespace mini

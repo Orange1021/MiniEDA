@@ -36,7 +36,7 @@ struct AppConfig {
     // ========================================================================
     // Physical Design Constraints
     // ========================================================================
-    double utilization = 0.7;                                ///< Target core utilization (0.1-1.0)
+    double utilization = 0.8;                                ///< Target core utilization (0.1-1.0)
     double row_height = 1.4;                                 ///< Standard cell row height (micrometers)
     double routing_pitch = 0.19;                             ///< Routing grid pitch (micrometers)
     double routing_grid_fine_factor = 0.5;                  ///< Fine grid factor for routing (0.5 = half pitch)
@@ -55,7 +55,6 @@ struct AppConfig {
     // ========================================================================
     // [NEW] Placement Algorithm Parameters
     // ========================================================================
-    double placement_target_density = 0.7;                   ///< Target utilization for global placement
     double placement_initial_lambda = 0.0001;                ///< Initial density penalty factor
     double placement_lambda_growth_rate = 1.05;              ///< Lambda growth rate per iteration
     double placement_learning_rate = 0.1;                    ///< Learning rate (step size)

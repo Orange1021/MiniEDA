@@ -109,9 +109,8 @@ double TableDelayModel::calculateCellDelay(Cell* cell, double input_slew, double
     }
 
     // 1. Find the corresponding Liberty cell using CellMapper
-    const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell->getTypeString()) : nullptr;
+    const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->findWithWarning(cell->getTypeString()) : nullptr;
     if (!lib_cell) {
-        std::cerr << "Warning: Cell type '" << cell->getTypeString() << "' not found in library" << std::endl;
         return 0.01;  // Small default delay
     }
 
@@ -119,17 +118,7 @@ double TableDelayModel::calculateCellDelay(Cell* cell, double input_slew, double
     // For simplicity, we'll use the first timing arc from the first output pin
     // In a real implementation, we need to match input and output pins properly
     
-    const LibTiming* timing_arc = nullptr;
-    
-    // Iterate through pins to find an output pin with timing arcs
-    for (const auto& pin_pair : lib_cell->pins) {
-        const LibPin& pin = pin_pair.second;
-        if (pin.direction == "output" && !pin.timing_arcs.empty()) {
-            // Use the first timing arc from this output pin
-            timing_arc = &pin.timing_arcs[0];
-            break;
-        }
-    }
+    const LibTiming* timing_arc = getFirstTimingArc(lib_cell);
     
     if (!timing_arc) {
         std::cerr << "Warning: No timing arc found for cell '" << cell->getTypeString() << "'" << std::endl;
@@ -137,14 +126,9 @@ double TableDelayModel::calculateCellDelay(Cell* cell, double input_slew, double
     }
 
     // 3. Lookup delay from the NLDM table
-    if (timing_arc->cell_delay.isValid()) {
-        double delay = timing_arc->cell_delay.lookup(input_slew, load_cap);
-        // Convert from nanoseconds to seconds if needed (assuming lib is in ns)
-        return delay * 1e-9;  // Convert ns to s
-    }
-
-    // Fallback: use intrinsic delay if available
-    return lib_cell->area * 0.01 * 1e-9;  // Rough estimate
+    double delay = safeLookup(&timing_arc->cell_delay, input_slew, load_cap);
+    // Convert from nanoseconds to seconds if needed (assuming lib is in ns)
+    return delay * 1e-9;  // Convert ns to s
 }
 
 /**
@@ -162,15 +146,7 @@ double TableDelayModel::calculateOutputSlew(Cell* cell, double input_slew, doubl
     }
 
     // 2. Find the appropriate timing arc
-    const LibTiming* timing_arc = nullptr;
-    
-    for (const auto& pin_pair : lib_cell->pins) {
-        const LibPin& pin = pin_pair.second;
-        if (pin.direction == "output" && !pin.timing_arcs.empty()) {
-            timing_arc = &pin.timing_arcs[0];
-            break;
-        }
-    }
+    const LibTiming* timing_arc = getFirstTimingArc(lib_cell);
     
     if (!timing_arc) {
         return 0.05 * 1e-9;  // Default fallback
@@ -187,13 +163,13 @@ double TableDelayModel::calculateOutputSlew(Cell* cell, double input_slew, doubl
         slew_table = &timing_arc->fall_transition;
     } else if (timing_arc->cell_delay.isValid()) {
         // Fallback: use delay table as rough approximation (better than magic number)
-        double delay = timing_arc->cell_delay.lookup(input_slew, load_cap);
+        double delay = safeLookup(&timing_arc->cell_delay, input_slew, load_cap);
         return delay * 0.7 * 1e-9;  // Slightly better approximation: 70% of delay
     }
 
     // 4. Perform NLDM lookup
     if (slew_table && slew_table->isValid()) {
-        double output_slew = slew_table->lookup(input_slew, load_cap);
+        double output_slew = safeLookup(slew_table, input_slew, load_cap);
         return output_slew * 1e-9;  // Convert from ns to s
     }
 
@@ -238,7 +214,7 @@ double TableDelayModel::calculateOutputSlewWithEdge(const LibTiming* timing_arc,
         } else {
             // Final fallback: use delay approximation
             if (timing_arc->cell_delay.isValid()) {
-                double delay = timing_arc->cell_delay.lookup(input_slew, load_cap);
+                double delay = safeLookup(&timing_arc->cell_delay, input_slew, load_cap);
                 return delay * 0.7 * 1e-9;  // 70% of delay as rough estimate
             }
             return 0.001 * 1e-9;  // 1ps fallback
@@ -246,8 +222,8 @@ double TableDelayModel::calculateOutputSlewWithEdge(const LibTiming* timing_arc,
     }
 
     // 4. Perform NLDM lookup
-    double output_slew = slew_table->lookup(input_slew, load_cap);
-    
+    double output_slew = safeLookup(slew_table, input_slew, load_cap);
+
     // 5. Ensure reasonable bounds (prevent negative or extremely small slew)
     if (output_slew <= 0.001) {  // Less than 1ps
         output_slew = 0.001;  // Minimum 1ps
@@ -335,7 +311,7 @@ double TableDelayModel::calculateWireDelay(Net* net) {
                 std::string cell_type = load_pin->getOwner()->getTypeString();
                 std::string pin_name = load_pin->getName();
                 
-                const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell_type) : library_->getCell(cell_type);
+                const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->findWithLibraryFallback(cell_type, library_) : nullptr;
                 if (lib_cell) {
                     const LibPin* lib_pin = lib_cell->getPin(pin_name);
                     if (lib_pin) {
@@ -365,7 +341,7 @@ double TableDelayModel::calculateWireDelay(Net* net) {
             std::string cell_type = load_pin->getOwner()->getTypeString();
             std::string pin_name = load_pin->getName();
             
-            const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->mapType(cell_type) : library_->getCell(cell_type);
+            const LibCell* lib_cell = cell_mapper_ ? cell_mapper_->findWithLibraryFallback(cell_type, library_) : nullptr;
             if (lib_cell) {
                 const LibPin* lib_pin = lib_cell->getPin(pin_name);
                 if (lib_pin) {
@@ -403,6 +379,44 @@ const LibTiming* TableDelayModel::findTimingArc(const LibCell* lib_cell,
     }
 
     return nullptr;  // No matching timing arc found
+}
+
+/**
+ * @brief Get the first timing arc from the first output pin
+ */
+const LibTiming* TableDelayModel::getFirstTimingArc(const LibCell* lib_cell) const {
+    if (!lib_cell) return nullptr;
+
+    // Iterate through pins to find the first output pin with timing arcs
+    for (const auto& pin_pair : lib_cell->pins) {
+        const LibPin& pin = pin_pair.second;
+        if (pin.direction == "output" && !pin.timing_arcs.empty()) {
+            // Return the first timing arc from this output pin
+            return &pin.timing_arcs[0];
+        }
+    }
+
+    return nullptr;  // No timing arc found
+}
+
+/**
+ * @brief Safe lookup with boundary checking
+ */
+double TableDelayModel::safeLookup(const LookupTable* table,
+                                   double x, double y,
+                                   double x_min, double x_max,
+                                   double y_min, double y_max,
+                                   double default_value) const {
+    if (!table || !table->isValid()) {
+        return default_value;
+    }
+
+    // Clamp input values to reasonable ranges
+    double clamped_x = std::max(x_min, std::min(x_max, x));
+    double clamped_y = std::max(y_min, std::min(y_max, y));
+
+    // Perform lookup
+    return table->lookup(clamped_x, clamped_y);
 }
 
 /**

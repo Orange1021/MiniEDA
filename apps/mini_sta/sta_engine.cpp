@@ -128,11 +128,9 @@ void STAEngine::updateArcDelays() {
                 
                 if (driver_pin && load_pin) {
                     // Get input slew from driver (both min and max)
-                    double input_slew_max = from_node->getSlewMax();
-                    double input_slew_min = from_node->getSlewMin();
-                    if (input_slew_max <= 0.0) input_slew_max = default_input_slew_max_;  // Use configured default
-                    if (input_slew_min <= 0.0) input_slew_min = default_input_slew_min_;  // Use configured default
-                    
+                    double input_slew_max = getValidInputSlew(from_node->getSlewMax(), true);
+                    double input_slew_min = getValidInputSlew(from_node->getSlewMin(), false);
+
                     // Physical parameters from configuration
                     double wire_r_per_unit = wire_resistance_per_unit_;
                     double wire_c_per_unit = wire_cap_per_unit_;
@@ -165,10 +163,8 @@ void STAEngine::updateArcDelays() {
                     Cell* cell = to_pin->getOwner();
                     if (cell) {
                         // Get input slew from previous node (this is the key!)
-                        double input_slew = from_node->getSlew();
-                        if (input_slew <= 0.0) {
-                                    input_slew = default_input_slew_max_;  // Use configured default
-                                }
+                        double input_slew = getValidInputSlew(from_node->getSlew(), true);
+
                         // Calculate realistic load capacitance (Pin Cap + Wire Cap)
                         // Uses Liberty library for pin capacitance and physical wire length
                         double wire_cap_per_unit = wire_cap_per_unit_;  // Use configured value
@@ -353,54 +349,18 @@ void STAEngine::updateArrivalTimes() {
         if (max_arrival > -std::numeric_limits<double>::infinity() / 2) {
             current_node->setArrivalTimeMax(max_arrival);
             updated = true;
-            
-            // Find the arc that gave us the max arrival (critical path)
-            for (TimingArc* arc : incoming_arcs) {
-                TimingNode* prev_node = arc->getFromNode();
-                if (!prev_node) continue;
-                
-                double prev_at_max = prev_node->getArrivalTimeMax();
-                if (prev_at_max > -TimingNode::UNINITIALIZED / 2) {
-                    double path_delay = prev_at_max + arc->getDelay();
-                    if (std::abs(path_delay - max_arrival) < 1e-15) {  // Found the critical path
-                        best_slew_max = arc->getOutputSlew();
-                        if (best_slew_max <= 0.0) {
-                            // Fallback: use previous node's max slew
-                            best_slew_max = prev_node->getSlewMax();
-                            if (best_slew_max <= 0.0) {
-                                                        best_slew_max = default_input_slew_min_;  // Use configured default
-                                                    }                        }
-                        break;
-                    }
-                }
-            }
+
+            // Get best slew from the critical path
+            best_slew_max = getBestSlewFromCriticalPath(incoming_arcs, max_arrival, true);
         }
 
         // ==================== Hold (Min) ====================
         if (min_arrival < std::numeric_limits<double>::infinity() / 2) {
             current_node->setArrivalTimeMin(min_arrival);
             updated = true;
-            
-            // Find the arc that gave us the min arrival (fastest path)
-            for (TimingArc* arc : incoming_arcs) {
-                TimingNode* prev_node = arc->getFromNode();
-                if (!prev_node) continue;
-                
-                double prev_at_min = prev_node->getArrivalTimeMin();
-                if (prev_at_min < TimingNode::UNINITIALIZED / 2) {
-                    double path_delay = prev_at_min + arc->getDelay();
-                    if (std::abs(path_delay - min_arrival) < 1e-15) {  // Found the fastest path
-                        best_slew_min = arc->getOutputSlew();
-                        if (best_slew_min <= 0.0) {
-                            // Fallback: use previous node's min slew
-                            best_slew_min = prev_node->getSlewMin();
-                            if (best_slew_min <= 0.0) {
-                                                        best_slew_min = 0.005 * 1e-9; // Default: 5ps (faster than setup)
-                                                    }                        }
-                        break;
-                    }
-                }
-            }
+
+            // Get best slew from the fastest path
+            best_slew_min = getBestSlewFromCriticalPath(incoming_arcs, min_arrival, false);
         }
 
         // Propagate slew if we found valid paths
@@ -757,6 +717,51 @@ double STAEngine::calculateNetLoadCapacitance(TimingNode* node, double wire_cap_
 }
 
 /**
+ * @brief Get valid input slew with default fallback
+ */
+double STAEngine::getValidInputSlew(double input_slew, bool is_max) const {
+    if (input_slew <= 0.0) {
+        return is_max ? default_input_slew_max_ : default_input_slew_min_;
+    }
+    return input_slew;
+}
+
+/**
+ * @brief Get best slew from critical path
+ */
+double STAEngine::getBestSlewFromCriticalPath(const std::vector<TimingArc*>& incoming_arcs,
+                                               double target_arrival,
+                                               bool is_max) const {
+    // Find the arc that gave us the target arrival (critical or fastest path)
+    for (TimingArc* arc : incoming_arcs) {
+        TimingNode* prev_node = arc->getFromNode();
+        if (!prev_node) continue;
+
+        double prev_at;
+        if (is_max) {
+            prev_at = prev_node->getArrivalTimeMax();
+            if (prev_at <= -TimingNode::UNINITIALIZED / 2) continue;
+        } else {
+            prev_at = prev_node->getArrivalTimeMin();
+            if (prev_at >= TimingNode::UNINITIALIZED / 2) continue;
+        }
+
+        double path_delay = prev_at + arc->getDelay();
+        if (std::abs(path_delay - target_arrival) < 1e-15) {  // Found the target path
+            double best_slew = arc->getOutputSlew();
+            if (best_slew <= 0.0) {
+                // Fallback: use previous node's slew
+                best_slew = getValidInputSlew(is_max ? prev_node->getSlewMax() : prev_node->getSlewMin(), is_max);
+            }
+            return best_slew;
+        }
+    }
+
+    // If no matching arc found, return default
+    return getValidInputSlew(0.0, is_max);
+}
+
+/**
  * @brief Dump complete graph delay information (for debug)
  */
 void STAEngine::dumpGraph() const {
@@ -860,9 +865,8 @@ void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted
             continue;
         }
         
-        const LibCell* lib_cell = cell_mapper->mapType(cell->getTypeString());
+        const LibCell* lib_cell = cell_mapper->findWithWarning(cell->getTypeString(), "DFF constraint check");
         if (!lib_cell) {
-            std::cout << "  Warning: No Liberty cell found for DFF " << cell->getTypeString() << std::endl;
             std::cout << "    Available cells in library: " << library->getCellCount() << " total" << std::endl;
             if (constraint_checks == 0) { // Only print once
                 library->printCellNames();
@@ -891,59 +895,55 @@ void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted
         // Clamp to reasonable ranges to avoid lookup errors
         data_slew_ns = std::max(0.001, std::min(2.0, data_slew_ns));
         clk_slew_ns = std::max(0.001, std::min(2.0, clk_slew_ns));
-        
-        // ==================== Setup Constraint Check ====================
-        const LibConstraint* setup_constraint = data_pin->getBestConstraint("setup_rising");
-        double lib_setup_time = 0.1; // Default fallback (100ps)
-        
-        if (setup_constraint && setup_constraint->constraint_table.isValid()) {
-            lib_setup_time = setup_constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
-            // [NEW] Debug: Show which constraint was selected
-            if (!setup_constraint->when_condition.empty()) {
-                std::cout << "    Using setup constraint with when: " << setup_constraint->when_condition << std::endl;
+
+        // Helper lambda to lookup constraint time
+        auto lookupConstraintTime = [&](const std::string& constraint_type, double default_time) -> double {
+            const LibConstraint* constraint = data_pin->getBestConstraint(constraint_type);
+            double constraint_time = default_time;
+
+            if (constraint && constraint->constraint_table.isValid()) {
+                constraint_time = constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
+                // [NEW] Debug: Show which constraint was selected
+                if (!constraint->when_condition.empty()) {
+                    std::cout << "    Using " << constraint_type << " constraint with when: "
+                              << constraint->when_condition << std::endl;
+                }
+            } else {
+                std::cout << "  Warning: No " << constraint_type << " table found for " << lib_cell->name
+                          << ", using default " << constraint_time << " ns" << std::endl;
             }
-        } else {
-            std::cout << "  Warning: No setup_rising table found for " << lib_cell->name 
-                      << ", using default " << lib_setup_time << " ns" << std::endl;
-        }
-        
+
+            return constraint_time;
+        };
+
+        // ==================== Setup Constraint Check ====================
+        double lib_setup_time = lookupConstraintTime("setup_rising", 0.1); // Default: 100ps
+
         // Calculate Setup Required Time
         // Formula: Required_Time = Clock_Capture_Edge - Setup_Time - Uncertainty
         double clk_arrival = clk_node->getArrivalTimeMax() * 1e9; // Convert to ns
         double setup_required = clk_arrival + clock_period - lib_setup_time - clock_uncertainty;
-        
+
         // Calculate Setup Slack
         double data_arrival = node->getArrivalTimeMax() * 1e9; // Convert to ns
         double setup_slack = setup_required - data_arrival;
-        
+
         // Update node's setup slack
         node->setSlackSetup(setup_slack * 1e-9); // Convert back to seconds
-        
+
         if (setup_slack < 0) setup_violations++;
-        
+
         // ==================== Hold Constraint Check ====================
-        const LibConstraint* hold_constraint = data_pin->getBestConstraint("hold_rising");
-        double lib_hold_time = 0.05; // Default fallback (50ps)
-        
-        if (hold_constraint && hold_constraint->constraint_table.isValid()) {
-            lib_hold_time = hold_constraint->constraint_table.lookup(data_slew_ns, clk_slew_ns);
-            // [NEW] Debug: Show which constraint was selected
-            if (!hold_constraint->when_condition.empty()) {
-                std::cout << "    Using hold constraint with when: " << hold_constraint->when_condition << std::endl;
-            }
-        } else {
-            std::cout << "  Warning: No hold_rising table found for " << lib_cell->name 
-                      << ", using default " << lib_hold_time << " ns" << std::endl;
-        }
-        
-        // Calculate Hold Required Time  
+        double lib_hold_time = lookupConstraintTime("hold_rising", 0.05); // Default: 50ps
+
+        // Calculate Hold Required Time
         // Formula: Required_Time = Clock_Launch_Edge + Hold_Time + Uncertainty
         double hold_required = clk_arrival + lib_hold_time + clock_uncertainty;
-        
+
         // Calculate Hold Slack
         double data_arrival_min = node->getArrivalTimeMin() * 1e9; // Convert to ns
         double hold_slack = data_arrival_min - hold_required;
-        
+
         // Update node's hold slack
         node->setSlackHold(hold_slack * 1e-9); // Convert back to seconds
         
