@@ -80,12 +80,6 @@ public:
     void setDebugMode(bool enabled) { debug_enabled_ = enabled; }
 
     /**
-     * @brief Debug logging helper
-     * @param message Debug message to print
-     */
-    void debugLog(const std::string& message) const;
-
-    /**
      * @brief Get mapping statistics
      * @return Pair of (successful_mappings, total_attempts)
      */

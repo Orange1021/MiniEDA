@@ -4,6 +4,7 @@
  */
 
 #include "lef_pin_mapper.h"
+#include "debug_log.h"
 #include <algorithm>
 #include <cctype>
 #include <iostream>
@@ -13,7 +14,6 @@ namespace mini {
 LefPinMapper::LefPinMapper(const LefLibrary& lef_lib, const MacroMapper& macro_mapper)
     : lef_lib_(const_cast<LefLibrary&>(lef_lib)), 
       macro_mapper_(const_cast<MacroMapper&>(macro_mapper)), 
-      debug_enabled_(false),
       successful_mappings_(0), total_attempts_(0) {
 }
 
@@ -21,12 +21,12 @@ std::string LefPinMapper::getPhysicalPinName(const std::string& cell_type,
                                              const std::string& logical_pin_name) const {
     total_attempts_++;
     
-    debugLog("Mapping pin: " + cell_type + ":" + logical_pin_name);
+    DEBUG_LOG("LefPinMapper", "Mapping pin: " + cell_type + ":" + logical_pin_name);
     
     // Get the LEF macro for this cell type
     const LefMacro* macro = macro_mapper_.mapType(cell_type);
     if (!macro) {
-        debugLog("  ✗ No macro found for cell type: " + cell_type);
+        DEBUG_LOG("LefPinMapper", "  ✗ No macro found for cell type: " + cell_type);
         return logical_pin_name; // Fallback to original name
     }
     
@@ -34,7 +34,7 @@ std::string LefPinMapper::getPhysicalPinName(const std::string& cell_type,
     const LefPort* port = tryDirectMatch(macro, logical_pin_name);
     if (port) {
         successful_mappings_++;
-        debugLog("  ✓ Direct match found: " + logical_pin_name);
+        DEBUG_LOG("LefPinMapper", "  ✓ Direct match found: " + logical_pin_name);
         return logical_pin_name;
     }
     
@@ -46,13 +46,13 @@ std::string LefPinMapper::getPhysicalPinName(const std::string& cell_type,
         // Find the actual pin name in the macro
         for (const auto& pin_name : macro->getPinNames()) {
             if (macro->getPin(pin_name) == port) {
-                debugLog("  ✓ Heuristic mapping: " + logical_pin_name + " -> " + pin_name);
+                DEBUG_LOG("LefPinMapper", "  ✓ Heuristic mapping: " + logical_pin_name + " -> " + pin_name);
                 return pin_name;
             }
         }
     }
     
-    debugLog("  ✗ No mapping found for: " + logical_pin_name);
+    DEBUG_LOG("LefPinMapper", "  ✗ No mapping found for: " + logical_pin_name);
     return logical_pin_name; // Fallback to original name
 }
 
@@ -73,7 +73,7 @@ const LefPort* LefPinMapper::tryDirectMatch(const LefMacro* macro, const std::st
     
     const LefPort* port = macro->getPin(pin_name);
     if (port) {
-        debugLog("    Direct match success: " + pin_name);
+        DEBUG_LOG("LefPinMapper", "    Direct match success: " + pin_name);
     }
     
     return port;
@@ -82,7 +82,7 @@ const LefPort* LefPinMapper::tryDirectMatch(const LefMacro* macro, const std::st
 const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const std::string& netlist_pin_name) const {
     if (!macro) return nullptr;
     
-    debugLog("    Trying heuristic mapping for pin: " + netlist_pin_name);
+    DEBUG_LOG("LefPinMapper", "    Trying heuristic mapping for pin: " + netlist_pin_name);
     
     // Convert to uppercase for case-insensitive comparison
     std::string pin_upper = netlist_pin_name;
@@ -135,7 +135,7 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
             for (const auto& target_pin : mapping.second) {
                 const LefPort* port = macro->getPin(target_pin);
                 if (port) {
-                    debugLog("    Enhanced mapping success: " + mapping.first + " -> " + target_pin);
+                    DEBUG_LOG("LefPinMapper", "    Enhanced mapping success: " + mapping.first + " -> " + target_pin);
                     return port;
                 }
             }
@@ -150,7 +150,7 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
             std::string candidate = pin_upper + suffix;
             const LefPort* port = macro->getPin(candidate);
             if (port) {
-                debugLog("    Priority suffix match: " + netlist_pin_name + " -> " + candidate);
+                DEBUG_LOG("LefPinMapper", "    Priority suffix match: " + netlist_pin_name + " -> " + candidate);
                 return port;
             }
         }
@@ -164,7 +164,7 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
             if (pin_upper == lef_pin_upper) {
                 const LefPort* port = macro->getPin(pin_name);
                 if (port) {
-                    debugLog("    Case-insensitive match: " + netlist_pin_name + " -> " + pin_name);
+                    DEBUG_LOG("LefPinMapper", "    Case-insensitive match: " + netlist_pin_name + " -> " + pin_name);
                     return port;
                 }
             }
@@ -174,7 +174,7 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
                 pin_upper[0] == lef_pin_upper[0]) {
                 const LefPort* port = macro->getPin(pin_name);
                 if (port) {
-                    debugLog("    Prefix match: " + netlist_pin_name + " -> " + pin_name);
+                    DEBUG_LOG("LefPinMapper", "    Prefix match: " + netlist_pin_name + " -> " + pin_name);
                     return port;
                 }
             }
@@ -184,7 +184,7 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
                 pin_upper.find(lef_pin_upper) != std::string::npos) {
                 const LefPort* port = macro->getPin(pin_name);
                 if (port) {
-                    debugLog("    Substring match: " + netlist_pin_name + " -> " + pin_name);
+                    DEBUG_LOG("LefPinMapper", "    Substring match: " + netlist_pin_name + " -> " + pin_name);
                     return port;
                 }
             }
@@ -208,7 +208,7 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
         for (const auto& candidate : candidates) {
             const LefPort* port = macro->getPin(candidate);
             if (port) {
-                debugLog("    Function-based fallback: " + netlist_pin_name + " -> " + candidate);
+                DEBUG_LOG("LefPinMapper", "    Function-based fallback: " + netlist_pin_name + " -> " + candidate);
                 return port;
             }
         }
@@ -219,12 +219,12 @@ const LefPort* LefPinMapper::tryHeuristicMapping(const LefMacro* macro, const st
         const std::string& first_pin = macro->getPinNames()[0];
         const LefPort* port = macro->getPin(first_pin);
         if (port) {
-            debugLog("    Last resort fallback: " + netlist_pin_name + " -> " + first_pin);
+            DEBUG_LOG("LefPinMapper", "    Last resort fallback: " + netlist_pin_name + " -> " + first_pin);
             return port;
         }
     }
     
-    debugLog("    No heuristic mapping found for: " + netlist_pin_name);
+    DEBUG_LOG("LefPinMapper", "    No heuristic mapping found for: " + netlist_pin_name);
     return nullptr;
 }
 
@@ -248,12 +248,5 @@ std::string LefPinMapper::getPinKey(Cell* cell, Pin* pin) const {
     
     return key;
 }
-
-void LefPinMapper::debugLog(const std::string& message) const {
-    (void)message; // Suppress unused parameter warning
-    
-}
-
-
 
 } // namespace mini

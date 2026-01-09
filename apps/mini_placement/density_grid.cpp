@@ -4,6 +4,7 @@
  */
 
 #include "density_grid.h"
+#include "../../lib/include/debug_log.h"
 #include "../../lib/include/placer_db.h"
 #include <iomanip>
 #include <numeric>
@@ -65,10 +66,10 @@ bool DensityGrid::init(double core_w, double core_h, double core_x_min, double c
 
     initialized_ = true;
 
-    debugLog("Density grid initialized: " + std::to_string(num_bins_x_) + "x" + 
+    DEBUG_LOG("DensityGrid", "Density grid initialized: " + std::to_string(num_bins_x_) + "x" + 
              std::to_string(num_bins_y_) + " bins");
-    debugLog("Bin dimensions: " + std::to_string(bin_w_) + "x" + std::to_string(bin_h_));
-    debugLog("Core area: (" + std::to_string(core_x_min_) + "," + std::to_string(core_y_min_) + 
+    DEBUG_LOG("DensityGrid", "Bin dimensions: " + std::to_string(bin_w_) + "x" + std::to_string(bin_h_));
+    DEBUG_LOG("DensityGrid", "Core area: (" + std::to_string(core_x_min_) + "," + std::to_string(core_y_min_) + 
              ") to (" + std::to_string(core_x_min_ + core_w_) + "," + 
              std::to_string(core_y_min_ + core_h_) + ")");
 
@@ -131,7 +132,7 @@ void DensityGrid::updateDensity(const std::vector<Cell*>& cells, PlacerDB* place
         bin.density /= bin_area;
     }
 
-    debugLog("Density updated for " + std::to_string(cells.size()) + " cells");
+    DEBUG_LOG("DensityGrid", "Density updated for " + std::to_string(cells.size()) + " cells");
 }
 
 // ============================================================================
@@ -311,7 +312,7 @@ void DensityGrid::exportDensityMap(const std::string& filename) const {
     }
 
     file.close();
-    debugLog("Density map exported to " + filename);
+    DEBUG_LOG("DensityGrid", "Density map exported to " + filename);
 }
 
 void DensityGrid::exportPotentialMap(const std::string& filename) const {
@@ -335,18 +336,12 @@ void DensityGrid::exportPotentialMap(const std::string& filename) const {
     }
 
     file.close();
-    debugLog("Potential map exported to " + filename);
+    DEBUG_LOG("DensityGrid", "Potential map exported to " + filename);
 }
 
 // ============================================================================
 // Debug Helper
 // ============================================================================
-
-void DensityGrid::debugLog(const std::string& message) const {
-    // In a real implementation, this could be controlled by a verbose flag
-    // For now, just print the message
-    std::cout << "[DensityGrid] " << message << std::endl;
-}
 
 bool DensityGrid::init(int grid_x, int grid_y, double core_w, double core_h, double core_x_min, double core_y_min) {
     if (grid_x <= 0 || grid_y <= 0 || core_w <= 0.0 || core_h <= 0.0) {
@@ -388,9 +383,9 @@ bool DensityGrid::init(int grid_x, int grid_y, double core_w, double core_h, dou
     }
 
     initialized_ = true;
-    debugLog("Density grid initialized: " + std::to_string(num_bins_x_) + "x" + std::to_string(num_bins_y_) + " bins");
-    debugLog("Bin dimensions: " + std::to_string(bin_w_) + "x" + std::to_string(bin_h_));
-    debugLog("Core area: (" + std::to_string(core_x_min_) + "," + std::to_string(core_y_min_) + ") to (" + 
+    DEBUG_LOG("DensityGrid", "Density grid initialized: " + std::to_string(num_bins_x_) + "x" + std::to_string(num_bins_y_) + " bins");
+    DEBUG_LOG("DensityGrid", "Bin dimensions: " + std::to_string(bin_w_) + "x" + std::to_string(bin_h_));
+    DEBUG_LOG("DensityGrid", "Core area: (" + std::to_string(core_x_min_) + "," + std::to_string(core_y_min_) + ") to (" + 
               std::to_string(core_x_min_ + core_w_) + "," + std::to_string(core_y_min_ + core_h_) + ")");
     
     return true;

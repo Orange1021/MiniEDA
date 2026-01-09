@@ -34,7 +34,7 @@ PlacerEngine::PlacerEngine(PlacerDB* db, double target_density, double initial_l
       momentum_(momentum), convergence_threshold_(convergence_threshold) {
 }
 PlacerEngine::~PlacerEngine() {
-    delete global_placer_;
+    // Smart pointers automatically clean up
 }
 
 void PlacerEngine::runGlobalPlacementWithAlgorithm(const std::string& algorithm) {
@@ -340,7 +340,7 @@ void PlacerEngine::runElectrostaticStrategy() {
     std::cout << "  Running Electrostatic Field Algorithm (Nesterov)..." << std::endl;
     
     if (!global_placer_) {
-        global_placer_ = new GlobalPlacer(db_, db_->getNetlistDB());
+        global_placer_ = std::make_unique<GlobalPlacer>(db_, db_->getNetlistDB());
         global_placer_->setDensityMargin(density_margin_);
         global_placer_->setMaxGradientRatio(max_gradient_ratio_);
         global_placer_->setMaxDisplacementRatio(max_displacement_ratio_);
@@ -411,7 +411,7 @@ void PlacerEngine::runHybridStrategy() {
     std::cout << "\n  === Phase 2: Refinement (Electrostatic Nesterov) ===" << std::endl;
     
     if (!global_placer_) {
-        global_placer_ = new GlobalPlacer(db_, db_->getNetlistDB());
+        global_placer_ = std::make_unique<GlobalPlacer>(db_, db_->getNetlistDB());
         global_placer_->setDensityMargin(density_margin_);
         global_placer_->setMaxGradientRatio(max_gradient_ratio_);
         global_placer_->setMaxDisplacementRatio(max_displacement_ratio_);

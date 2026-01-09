@@ -85,11 +85,6 @@ public:
                            const std::string& lib_pin, 
                            const std::string& netlist_pin);
 
-    /**
-     * @brief Enable/disable debug output for mapping process
-     * @param enabled True to enable debug logging
-     */
-    void setDebugMode(bool enabled) { debug_enabled_ = enabled; }
 
     /**
      * @brief Get mapping statistics
@@ -130,7 +125,6 @@ private:
     // Configuration and Statistics
     // ============================================================================
 
-    bool debug_enabled_;                    ///< Debug output flag
     mutable size_t successful_mappings_;    ///< Statistics: successful mappings
     mutable size_t total_attempts_;         ///< Statistics: total mapping attempts
 
@@ -143,12 +137,6 @@ private:
      * @details Sets up standard mappings for Nangate, TSMC, GF, etc.
      */
     void initializeDefaultMappings();
-
-    /**
-     * @brief Debug logging helper
-     * @param message Debug message to print
-     */
-    void debugLog(const std::string& message) const;
 };
 
 } // namespace mini

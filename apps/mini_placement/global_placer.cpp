@@ -5,6 +5,8 @@
  */
 
 #include "global_placer.h"
+#include "../../lib/include/debug_log.h"
+#include "../../lib/include/geometry.h"
 #include <iomanip>
 #include <algorithm>
 #include <chrono>
@@ -24,12 +26,12 @@ GlobalPlacer::GlobalPlacer(PlacerDB* placer_db, NetlistDB* netlist_db)
         throw std::invalid_argument("PlacerDB and NetlistDB must be valid");
     }
     
-    debugLog("GlobalPlacer initialized - ready for electrostatic placement!");
+    DEBUG_LOG("GlobalPlacer", "GlobalPlacer initialized - ready for electrostatic placement!");
 }
 
 bool GlobalPlacer::initialize(int grid_size, double target_density, double initial_lambda, double lambda_growth_rate, 
                                double learning_rate, double momentum, double convergence_threshold) {
-    debugLog("Initializing global placer...");
+    DEBUG_LOG("GlobalPlacer", "Initializing global placer...");
     
     // Validate grid size (must be power of 2 for FFT)
     if (!PoissonSolver::isValidFFTSize(grid_size, grid_size)) {
@@ -78,7 +80,7 @@ bool GlobalPlacer::initialize(int grid_size, double target_density, double initi
         cells_.end()
     );
     
-    debugLog("Found " + std::to_string(cells_.size()) + " movable cells");
+    DEBUG_LOG("GlobalPlacer", "Found " + std::to_string(cells_.size()) + " movable cells");
     
     // Initialize optimization state
     initializeOptimizationState();
@@ -86,10 +88,10 @@ bool GlobalPlacer::initialize(int grid_size, double target_density, double initi
     initialized_ = validateInitialization();
     
     if (initialized_) {
-        debugLog("Global placer initialized successfully!");
-        debugLog("Grid size: " + std::to_string(grid_size_) + "x" + std::to_string(grid_size_));
-        debugLog("Target density: " + std::to_string(target_density_));
-        debugLog("Initial lambda: " + std::to_string(initial_lambda_));
+        DEBUG_LOG("GlobalPlacer", "Global placer initialized successfully!");
+        DEBUG_LOG("GlobalPlacer", "Grid size: " + std::to_string(grid_size_) + "x" + std::to_string(grid_size_));
+        DEBUG_LOG("GlobalPlacer", "Target density: " + std::to_string(target_density_));
+        DEBUG_LOG("GlobalPlacer", "Initial lambda: " + std::to_string(initial_lambda_));
     }
     
     return initialized_;
@@ -105,7 +107,7 @@ void GlobalPlacer::initializeOptimizationState() {
     // Clear statistics
     stats_.clear();
     
-    debugLog("Optimization state initialized");
+    DEBUG_LOG("GlobalPlacer", "Optimization state initialized");
 }
 
 bool GlobalPlacer::validateInitialization() const {
@@ -137,7 +139,7 @@ void GlobalPlacer::runPlacement() {
         return;
     }
     
-    debugLog("Starting momentum-based global placement optimization...");
+    DEBUG_LOG("GlobalPlacer", "Starting momentum-based global placement optimization...");
     
     // === Auto-Normalize Initial Lambda ===
     // Run one iteration to measure gradient magnitudes
@@ -190,13 +192,13 @@ void GlobalPlacer::runPlacement() {
         // 3. Save upper limit for subsequent growth
         max_lambda_ = max_lambda;
         
-        debugLog(">>> DYNAMIC Lambda Strategy:");
-        debugLog("    Initial Lambda: " + std::to_string(current_lambda_) + " (auto-calculated)");
-        debugLog("    Max Lambda: " + std::to_string(max_lambda_) + " (safety limit)");
-        debugLog("    Force ratio: " + std::to_string(ratio));
-        debugLog("    Expected: Balanced gradients from start");
+        DEBUG_LOG("GlobalPlacer", ">>> DYNAMIC Lambda Strategy:");
+        DEBUG_LOG("GlobalPlacer", "    Initial Lambda: " + std::to_string(current_lambda_) + " (auto-calculated)");
+        DEBUG_LOG("GlobalPlacer", "    Max Lambda: " + std::to_string(max_lambda_) + " (safety limit)");
+        DEBUG_LOG("GlobalPlacer", "    Force ratio: " + std::to_string(ratio));
+        DEBUG_LOG("GlobalPlacer", "    Expected: Balanced gradients from start");
     } else {
-        debugLog(">>> Using fallback Initial Lambda: " + std::to_string(current_lambda_));
+        DEBUG_LOG("GlobalPlacer", ">>> Using fallback Initial Lambda: " + std::to_string(current_lambda_));
     }
     
     // === Force Magnitude Balance Diagnosis ===
@@ -205,21 +207,21 @@ void GlobalPlacer::runPlacement() {
         double avg_dens_gradient = sum_dens_gradient / active_cells;
         double ratio = avg_dens_gradient > 1e-9 ? avg_wire_gradient / avg_dens_gradient : 0.0;
         
-        debugLog("Gradient Balance Analysis (GAS DIFFUSION MODE):");
-          debugLog("  Average Wire Gradient: " + std::to_string(avg_wire_gradient));
-          debugLog("  Average Density Gradient: " + std::to_string(avg_dens_gradient));
-          debugLog("  Gradient Ratio (Wire/Density): " + std::to_string(ratio));        
+        DEBUG_LOG("GlobalPlacer", "Gradient Balance Analysis (GAS DIFFUSION MODE):");
+          DEBUG_LOG("GlobalPlacer", "  Average Wire Gradient: " + std::to_string(avg_wire_gradient));
+          DEBUG_LOG("GlobalPlacer", "  Average Density Gradient: " + std::to_string(avg_dens_gradient));
+          DEBUG_LOG("GlobalPlacer", "  Gradient Ratio (Wire/Density): " + std::to_string(ratio));        
         if (ratio > 2.0) {
-            debugLog("  [WARNING] Wire Gradient dominates! Cells may cluster excessively.");
+            DEBUG_LOG("GlobalPlacer", "  [WARNING] Wire Gradient dominates! Cells may cluster excessively.");
         } else if (ratio < 0.5) {
-            debugLog("  [WARNING] Density Gradient dominates! Cells may explode to corners.");
+            DEBUG_LOG("GlobalPlacer", "  [WARNING] Density Gradient dominates! Cells may explode to corners.");
         } else {
-            debugLog("  [PERFECT] Gradients are balanced - expect gentle gas diffusion.");
+            DEBUG_LOG("GlobalPlacer", "  [PERFECT] Gradients are balanced - expect gentle gas diffusion.");
         }
-        debugLog("  [EXPECTED] Gentle spreading like ink in water, uniform density distribution.");
+        DEBUG_LOG("GlobalPlacer", "  [EXPECTED] Gentle spreading like ink in water, uniform density distribution.");
     }
     
-    debugLog("----------------------------");
+    DEBUG_LOG("GlobalPlacer", "----------------------------");
     
     auto start_time = std::chrono::high_resolution_clock::now();
     
@@ -245,7 +247,7 @@ void GlobalPlacer::runPlacement() {
         double target_density = utilization + density_margin_;  // Use configured margin
         if (target_density > 1.0) target_density = 1.0;
         
-        debugLog(">>> OVERFLOW-ONLY MODE: target_density=" + std::to_string(target_density) + 
+        DEBUG_LOG("GlobalPlacer", ">>> OVERFLOW-ONLY MODE: target_density=" + std::to_string(target_density) + 
                   ", utilization=" + std::to_string(utilization));
         
         // Prepare Poisson solver input: only handle excess density
@@ -367,7 +369,7 @@ void GlobalPlacer::runPlacement() {
         
         // Step 9: Check convergence
         if (checkConvergence(total_movement)) {
-            debugLog("Convergence reached at iteration " + std::to_string(iter));
+            DEBUG_LOG("GlobalPlacer", "Convergence reached at iteration " + std::to_string(iter));
             break;
         }
     }
@@ -375,7 +377,7 @@ void GlobalPlacer::runPlacement() {
     auto end_time = std::chrono::high_resolution_clock::now();
     auto total_duration = std::chrono::duration_cast<std::chrono::milliseconds>(end_time - start_time);
     
-    debugLog("Global placement completed in " + std::to_string(total_duration.count()) + " ms");
+    DEBUG_LOG("GlobalPlacer", "Global placement completed in " + std::to_string(total_duration.count()) + " ms");
     
     // Final export
     exportPlacementImage(max_iterations_);
@@ -410,7 +412,7 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
         io_weight = 0.5 + (progress_ratio - 0.3) * 1.67;  
     }
     
-    debugLog("IO Weight Schedule: progress=" + std::to_string(progress_ratio) + 
+    DEBUG_LOG("GlobalPlacer", "IO Weight Schedule: progress=" + std::to_string(progress_ratio) + 
               ", io_weight=" + std::to_string(io_weight));
     
     // Real wirelength model: Star Model HPWL gradient with IO weighting
@@ -658,7 +660,7 @@ double GlobalPlacer::momentumUpdate(int iteration) {
         // [Safety Valve #1] Displacement Clipping - prevent "explosion"
         double dx = velocities_[i].x;
         double dy = velocities_[i].y;
-        double dist = std::sqrt(dx*dx + dy*dy);
+        double dist = velocities_[i].euclideanDistance(Point(0, 0));
         
         // Set upper limit: use configured ratio of chip width
         double max_dist = core_area.width() * max_displacement_ratio_;
@@ -829,17 +831,10 @@ void GlobalPlacer::printFinalStatistics() const {
     std::cout << "==========================================" << std::endl;
 }
 
-void GlobalPlacer::debugLog(const std::string& message) const {
-    if (verbose_) {
-        std::cout << "[GlobalPlacer] " << message << std::endl;
-    }
-}
-
-
 
 void GlobalPlacer::exportDensityVisualization() const {
     if (!density_grid_ || !initialized_) {
-        debugLog("Skipping density visualization - grid not initialized");
+        DEBUG_LOG("GlobalPlacer", "Skipping density visualization - grid not initialized");
         return;
     }
     
@@ -858,9 +853,9 @@ void GlobalPlacer::exportDensityVisualization() const {
     
     int result = std::system(python_cmd.c_str());
     if (result == 0) {
-        debugLog("Density heatmap generated: " + png_filename);
+        DEBUG_LOG("GlobalPlacer", "Density heatmap generated: " + png_filename);
     } else {
-        debugLog("Warning: Failed to generate density heatmap (python3 or matplotlib may not be available)");
+        DEBUG_LOG("GlobalPlacer", "Warning: Failed to generate density heatmap (python3 or matplotlib may not be available)");
     }
 }
 

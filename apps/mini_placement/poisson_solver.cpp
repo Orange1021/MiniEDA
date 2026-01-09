@@ -5,6 +5,7 @@
  */
 
 #include "poisson_solver.h"
+#include "../../lib/include/debug_log.h"
 #include <iomanip>
 #include <algorithm>
 #include <stdexcept>
@@ -16,17 +17,17 @@ namespace mini {
 // ============================================================================
 
 PoissonSolver::PoissonSolver() : bin_width_(0.0), bin_height_(0.0) {
-    debugLog("PoissonSolver initialized - ready to solve electrostatic equations!");
+    DEBUG_LOG("PoissonSolver", "PoissonSolver initialized - ready to solve electrostatic equations!");
 }
 
 void PoissonSolver::setBinSize(double bin_width, double bin_height) {
     bin_width_ = bin_width;
     bin_height_ = bin_height;
-    debugLog("Bin dimensions set: " + std::to_string(bin_width_) + "x" + std::to_string(bin_height_));
+    DEBUG_LOG("PoissonSolver", "Bin dimensions set: " + std::to_string(bin_width_) + "x" + std::to_string(bin_height_));
 }
 
 bool PoissonSolver::solve(std::vector<Bin>& bins, int grid_width, int grid_height) {
-    debugLog("Starting Poisson equation solver...");
+    DEBUG_LOG("PoissonSolver", "Starting Poisson equation solver...");
     
     // Validate input
     if (!validateInput(bins, grid_width, grid_height)) {
@@ -42,30 +43,30 @@ bool PoissonSolver::solve(std::vector<Bin>& bins, int grid_width, int grid_heigh
             spectrum[i] = Complex(bins[i].density, 0.0);
         }
         
-        debugLog("Extracted density data from " + std::to_string(total_bins) + " bins");
+        DEBUG_LOG("PoissonSolver", "Extracted density data from " + std::to_string(total_bins) + " bins");
         
         // Step 2: 2D FFT to frequency domain
         fft2D(spectrum, grid_width, grid_height, false); // Forward FFT
-        debugLog("Completed forward 2D FFT transform");
+        DEBUG_LOG("PoissonSolver", "Completed forward 2D FFT transform");
         
         // Step 3: Apply Poisson filter in frequency domain
         applyPoissonFilter(spectrum, grid_width, grid_height);
-        debugLog("Applied Poisson filter in frequency domain");
+        DEBUG_LOG("PoissonSolver", "Applied Poisson filter in frequency domain");
         
         // Step 4: 2D IFFT back to spatial domain
             fft2D(spectrum, grid_width, grid_height, true); // Inverse FFT
-            debugLog("Completed inverse 2D FFT transform");
+            DEBUG_LOG("PoissonSolver", "Completed inverse 2D FFT transform");
             
                     
         // Step 5: Calculate gradient forces
         calculateGradientForces(bins, spectrum, grid_width, grid_height);
-        debugLog("Calculated electrostatic forces");
+        DEBUG_LOG("PoissonSolver", "Calculated electrostatic forces");
         
         // Update statistics
         updateStatistics(bins);
         
         solve_successful_ = true;
-        debugLog("Poisson solver completed successfully!");
+        DEBUG_LOG("PoissonSolver", "Poisson solver completed successfully!");
         
         return true;
         
@@ -274,7 +275,7 @@ void PoissonSolver::insertColumn(std::vector<Complex>& data, int col, int width,
 
 void PoissonSolver::applyPoissonFilter(std::vector<Complex>& spectrum,
                                        int width, int height) {
-    debugLog("Applying Poisson filter in frequency domain...");
+    DEBUG_LOG("PoissonSolver", "Applying Poisson filter in frequency domain...");
     
     
     
@@ -310,7 +311,7 @@ void PoissonSolver::applyPoissonFilter(std::vector<Complex>& spectrum,
         }
     }
     
-    debugLog("Poisson filter applied successfully");
+    DEBUG_LOG("PoissonSolver", "Poisson filter applied successfully");
 }
 
 int PoissonSolver::getFrequencyIndex(int index, int grid_size) const {
@@ -326,7 +327,7 @@ int PoissonSolver::getFrequencyIndex(int index, int grid_size) const {
 void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
                                            const std::vector<Complex>& potential,
                                            int width, int height) {
-    debugLog("Calculating gradient forces...");
+    DEBUG_LOG("PoissonSolver", "Calculating gradient forces...");
     
     
     
@@ -430,7 +431,7 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
     
     avg_gradient_magnitude_ = (count > 0) ? (total_gradient_magnitude / count) : 0.0;
     
-    debugLog("Gradient forces calculated with proper scaling");
+    DEBUG_LOG("PoissonSolver", "Gradient forces calculated with proper scaling");
 }
 
 double PoissonSolver::centralDifference(const std::vector<Complex>& data,
@@ -451,7 +452,7 @@ double PoissonSolver::centralDifference(const std::vector<Complex>& data,
 
 void PoissonSolver::updateStatistics(const std::vector<Bin>& bins) {
     // Statistics are already calculated in calculateGradientForces
-    debugLog("Statistics updated");
+    DEBUG_LOG("PoissonSolver", "Statistics updated");
 }
 
 bool PoissonSolver::validateInput(const std::vector<Bin>& bins,
@@ -483,10 +484,6 @@ bool PoissonSolver::validateInput(const std::vector<Bin>& bins,
     }
     
     return true;
-}
-
-void PoissonSolver::debugLog(const std::string& message) const {
-    std::cout << "[PoissonSolver] " << message << std::endl;
 }
 
 } // namespace mini

@@ -233,12 +233,6 @@ private:
                      double& x_min, double& x_max,
                      double& y_min, double& y_max) const;
 
-    /**
-     * @brief Debug log helper
-     * @param message Debug message
-     */
-    void debugLog(const std::string& message) const;
-
     // External reference to placer database for cell dimensions
     // Note: In a real implementation, this would be passed during updateDensity
     // For now, we'll assume cells have position/dimension info available

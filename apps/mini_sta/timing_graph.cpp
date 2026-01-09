@@ -29,12 +29,10 @@ TimingGraph::TimingGraph(NetlistDB* netlist, Library* library)
     // Initialize CellMapper if Liberty library is available
     if (library_) {
         cell_mapper_ = std::make_unique<CellMapper>(*library_);
-        cell_mapper_->setDebugMode(false); // Production mode - disable debug output
     }
-    
+
     // Initialize PinMapper for professional pin name translation
     pin_mapper_ = std::make_unique<LibertyPinMapper>();
-    pin_mapper_->setDebugMode(false); // Set to true for debugging
 }
 
 /**

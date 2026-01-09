@@ -111,7 +111,7 @@ private:
     int detailed_iterations_;         ///< Number of iterations for detailed placement
     double warmup_stop_ratio_;         ///< Stop warmup when HPWL drops to this ratio of initial value
     std::string run_id_;              // Run ID for file naming
-    GlobalPlacer* global_placer_;     // Pointer to advanced global placer
+    std::unique_ptr<GlobalPlacer> global_placer_;  // Smart pointer to advanced global placer
     LegalizationAlgorithm leg_algo_;  // Legalization algorithm selection
     std::unique_ptr<DetailedPlacer> detailed_placer_;  // Detailed placement optimizer
     

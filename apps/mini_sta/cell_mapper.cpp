@@ -4,6 +4,7 @@
  */
 
 #include "cell_mapper.h"
+#include "../../lib/include/debug_log.h"
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -11,19 +12,19 @@
 namespace mini {
 
 CellMapper::CellMapper(const Library& library) 
-    : library_(library), debug_enabled_(false), successful_mappings_(0), total_attempts_(0) {
+    : library_(library), successful_mappings_(0), total_attempts_(0) {
 }
 
 const LibCell* CellMapper::mapType(const std::string& cell_type) const {
     total_attempts_++;
     
-    debugLog("Mapping cell type: " + cell_type);
+    DEBUG_LOG("CellMapper", "Mapping cell type: " + cell_type);
     
     // Strategy 1: Try exact match first
     const LibCell* cell = tryExactMatch(cell_type);
     if (cell) {
         successful_mappings_++;
-        debugLog("  ✓ Exact match found: " + cell_type);
+        DEBUG_LOG("CellMapper", "  ✓ Exact match found: " + cell_type);
         return cell;
     }
     
@@ -31,7 +32,7 @@ const LibCell* CellMapper::mapType(const std::string& cell_type) const {
     cell = tryAlternativeNames(cell_type);
     if (cell) {
         successful_mappings_++;
-        debugLog("  ✓ Alternative name match: " + cell_type + " -> " + cell->name);
+        DEBUG_LOG("CellMapper", "  ✓ Alternative name match: " + cell_type + " -> " + cell->name);
         return cell;
     }
     
@@ -41,7 +42,7 @@ const LibCell* CellMapper::mapType(const std::string& cell_type) const {
             cell = tryDriveStrengthMatch(alt_pair.second);
             if (cell) {
                 successful_mappings_++;
-                debugLog("  ✓ Drive strength match: " + cell_type + " -> " + cell->name);
+                DEBUG_LOG("CellMapper", "  ✓ Drive strength match: " + cell_type + " -> " + cell->name);
                 return cell;
             }
         }
@@ -51,7 +52,7 @@ const LibCell* CellMapper::mapType(const std::string& cell_type) const {
     cell = tryDriveStrengthMatch(cell_type);
     if (cell) {
         successful_mappings_++;
-        debugLog("  ✓ Drive strength match: " + cell_type + " -> " + cell->name);
+        DEBUG_LOG("CellMapper", "  ✓ Drive strength match: " + cell_type + " -> " + cell->name);
         return cell;
     }
     
@@ -59,7 +60,7 @@ const LibCell* CellMapper::mapType(const std::string& cell_type) const {
     cell = tryPatternMatch(cell_type);
     if (cell) {
         successful_mappings_++;
-        debugLog("  ✓ Pattern match: " + cell_type + " -> " + cell->name);
+        DEBUG_LOG("CellMapper", "  ✓ Pattern match: " + cell_type + " -> " + cell->name);
         return cell;
     }
     
@@ -67,11 +68,11 @@ const LibCell* CellMapper::mapType(const std::string& cell_type) const {
     cell = tryFuzzyMatch(cell_type);
     if (cell) {
         successful_mappings_++;
-        debugLog("  ✓ Fuzzy match: " + cell_type + " -> " + cell->name);
+        DEBUG_LOG("CellMapper", "  ✓ Fuzzy match: " + cell_type + " -> " + cell->name);
         return cell;
     }
     
-    debugLog("  ✗ No match found for: " + cell_type);
+    DEBUG_LOG("CellMapper", "  ✗ No match found for: " + cell_type);
     return nullptr;
 }
 
@@ -84,10 +85,10 @@ const LibCell* CellMapper::tryDriveStrengthMatch(const std::string& base_name) c
         std::string candidate_name = base_name + suffix;
         const LibCell* cell = library_.getCell(candidate_name);
         if (cell) {
-            debugLog("    Trying: " + candidate_name + " - SUCCESS");
+            DEBUG_LOG("CellMapper", "    Trying: " + candidate_name + " - SUCCESS");
             return cell;
         } else {
-            debugLog("    Trying: " + candidate_name + " - not found");
+            DEBUG_LOG("CellMapper", "    Trying: " + candidate_name + " - not found");
         }
     }
     return nullptr;
@@ -98,10 +99,10 @@ const LibCell* CellMapper::tryAlternativeNames(const std::string& cell_type) con
         if (alt_pair.first == cell_type) {
             const LibCell* cell = library_.getCell(alt_pair.second);
             if (cell) {
-                debugLog("    Alternative: " + alt_pair.second + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Alternative: " + alt_pair.second + " - SUCCESS");
                 return cell;
             } else {
-                debugLog("    Alternative: " + alt_pair.second + " - not found");
+                DEBUG_LOG("CellMapper", "    Alternative: " + alt_pair.second + " - not found");
             }
         }
     }
@@ -116,7 +117,7 @@ const LibCell* CellMapper::tryPatternMatch(const std::string& cell_type) const {
             std::string candidate = "AND" + std::to_string(num_inputs) + "_X1";
             const LibCell* cell = library_.getCell(candidate);
             if (cell) {
-                debugLog("    Pattern AND match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Pattern AND match: " + candidate + " - SUCCESS");
                 return cell;
             }
         }
@@ -128,7 +129,7 @@ const LibCell* CellMapper::tryPatternMatch(const std::string& cell_type) const {
             std::string candidate = "NAND" + std::to_string(num_inputs) + "_X1";
             const LibCell* cell = library_.getCell(candidate);
             if (cell) {
-                debugLog("    Pattern NAND match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Pattern NAND match: " + candidate + " - SUCCESS");
                 return cell;
             }
         }
@@ -140,7 +141,7 @@ const LibCell* CellMapper::tryPatternMatch(const std::string& cell_type) const {
             std::string candidate = "OR" + std::to_string(num_inputs) + "_X1";
             const LibCell* cell = library_.getCell(candidate);
             if (cell) {
-                debugLog("    Pattern OR match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Pattern OR match: " + candidate + " - SUCCESS");
                 return cell;
             }
         }
@@ -152,7 +153,7 @@ const LibCell* CellMapper::tryPatternMatch(const std::string& cell_type) const {
             std::string candidate = "NOR" + std::to_string(num_inputs) + "_X1";
             const LibCell* cell = library_.getCell(candidate);
             if (cell) {
-                debugLog("    Pattern NOR match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Pattern NOR match: " + candidate + " - SUCCESS");
                 return cell;
             }
         }
@@ -166,7 +167,7 @@ const LibCell* CellMapper::tryPatternMatch(const std::string& cell_type) const {
         for (const auto& variant : dff_variants) {
             const LibCell* cell = library_.getCell(variant);
             if (cell) {
-                debugLog("    Pattern DFF match: " + variant + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Pattern DFF match: " + variant + " - SUCCESS");
                 return cell;
             }
         }
@@ -178,7 +179,7 @@ const LibCell* CellMapper::tryPatternMatch(const std::string& cell_type) const {
         std::string candidate = base_name + "_X1";
         const LibCell* cell = library_.getCell(candidate);
         if (cell) {
-            debugLog("    Pattern complex gate match: " + candidate + " - SUCCESS");
+            DEBUG_LOG("CellMapper", "    Pattern complex gate match: " + candidate + " - SUCCESS");
             return cell;
         }
     }
@@ -198,7 +199,7 @@ const LibCell* CellMapper::tryFuzzyMatch(const std::string& cell_type) const {
             std::string base_name = fuzzy_name.substr(0, fuzzy_name.length() - suffix.length());
             const LibCell* cell = library_.getCell(base_name);
             if (cell) {
-                debugLog("    Fuzzy suffix removal: " + base_name + " - SUCCESS");
+                DEBUG_LOG("CellMapper", "    Fuzzy suffix removal: " + base_name + " - SUCCESS");
                 return cell;
             }
         }
@@ -236,11 +237,7 @@ size_t CellMapper::extractInputCount(const std::string& cell_type) const {
     return 2;
 }
 
-void CellMapper::debugLog(const std::string& message) const {
-    if (debug_enabled_) {
-        std::cout << "[CellMapper] " << message << std::endl;
-    }
-}
+
 
 const LibCell* CellMapper::findWithWarning(const std::string& cell_type,
                                            const std::string& context) const {

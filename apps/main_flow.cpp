@@ -38,66 +38,7 @@
 
 using namespace mini;
 
-/**
- * @brief Convert AppConfig to PlacementConfig
- */
-PlacementConfig toPlacementConfig(const AppConfig& app_config) {
-    PlacementConfig placement_config;
-    placement_config.lef_file = app_config.lef_file;
-    placement_config.liberty_file = app_config.liberty_file;
-    placement_config.utilization = app_config.utilization;
-    placement_config.row_height = app_config.row_height;
-    placement_config.verbose = app_config.verbose;
-    placement_config.run_id = app_config.run_id + "_placement";
-    
-    // Transfer placement algorithm parameters
-    // Note: target_density should match utilization for consistent placement
-    placement_config.target_density = app_config.utilization;
-    placement_config.initial_lambda = app_config.placement_initial_lambda;
-    placement_config.lambda_growth_rate = app_config.placement_lambda_growth_rate;
-    placement_config.learning_rate = app_config.placement_learning_rate;
-    placement_config.momentum = app_config.placement_momentum;
-    placement_config.convergence_threshold = app_config.placement_convergence_threshold;
-    
-    // Transfer additional parameters
-    placement_config.default_cell_area = app_config.default_cell_area;
-    placement_config.site_width = app_config.site_width;
-    placement_config.density_margin = app_config.placement_density_margin;
-    placement_config.max_gradient_ratio = app_config.placement_max_gradient_ratio;
-    placement_config.max_displacement_ratio = app_config.placement_max_displacement_ratio;
-    placement_config.placement_hpwl_convergence_ratio = app_config.placement_hpwl_convergence_ratio;
-    placement_config.placement_detailed_iterations = app_config.placement_detailed_iterations;
-    placement_config.placement_warmup_stop_ratio = app_config.placement_warmup_stop_ratio;
-    
-    return placement_config;
-}
 
-/**
- * @brief Convert AppConfig to RoutingConfig
- */
-RoutingConfig toRoutingConfig(const AppConfig& app_config) {
-    RoutingConfig routing_config;
-    routing_config.lef_file = app_config.lef_file;
-    routing_config.liberty_file = app_config.liberty_file;
-    routing_config.via_cost = app_config.via_cost;
-    routing_config.wire_cost = app_config.wire_cost;
-    routing_config.routing_pitch = app_config.routing_pitch;
-    routing_config.routing_grid_fine_factor = app_config.routing_grid_fine_factor;
-    routing_config.verbose = app_config.verbose;
-    routing_config.run_id = app_config.run_id;
-    
-    // Routing algorithm parameters
-    routing_config.initial_collision_penalty = app_config.initial_collision_penalty;
-    routing_config.penalty_growth_rate = app_config.penalty_growth_rate;
-    routing_config.max_penalty = app_config.max_penalty;
-    routing_config.initial_history_increment = app_config.initial_history_increment;
-    routing_config.max_history_increment = app_config.max_history_increment;
-    routing_config.history_increment_growth_rate = app_config.history_increment_growth_rate;
-    routing_config.decay_factor = app_config.decay_factor;
-    routing_config.distance_weight = app_config.distance_weight;
-    
-    return routing_config;
-}
 
 /**
  * @brief Auto-detect row height from LEF library (with fallback to config)
@@ -159,45 +100,44 @@ void backannotateCoordinates(PlacerDB& placer_db, NetlistDB& /* netlist_db */) {
 /**
  * @brief Run placement using unified configuration
  */
-std::unique_ptr<PlacerDB> runPlacement(const AppConfig& config, std::shared_ptr<NetlistDB> netlist_db) {
+std::unique_ptr<PlacerDB> runPlacement(AppConfig& config, std::shared_ptr<NetlistDB> netlist_db) {
     std::cout << "\n=== Running Placement ===" << std::endl;
-    
+
     // Detect actual row height from LEF (override config if available)
     double actual_row_height = detectRowHeight(config);
-    
+
     // Determine placement algorithm from environment variable
     std::string placement_algo = "hybrid";  // default to hybrid (best practice)
     const char* env_algo = std::getenv("MINIEDA_PLACEMENT_ALGO");
     if (env_algo) {
         placement_algo = std::string(env_algo);
     }
-    
+
     std::cout << "  Using Placement Algorithm: " << placement_algo << std::endl;
-    
-    // Convert to placement configuration
-    PlacementConfig placement_config = toPlacementConfig(config);
-    placement_config.row_height = actual_row_height;  // Use detected height
-    placement_config.placement_algo = placement_algo;  // Set algorithm
-    
+
+    // Update config with runtime values
+    config.placement_algo = placement_algo;
+    config.row_height = actual_row_height;
+
     // Extract base run_id without _routing suffix for placement
     std::string base_run_id = config.run_id;
     size_t routing_pos = base_run_id.find("_routing");
     if (routing_pos != std::string::npos) {
         base_run_id = base_run_id.substr(0, routing_pos);
     }
-    placement_config.run_id = base_run_id;
-    
+    config.run_id = base_run_id;
+
     // Run placement using unified interface
     auto placer_db = PlacementInterface::runPlacementWithVisualization(
-        placement_config, netlist_db, nullptr);
+        config, netlist_db, nullptr);
     
     if (placer_db && config.verbose) {
         std::cout << "  Placement completed successfully" << std::endl;
-        std::cout << "  Final utilization: " << placement_config.utilization << std::endl;
+        std::cout << "  Final utilization: " << config.utilization << std::endl;
         std::cout << "  Row height used: " << actual_row_height << " um" << std::endl;
-        if (placement_config.placement_algo == "hybrid") {
+        if (config.placement_algo == "hybrid") {
             std::cout << "  Placement mode: Hybrid (Warm-up + Electrostatic)" << std::endl;
-        } else if (placement_config.placement_algo == "nesterov") {
+        } else if (config.placement_algo == "nesterov") {
             std::cout << "  Placement mode: Electrostatic Field (Nesterov)" << std::endl;
         } else {
             std::cout << "  Placement mode: Basic Force-Directed" << std::endl;
@@ -224,13 +164,10 @@ bool runRouting(const AppConfig& config, std::shared_ptr<NetlistDB> netlist_db,
         std::cerr << "Error: LEF file is required for routing" << std::endl;
         return false;
     }
-    
-    // Convert to routing configuration
-    RoutingConfig routing_config = toRoutingConfig(config);
-    
-    // Run routing
+
+    // Run routing using AppConfig directly
     auto routing_results = RoutingInterface::runRouting(
-        routing_config, netlist_db, placer_db);
+        config, netlist_db, placer_db);
     
     // Get and report routing statistics
     double total_wirelength;

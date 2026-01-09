@@ -13,10 +13,6 @@
 
 namespace mini {
 
-double SteinerTreeBuilder::manhattanDist(const Point& p1, const Point& p2) {
-    return std::abs(p1.x - p2.x) + std::abs(p1.y - p2.y);
-}
-
 Point SteinerTreeBuilder::getPinAbsolutePosition(Pin* pin, PlacerDB* db, 
                                                 const LefLibrary* lef_lib, 
                                                 const MacroMapper* macro_mapper) {
@@ -218,7 +214,7 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db,
         // Update distances to remaining vertices
         for (size_t v = 0; v < n; ++v) {
             if (!connected[v]) {
-                double dist = manhattanDist(pin_points[u], pin_points[v]);
+                double dist = pin_points[u].manhattanDistance(pin_points[v]);
                 if (dist < min_dist[v]) {
                     min_dist[v] = dist;
                     parent[v] = u;

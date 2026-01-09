@@ -265,12 +265,6 @@ private:
     void exportDensityVisualization() const;
 
     /**
-     * @brief Debug log helper
-     * @param message Debug message
-     */
-    void debugLog(const std::string& message) const;
-
-    /**
      * @brief Validate initialization
      * @return true if properly initialized
      */

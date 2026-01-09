@@ -57,4 +57,7 @@ Desktop.ini
 txt/
 
 # Benchmark datasets (large public datasets)
-benchmarks/
+# benchmarks/ISCAS/ - ISCAS benchmark suite (large files, ignored)
+benchmarks/ISCAS/
+# Keep individual test files in benchmarks/ directory
+# (NangateOpenCellLibrary*.lib, NangateOpenCellLibrary*.lef, *.v)

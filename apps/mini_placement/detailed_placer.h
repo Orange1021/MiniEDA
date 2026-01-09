@@ -110,12 +110,6 @@ private:
     // ========================================================================
     
     /**
-     * @brief Debug logging helper
-     * @param message Debug message
-     */
-    void debugLog(const std::string& message) const;
-
-    /**
      * @brief Get all cells organized by rows
      * @return Vector of rows, each containing cells sorted by X coordinate
      */

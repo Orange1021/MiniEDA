@@ -4,6 +4,7 @@
  */
 
 #include "macro_mapper.h"
+#include "../../lib/include/debug_log.h"
 #include <algorithm>
 #include <cctype>
 #include <string>
@@ -11,19 +12,19 @@
 namespace mini {
 
 MacroMapper::MacroMapper(const LefLibrary& lef_lib) 
-    : lef_lib_(lef_lib), debug_enabled_(false), successful_mappings_(0), total_attempts_(0) {
+    : lef_lib_(lef_lib), successful_mappings_(0), total_attempts_(0) {
 }
 
 const LefMacro* MacroMapper::mapType(const std::string& cell_type) const {
     total_attempts_++;
     
-    debugLog("Mapping cell type: " + cell_type);
+    DEBUG_LOG("MacroMapper", "Mapping cell type: " + cell_type);
     
     // Strategy 1: Try exact match first
     const LefMacro* macro = tryExactMatch(cell_type);
     if (macro) {
         successful_mappings_++;
-        debugLog("  ✓ Exact match found: " + cell_type);
+        DEBUG_LOG("MacroMapper", "  ✓ Exact match found: " + cell_type);
         return macro;
     }
     
@@ -31,7 +32,7 @@ const LefMacro* MacroMapper::mapType(const std::string& cell_type) const {
     macro = tryAlternativeNames(cell_type);
     if (macro) {
         successful_mappings_++;
-        debugLog("  ✓ Alternative name match: " + cell_type + " -> " + macro->name);
+        DEBUG_LOG("MacroMapper", "  ✓ Alternative name match: " + cell_type + " -> " + macro->name);
         return macro;
     }
     
@@ -41,7 +42,7 @@ const LefMacro* MacroMapper::mapType(const std::string& cell_type) const {
             macro = tryDriveStrengthMatch(alt_pair.second);
             if (macro) {
                 successful_mappings_++;
-                debugLog("  ✓ Drive strength match: " + cell_type + " -> " + macro->name);
+                DEBUG_LOG("MacroMapper", "  ✓ Drive strength match: " + cell_type + " -> " + macro->name);
                 return macro;
             }
         }
@@ -51,7 +52,7 @@ const LefMacro* MacroMapper::mapType(const std::string& cell_type) const {
     macro = tryDriveStrengthMatch(cell_type);
     if (macro) {
         successful_mappings_++;
-        debugLog("  ✓ Drive strength match: " + cell_type + " -> " + macro->name);
+        DEBUG_LOG("MacroMapper", "  ✓ Drive strength match: " + cell_type + " -> " + macro->name);
         return macro;
     }
     
@@ -59,7 +60,7 @@ const LefMacro* MacroMapper::mapType(const std::string& cell_type) const {
     macro = tryPatternMatch(cell_type);
     if (macro) {
         successful_mappings_++;
-        debugLog("  ✓ Pattern match: " + cell_type + " -> " + macro->name);
+        DEBUG_LOG("MacroMapper", "  ✓ Pattern match: " + cell_type + " -> " + macro->name);
         return macro;
     }
     
@@ -67,11 +68,11 @@ const LefMacro* MacroMapper::mapType(const std::string& cell_type) const {
     macro = tryFuzzyMatch(cell_type);
     if (macro) {
         successful_mappings_++;
-        debugLog("  ✓ Fuzzy match: " + cell_type + " -> " + macro->name);
+        DEBUG_LOG("MacroMapper", "  ✓ Fuzzy match: " + cell_type + " -> " + macro->name);
         return macro;
     }
     
-    debugLog("  ✗ No match found for: " + cell_type);
+    DEBUG_LOG("MacroMapper", "  ✗ No match found for: " + cell_type);
     return nullptr;
 }
 
@@ -84,10 +85,10 @@ const LefMacro* MacroMapper::tryDriveStrengthMatch(const std::string& base_name)
         std::string candidate_name = base_name + suffix;
         const LefMacro* macro = lef_lib_.getMacro(candidate_name);
         if (macro) {
-            debugLog("    Trying: " + candidate_name + " - SUCCESS");
+            DEBUG_LOG("MacroMapper", "    Trying: " + candidate_name + " - SUCCESS");
             return macro;
         } else {
-            debugLog("    Trying: " + candidate_name + " - not found");
+            DEBUG_LOG("MacroMapper", "    Trying: " + candidate_name + " - not found");
         }
     }
     return nullptr;
@@ -98,10 +99,10 @@ const LefMacro* MacroMapper::tryAlternativeNames(const std::string& cell_type) c
         if (alt_pair.first == cell_type) {
             const LefMacro* macro = lef_lib_.getMacro(alt_pair.second);
             if (macro) {
-                debugLog("    Alternative: " + alt_pair.second + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Alternative: " + alt_pair.second + " - SUCCESS");
                 return macro;
             } else {
-                debugLog("    Alternative: " + alt_pair.second + " - not found");
+                DEBUG_LOG("MacroMapper", "    Alternative: " + alt_pair.second + " - not found");
             }
         }
     }
@@ -116,7 +117,7 @@ const LefMacro* MacroMapper::tryPatternMatch(const std::string& cell_type) const
             std::string candidate = "AND" + std::to_string(num_inputs) + "_X1";
             const LefMacro* macro = lef_lib_.getMacro(candidate);
             if (macro) {
-                debugLog("    Pattern AND match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Pattern AND match: " + candidate + " - SUCCESS");
                 return macro;
             }
         }
@@ -128,7 +129,7 @@ const LefMacro* MacroMapper::tryPatternMatch(const std::string& cell_type) const
             std::string candidate = "NAND" + std::to_string(num_inputs) + "_X1";
             const LefMacro* macro = lef_lib_.getMacro(candidate);
             if (macro) {
-                debugLog("    Pattern NAND match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Pattern NAND match: " + candidate + " - SUCCESS");
                 return macro;
             }
         }
@@ -140,7 +141,7 @@ const LefMacro* MacroMapper::tryPatternMatch(const std::string& cell_type) const
             std::string candidate = "OR" + std::to_string(num_inputs) + "_X1";
             const LefMacro* macro = lef_lib_.getMacro(candidate);
             if (macro) {
-                debugLog("    Pattern OR match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Pattern OR match: " + candidate + " - SUCCESS");
                 return macro;
             }
         }
@@ -152,7 +153,7 @@ const LefMacro* MacroMapper::tryPatternMatch(const std::string& cell_type) const
             std::string candidate = "NOR" + std::to_string(num_inputs) + "_X1";
             const LefMacro* macro = lef_lib_.getMacro(candidate);
             if (macro) {
-                debugLog("    Pattern NOR match: " + candidate + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Pattern NOR match: " + candidate + " - SUCCESS");
                 return macro;
             }
         }
@@ -166,7 +167,7 @@ const LefMacro* MacroMapper::tryPatternMatch(const std::string& cell_type) const
         for (const auto& variant : dff_variants) {
             const LefMacro* macro = lef_lib_.getMacro(variant);
             if (macro) {
-                debugLog("    Pattern DFF match: " + variant + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Pattern DFF match: " + variant + " - SUCCESS");
                 return macro;
             }
         }
@@ -178,7 +179,7 @@ const LefMacro* MacroMapper::tryPatternMatch(const std::string& cell_type) const
         std::string candidate = base_name + "_X1";
         const LefMacro* macro = lef_lib_.getMacro(candidate);
         if (macro) {
-            debugLog("    Pattern complex gate match: " + candidate + " - SUCCESS");
+            DEBUG_LOG("MacroMapper", "    Pattern complex gate match: " + candidate + " - SUCCESS");
             return macro;
         }
     }
@@ -198,7 +199,7 @@ const LefMacro* MacroMapper::tryFuzzyMatch(const std::string& cell_type) const {
             std::string base_name = fuzzy_name.substr(0, fuzzy_name.length() - suffix.length());
             const LefMacro* macro = lef_lib_.getMacro(base_name);
             if (macro) {
-                debugLog("    Fuzzy suffix removal: " + base_name + " - SUCCESS");
+                DEBUG_LOG("MacroMapper", "    Fuzzy suffix removal: " + base_name + " - SUCCESS");
                 return macro;
             }
         }
@@ -213,7 +214,7 @@ const LefMacro* MacroMapper::tryFuzzyMatch(const std::string& cell_type) const {
         std::string macro_lower = macro_pair.first;
         std::transform(macro_lower.begin(), macro_lower.end(), macro_lower.begin(), ::tolower);
         if (macro_lower == lower_name) {
-            debugLog("    Fuzzy case-insensitive: " + macro_pair.first + " - SUCCESS");
+            DEBUG_LOG("MacroMapper", "    Fuzzy case-insensitive: " + macro_pair.first + " - SUCCESS");
             return &macro_pair.second;
         }
     }
@@ -222,7 +223,7 @@ const LefMacro* MacroMapper::tryFuzzyMatch(const std::string& cell_type) const {
     for (const auto& macro_pair : lef_lib_.macros) {
         if (macro_pair.first.find(cell_type) != std::string::npos || 
             cell_type.find(macro_pair.first) != std::string::npos) {
-            debugLog("    Fuzzy substring: " + macro_pair.first + " - SUCCESS");
+            DEBUG_LOG("MacroMapper", "    Fuzzy substring: " + macro_pair.first + " - SUCCESS");
             return &macro_pair.second;
         }
     }
@@ -245,12 +246,6 @@ size_t MacroMapper::extractInputCount(const std::string& cell_type) const {
     
     // Default to 2 inputs for gates without explicit number
     return 2;
-}
-
-void MacroMapper::debugLog(const std::string& message) const {
-    if (debug_enabled_) {
-        std::cout << "[MacroMapper] " << message << std::endl;
-    }
 }
 
 } // namespace mini

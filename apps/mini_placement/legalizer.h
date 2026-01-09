@@ -62,16 +62,6 @@ protected:
     bool verbose_ = false; ///< Verbose output flag
 
     /**
-     * @brief Debug logging function
-     * @param message Message to log
-     */
-    void debugLog(const std::string& message) const {
-        if (verbose_) {
-            std::cout << "[" << getAlgorithmName() << "] " << message << std::endl;
-        }
-    }
-
-    /**
      * @brief Check for overlaps after legalization
      * @return True if overlaps exist
      */

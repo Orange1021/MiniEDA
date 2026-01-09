@@ -150,7 +150,7 @@ std::unordered_map<std::string, Point> buildPinLocations(
 }
 
 std::vector<RoutingResult> RoutingInterface::runRouting(
-    const RoutingConfig& config,
+    const AppConfig& config,
     std::shared_ptr<NetlistDB> netlist_db,
     std::unique_ptr<PlacerDB>& placer_db) {
     
@@ -786,7 +786,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
 }
 
 std::vector<RoutingResult> RoutingInterface::runRoutingWithVisualization(
-    const RoutingConfig& config,
+    const AppConfig& config,
     std::shared_ptr<NetlistDB> netlist_db,
     std::unique_ptr<PlacerDB>& placer_db,
     Visualizer* visualizer) {

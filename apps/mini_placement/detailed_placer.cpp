@@ -4,6 +4,7 @@
  */
 
 #include "detailed_placer.h"
+#include "../../lib/include/debug_log.h"
 #include "../../lib/include/hpwl_calculator.h"
 #include <algorithm>
 #include <iostream>
@@ -16,7 +17,7 @@ DetailedPlacer::DetailedPlacer(PlacerDB* db, NetlistDB* netlist)
 }
 
 void DetailedPlacer::run() {
-    debugLog("Starting detailed placement optimization...");
+    DEBUG_LOG("DetailedPlacer", "Starting detailed placement optimization...");
     
     // Calculate initial HPWL
 // HPWLCalculator hpwl_calc;
@@ -54,13 +55,13 @@ void DetailedPlacer::run() {
                   << " (" << std::fixed << std::setprecision(1) << alignment_rate << "%)" << std::endl;
     }
     
-    debugLog("Detailed placement optimization completed");
+    DEBUG_LOG("DetailedPlacer", "Detailed placement optimization completed");
 }
 
 
 
 void DetailedPlacer::globalSwap() {
-    debugLog("Running global swap optimization...");
+    DEBUG_LOG("DetailedPlacer", "Running global swap optimization...");
     
     auto all_cells = db_->getAllCells();
     int successful_swaps = 0;
@@ -123,7 +124,7 @@ bool DetailedPlacer::trySwap(Cell* c1, Cell* c2) {
 }
 
 void DetailedPlacer::detailedReordering() {
-    debugLog("Running detailed reordering (Equal-Width Swap Strategy)...");
+    DEBUG_LOG("DetailedPlacer", "Running detailed reordering (Equal-Width Swap Strategy)...");
     
     // 1. Get cells grouped by row
     auto rows = getCellsByRow();
@@ -213,14 +214,6 @@ double DetailedPlacer::calculateLocalHPWL(const std::vector<Cell*>& cells) {
     }
 
     return total_hpwl;
-}
-
-
-
-void DetailedPlacer::debugLog(const std::string& message) const {
-    if (verbose_) {
-        std::cout << "[DetailedPlacer] " << message << std::endl;
-    }
 }
 
 std::vector<std::vector<Cell*>> DetailedPlacer::getCellsByRow() {

@@ -60,12 +60,6 @@ public:
                                            const Library* library) const;
 
     /**
-     * @brief Enable/disable debug output for mapping process
-     * @param enabled True to enable debug logging
-     */
-    void setDebugMode(bool enabled) { debug_enabled_ = enabled; }
-
-    /**
      * @brief Get mapping statistics
      * @return Pair of (successful_mappings, total_attempts)
      */
@@ -78,7 +72,6 @@ public:
 
 private:
     const Library& library_;
-    bool debug_enabled_;
     
     // Statistics
     mutable size_t successful_mappings_;
@@ -200,11 +193,6 @@ private:
      */
     size_t extractInputCount(const std::string& cell_type) const;
 
-    /**
-     * @brief Debug logging helper
-     * @param message Debug message to print
-     */
-    void debugLog(const std::string& message) const;
 };
 
 } // namespace mini

@@ -6,6 +6,7 @@
  */
 
 #include "../include/liberty_pin_mapper.h"
+#include "debug_log.h"
 
 namespace mini {
 
@@ -14,7 +15,7 @@ namespace mini {
  * @details Initializes default mapping rules and debug settings
  */
 LibertyPinMapper::LibertyPinMapper() 
-    : debug_enabled_(false), successful_mappings_(0), total_attempts_(0) {
+    : successful_mappings_(0), total_attempts_(0) {
     initializeDefaultMappings();
 }
 
@@ -38,10 +39,6 @@ std::string LibertyPinMapper::getNetlistPinName(const std::string& cell_type,
     auto specific_it = specific_map_.find(specific_key);
     if (specific_it != specific_map_.end()) {
         successful_mappings_++;
-        if (debug_enabled_) {
-            debugLog("Specific mapping: " + cell_type + ":" + lib_pin_name + 
-                    " -> " + specific_it->second);
-        }
         return specific_it->second;
     }
 
@@ -50,18 +47,11 @@ std::string LibertyPinMapper::getNetlistPinName(const std::string& cell_type,
     auto global_it = global_map_.find(lib_pin_name);
     if (global_it != global_map_.end()) {
         successful_mappings_++;
-        if (debug_enabled_) {
-            debugLog("Global mapping: " + lib_pin_name + " -> " + global_it->second);
-        }
         return global_it->second;
     }
 
     // Step 3: Default case (Passthrough)
     // If no mapping found, assume names are identical (A -> A)
-    if (debug_enabled_) {
-        debugLog("Passthrough: " + lib_pin_name + " -> " + lib_pin_name + 
-                " (no mapping rule found)");
-    }
     return lib_pin_name;
 }
 
@@ -101,9 +91,6 @@ std::string LibertyPinMapper::getLibPinName(const std::string& cell_type,
 void LibertyPinMapper::addGlobalMapping(const std::string& lib_pin, 
                                         const std::string& netlist_pin) {
     global_map_[lib_pin] = netlist_pin;
-    if (debug_enabled_) {
-        debugLog("Added global mapping: " + lib_pin + " -> " + netlist_pin);
-    }
 }
 
 /**
@@ -118,10 +105,8 @@ void LibertyPinMapper::addSpecificMapping(const std::string& cell_type,
                                           const std::string& netlist_pin) {
     auto key = std::make_pair(cell_type, lib_pin);
     specific_map_[key] = netlist_pin;
-    if (debug_enabled_) {
-        debugLog("Added specific mapping: " + cell_type + ":" + lib_pin + 
-                " -> " + netlist_pin);
-    }
+    DEBUG_LOG("LibertyPinMapper", "Added specific mapping: " + cell_type + ":" + lib_pin + 
+              " -> " + netlist_pin);
 }
 
 /**
@@ -211,17 +196,10 @@ void LibertyPinMapper::initializeDefaultMappings() {
     // addGlobalMapping("IN0", "A"); // Intel input naming
     // addGlobalMapping("IN1", "B"); // Intel input naming
     
-    if (debug_enabled_) {
-        debugLog("Initialized default mappings for common process libraries");
-    }
 }
 
 /**
  * @brief Debug logging helper
  * @param message Debug message to print
  */
-void LibertyPinMapper::debugLog(const std::string& message) const {
-    std::cout << "[PinMapper] " << message << std::endl;
-}
-
 } // namespace mini

@@ -246,12 +246,6 @@ private:
     void updateStatistics(const std::vector<Bin>& bins);
 
     /**
-     * @brief Debug log helper
-     * @param message Debug message
-     */
-    void debugLog(const std::string& message) const;
-
-    /**
      * @brief Validate grid dimensions and data
      * @param bins Bin array
      * @param width Grid width

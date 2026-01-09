@@ -17,14 +17,14 @@
 namespace mini {
 
 std::unique_ptr<PlacerDB> PlacementInterface::runPlacement(
-    const PlacementConfig& config,
+    const AppConfig& config,
     std::shared_ptr<NetlistDB> netlist_db) {
     
     return runPlacementWithVisualization(config, netlist_db, nullptr);
 }
 
 std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
-    const PlacementConfig& config,
+    const AppConfig& config,
     std::shared_ptr<NetlistDB> netlist_db,
     Visualizer* visualizer) {
     
@@ -52,8 +52,7 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
             
             // Initialize macro mapper
             macro_mapper = std::make_unique<MacroMapper>(*lef_library);
-            macro_mapper->setDebugMode(config.verbose);
-            
+
             // Auto-detect technology row height from LEF library
             double tech_row_height = config.row_height; // Default fallback
             bool found_macro = false;
@@ -76,10 +75,7 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
                 std::cout << "  Warning: No valid macro found in LEF, using default row height: " 
                           << tech_row_height << " μm" << std::endl;
             }
-            
-            // Update config with detected row height
-            const_cast<PlacementConfig&>(config).row_height = tech_row_height;
-            
+
         } catch (const std::exception& e) {
             std::cerr << "Error parsing LEF file: " << e.what() << std::endl;
             return nullptr;
@@ -242,9 +238,9 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     if (config.verbose) {
         std::cout << "\nSetting up Placement Engine..." << std::endl;
     }
-    PlacerEngine engine(placer_db.get(), config.target_density, config.initial_lambda,
-                       config.lambda_growth_rate, config.learning_rate,
-                       config.momentum, config.convergence_threshold, config.density_margin, config.max_gradient_ratio, config.max_displacement_ratio);
+    PlacerEngine engine(placer_db.get(), config.utilization, config.placement_initial_lambda,
+                       config.placement_lambda_growth_rate, config.placement_learning_rate,
+                       config.placement_momentum, config.placement_convergence_threshold, config.placement_density_margin, config.placement_max_gradient_ratio, config.placement_max_displacement_ratio);
     engine.setHPWLConvergenceRatio(config.placement_hpwl_convergence_ratio);
     engine.setDetailedIterations(config.placement_detailed_iterations);
     engine.setRunId(config.run_id);

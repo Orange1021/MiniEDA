@@ -5,6 +5,7 @@
 
 #include "abacus_legalizer.h"
 #include "../../lib/include/hpwl_calculator.h"
+#include "../../lib/include/debug_log.h"
 #include <algorithm>
 #include <cmath>
 #include <iomanip>
@@ -54,25 +55,25 @@ void AbacusCluster::addCluster(const AbacusCluster& other) {
 
 
 void AbacusLegalizer::run() {
-    debugLog("Starting Abacus legalization...");
+    DEBUG_LOG("AbacusLegalizer", "Starting Abacus legalization...");
     
     // Phase 1: Distribute cells to rows
     distributeCellsToRows();
     
     // Phase 2: Solve row conflicts with cluster merging
-    debugLog("Phase 2: Row-based conflict resolution with cluster merging");
+    DEBUG_LOG("AbacusLegalizer", "Phase 2: Row-based conflict resolution with cluster merging");
     for (auto& row : rows_) {
         legalizeRow(row);
     }
     
     // Phase 3: Snap to site grid (final alignment)
-    debugLog("Phase 3: Site alignment (snap to grid)");
+    DEBUG_LOG("AbacusLegalizer", "Phase 3: Site alignment (snap to grid)");
     snapToSiteGrid();
 
     // Report final statistics
     reportFinalStatistics();
 
-    debugLog("Abacus legalization completed (Phase 1 + Phase 2 + Phase 3)");
+    DEBUG_LOG("AbacusLegalizer", "Abacus legalization completed (Phase 1 + Phase 2 + Phase 3)");
 }
 
 void AbacusLegalizer::distributeCellsToRows() {
@@ -158,7 +159,7 @@ void AbacusLegalizer::initializeRows() {
         rows_[i].min_x = core_area.x_min;
         rows_[i].max_x = core_area.x_min + core_area.width();
         
-        debugLog("Row " + std::to_string(i) + 
+        DEBUG_LOG("AbacusLegalizer", "Row " + std::to_string(i) + 
                  ": Y=" + std::to_string(rows_[i].y_coordinate) +
                  ", Range=[" + std::to_string(rows_[i].min_x) + 
                  "," + std::to_string(rows_[i].max_x) + "]");
@@ -176,7 +177,7 @@ void AbacusLegalizer::snapCellToRow(Cell* cell, int row_idx) {
     // Note: placeCell() internally calls cell->setPosition()
     db_->placeCell(cell, current_x, row_y);
     
-    debugLog("Snapped cell " + cell->getName() + 
+    DEBUG_LOG("AbacusLegalizer", "Snapped cell " + cell->getName() + 
              " to row " + std::to_string(row_idx) + 
              " at Y=" + std::to_string(row_y));
 }
@@ -270,7 +271,7 @@ void AbacusLegalizer::exportResult(const std::string& filename) const {
 // ============================================================================
 
 void AbacusLegalizer::legalizeRow(AbacusRow& row) {
-    debugLog("Legalizing row " + std::to_string(row.index) + " with " + 
+    DEBUG_LOG("AbacusLegalizer", "Legalizing row " + std::to_string(row.index) + " with " + 
              std::to_string(row.cells.size()) + " cells");
     
     // Clear existing clusters
@@ -295,7 +296,7 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
             double prev_right_boundary = prev.x + prev.width;
             if (curr.x < prev_right_boundary - 1e-9) {  // Small epsilon for floating point
                 // === COLLISION DETECTED! MERGE! ===
-                debugLog("  Collision: merging clusters (curr.x=" + 
+                DEBUG_LOG("AbacusLegalizer", "  Collision: merging clusters (curr.x=" + 
                          std::to_string(curr.x) + " < prev.right=" + 
                          std::to_string(prev_right_boundary) + ")");
                 
@@ -305,7 +306,7 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
                 // Remove curr (it has been absorbed)
                 row.clusters.pop_back();
                 
-                debugLog("  After merge: new cluster pos=" + 
+                DEBUG_LOG("AbacusLegalizer", "  After merge: new cluster pos=" + 
                          std::to_string(prev.x) + ", width=" + 
                          std::to_string(prev.width) + ", weight=" + 
                          std::to_string(prev.weight));
@@ -318,7 +319,7 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
         }
     }
     
-    debugLog("Row " + std::to_string(row.index) + " reduced to " + 
+    DEBUG_LOG("AbacusLegalizer", "Row " + std::to_string(row.index) + " reduced to " + 
              std::to_string(row.clusters.size()) + " clusters");
     
 // Right-to-Left compaction to fix boundary pile-up
@@ -362,12 +363,12 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
         }
     }
     
-    debugLog("Row " + std::to_string(row.index) + " legalization completed");
+    DEBUG_LOG("AbacusLegalizer", "Row " + std::to_string(row.index) + " legalization completed");
 }
 
 void AbacusLegalizer::collapseClusters(AbacusRow& row, int cluster_idx) {
     // TODO: Implement cluster merging with optimal position calculation
-    debugLog(" collapseClusters() - to be implemented in next phase");
+    DEBUG_LOG("AbacusLegalizer", " collapseClusters() - to be implemented in next phase");
 }
 
 bool AbacusLegalizer::clusterFitsAt(const AbacusCluster& cluster, double x, const AbacusRow& row) const {

@@ -55,7 +55,7 @@ struct Segment {
      * @return Manhattan distance between start and end points
      */
     double manhattanLength() const {
-        return std::abs(start.x - end.x) + std::abs(start.y - end.y);
+        return start.manhattanDistance(end);
     }
     
     /**
@@ -63,9 +63,7 @@ struct Segment {
      * @return Euclidean distance between start and end points
      */
     double euclideanLength() const {
-        double dx = start.x - end.x;
-        double dy = start.y - end.y;
-        return std::sqrt(dx * dx + dy * dy);
+        return start.euclideanDistance(end);
     }
 };
 

@@ -8,6 +8,7 @@
 #include "cell_mapper.h"
 #include "../../lib/include/cell.h"
 #include "../../lib/include/net.h"
+#include "../../lib/include/geometry.h"
 #include <iostream>
 #include <cmath>
 #include <memory>
@@ -95,8 +96,6 @@ TableDelayModel::TableDelayModel(Library* lib) : library_(lib) {
     } else {
         // Initialize cell mapper with the library
         cell_mapper_ = std::make_unique<CellMapper>(*library_);
-        // Enable debug mode to see mapping details
-        cell_mapper_->setDebugMode(false); // Set to true for debugging
     }
 }
 
@@ -463,8 +462,8 @@ std::pair<double, double> TableDelayModel::calculateInterconnectDelay(
         double driver_y = driver_cell->getY();
         double load_x = load_cell->getX();
         double load_y = load_cell->getY();
-        
-        wire_length = std::abs(load_x - driver_x) + std::abs(load_y - driver_y);  // μm
+
+        wire_length = Point(driver_x, driver_y).manhattanDistance(Point(load_x, load_y));  // μm
     }
     
     // If cells are not placed or at same location, use minimal delay

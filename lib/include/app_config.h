@@ -55,6 +55,8 @@ struct AppConfig {
     // ========================================================================
     // [NEW] Placement Algorithm Parameters
     // ========================================================================
+    std::string placement_algo = "hybrid";                  ///< Placement algorithm: "basic", "nesterov", or "hybrid"
+    double placement_target_density = 0.8;                   ///< Target utilization for global placement (same as utilization)
     double placement_initial_lambda = 0.0001;                ///< Initial density penalty factor
     double placement_lambda_growth_rate = 1.05;              ///< Lambda growth rate per iteration
     double placement_learning_rate = 0.1;                    ///< Learning rate (step size)

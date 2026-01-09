@@ -11,6 +11,7 @@
 #include <string>
 #include <vector>
 #include "../../lib/include/netlist_db.h"
+#include "../../lib/include/app_config.h"
 
 namespace mini {
 
@@ -19,61 +20,36 @@ class Visualizer;
 struct RoutingResult;
 
 /**
- * @struct RoutingConfig
- * @brief Configuration parameters for routing
- * @note Uses AppConfig as single source of truth for routing parameters
- */
-struct RoutingConfig {
-    std::string lef_file;           // LEF physical library file
-    std::string liberty_file;       // Liberty timing library file
-    double via_cost;                // Via penalty cost multiplier (from AppConfig)
-    double wire_cost;                // Wire cost per unit length (from AppConfig)
-    double routing_pitch;            // Routing grid pitch (from AppConfig)
-    double routing_grid_fine_factor; // Fine grid factor for routing (from AppConfig)
-    bool verbose = false;           // Enable verbose output
-    std::string run_id = "routing";  // Run identifier for output files
-    
-    // Routing algorithm parameters (from AppConfig)
-    double initial_collision_penalty;   ///< Initial collision penalty for PathFinder
-    double penalty_growth_rate;          ///< Penalty growth rate per iteration
-    double max_penalty;                  ///< Maximum collision penalty cap
-    double initial_history_increment;    ///< Initial history increment
-    double max_history_increment;       ///< Maximum history increment cap
-    double history_increment_growth_rate; ///< History increment growth rate per iteration
-    double decay_factor;                 ///< History decay factor for cooling hotspots
-    double distance_weight;              ///< Distance weight for pin access scoring
-};
-
-/**
  * @class RoutingInterface
  * @brief High-level interface for running complete routing flow
  * @details Encapsulates all routing steps: I/O placement, grid initialization, and maze routing
+ * @note Uses AppConfig as single source of truth for all routing parameters
  */
 class RoutingInterface {
 public:
     /**
      * @brief Run complete routing flow
-     * @param config Routing configuration
+     * @param config Application configuration (contains all routing parameters)
      * @param netlist_db Netlist database
      * @param placer_db Placement database with cell locations
      * @return Vector of routing results for visualization
      */
     static std::vector<RoutingResult> runRouting(
-        const RoutingConfig& config,
+        const AppConfig& config,
         std::shared_ptr<NetlistDB> netlist_db,
         std::unique_ptr<PlacerDB>& placer_db
     );
 
     /**
      * @brief Run routing with visualization
-     * @param config Routing configuration
+     * @param config Application configuration (contains all routing parameters)
      * @param netlist_db Netlist database
      * @param placer_db Placement database with cell locations
      * @param visualizer Optional visualizer for debug output
      * @return Vector of routing results for visualization
      */
     static std::vector<RoutingResult> runRoutingWithVisualization(
-        const RoutingConfig& config,
+        const AppConfig& config,
         std::shared_ptr<NetlistDB> netlist_db,
         std::unique_ptr<PlacerDB>& placer_db,
         Visualizer* visualizer = nullptr

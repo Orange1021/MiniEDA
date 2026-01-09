@@ -5,21 +5,22 @@
 
 #include "greedy_legalizer.h"
 #include "../../lib/include/hpwl_calculator.h"
+#include "../../lib/include/debug_log.h"
 #include <algorithm>
 #include <iostream>
 
 namespace mini {
 
 void GreedyLegalizer::run() {
-    debugLog("Starting Greedy (Tetris) legalization...");
+    DEBUG_LOG("GreedyLegalizer", "Starting Greedy (Tetris) legalization...");
     
     // 1. Collect all movable cells
     auto movable_cells = Legalizer::collectMovableCells();
-    debugLog("Collected " + std::to_string(movable_cells.size()) + " movable cells");
+    DEBUG_LOG("GreedyLegalizer", "Collected " + std::to_string(movable_cells.size()) + " movable cells");
     
     // 2. Sort cells by Y then X coordinates
     sortCells(movable_cells);
-    debugLog("Cells sorted by Y then X coordinates");
+    DEBUG_LOG("GreedyLegalizer", "Cells sorted by Y then X coordinates");
     
     // 3. Perform linear packing placement
     int cells_placed = performLinearPacking(movable_cells);
@@ -43,7 +44,7 @@ void GreedyLegalizer::run() {
     // Report final statistics
     reportFinalStatistics();
 
-    debugLog("Greedy legalization completed");
+    DEBUG_LOG("GreedyLegalizer", "Greedy legalization completed");
 }
 
 void GreedyLegalizer::sortCells(std::vector<Cell*>& cells) const {
@@ -70,7 +71,7 @@ int GreedyLegalizer::performLinearPacking(const std::vector<Cell*>& cells) {
     
     // Calculate maximum number of rows that fit in core
     int max_rows = static_cast<int>(std::floor(core_area.height() / row_height));
-    debugLog("Core can accommodate " + std::to_string(max_rows) + " rows");
+    DEBUG_LOG("GreedyLegalizer", "Core can accommodate " + std::to_string(max_rows) + " rows");
     
     // Linear Packing: Fill rows from bottom-left to top-right
     int current_row = 0;
