@@ -166,7 +166,7 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db,
     }
     
     if (pin_points.size() < 2) {
-        ROUTING_LOG("SteinerTree", "Warning: Net " + net->getName() + 
+        ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "SteinerTree", "Warning: Net " + net->getName() + 
                    " has fewer than 2 pins, skipping MST construction");
         return segments;
     }

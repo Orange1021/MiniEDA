@@ -16,6 +16,8 @@ def plot_routing(data_file):
     cells = []
     nets = set()
     
+    print(f"Reading data file: {data_file}")
+    line_count = 0
     with open(data_file, 'r') as f:
         for line in f:
             line = line.strip()
@@ -44,31 +46,44 @@ def plot_routing(data_file):
                     'net_id': net_id
                 })
                 nets.add(net_id)
+            
+            line_count += 1
+            if line_count % 100000 == 0:
+                print(f"  Processed {line_count} lines...")
     
     print(f"Loaded {len(cells)} cells, {len(segments)} segments from {len(nets)} networks")
     
     # Create figure
+    print("Creating visualization...")
     fig, ax = plt.subplots(1, 1, figsize=(12, 10))
     
     # Draw cells first (as background)
-    for cell in cells:
-        cell_rect = patches.Rectangle(
-            (cell['x'], cell['y']), 
-            cell['width'], cell['height'],
-            linewidth=0.5, 
-            edgecolor='gray', 
-            facecolor='lightgray', 
-            alpha=0.6
-        )
-        ax.add_patch(cell_rect)
+    if len(cells) > 0:
+        print(f"Drawing {len(cells)} cells...")
+        cell_patches = []
+        for cell in cells:
+            cell_rect = patches.Rectangle(
+                (cell['x'], cell['y']), 
+                cell['width'], cell['height'],
+                linewidth=0.5, 
+                edgecolor='gray', 
+                facecolor='lightgray', 
+                alpha=0.6
+            )
+            cell_patches.append(cell_rect)
+        
+        # Add all cell patches at once (more efficient)
+        for patch in cell_patches:
+            ax.add_patch(patch)
         
         # Add cell name label (optional, for small number of cells)
         if len(cells) <= 50:  # Only show labels for small designs
-            ax.text(cell['x'] + cell['width']/2, 
-                   cell['y'] + cell['height']/2,
-                   cell['name'], 
-                   ha='center', va='center',
-                   fontsize=6, alpha=0.7)
+            for cell in cells:
+                ax.text(cell['x'] + cell['width']/2, 
+                       cell['y'] + cell['height']/2,
+                       cell['name'], 
+                       ha='center', va='center',
+                       fontsize=6, alpha=0.7)
     
     # Define colors for different layers
     layer_colors = {
@@ -77,15 +92,40 @@ def plot_routing(data_file):
         2: 'green'   # M3 - optional
     }
     
-    # Plot segments
+    # Plot segments by layer (more efficient)
+    print(f"Drawing {len(segments)} segments...")
+    layer_segments = {0: [], 1: [], 2: []}
+    via_positions = []
+    
     for seg in segments:
-        color = layer_colors.get(int(seg['z1']), 'black')
-        ax.plot([seg['x1'], seg['x2']], [seg['y1'], seg['y2']], 
-                color=color, linewidth=1.0, alpha=0.7)
+        z1 = int(seg['z1'])
+        z2 = int(seg['z2'])
         
-        # Add via markers for layer changes
-        if seg['z1'] != seg['z2']:
-            ax.plot(seg['x1'], seg['y1'], 'ko', markersize=3, zorder=5)
+        if z1 in layer_segments:
+            layer_segments[z1].append((seg['x1'], seg['y1'], seg['x2'], seg['y2']))
+        
+        # Collect via positions
+        if z1 != z2:
+            via_positions.append((seg['x1'], seg['y1']))
+    
+    # Draw segments by layer
+    for layer, segs in layer_segments.items():
+        if segs:
+            color = layer_colors.get(layer, 'black')
+            # Extract x and y coordinates
+            x_coords = []
+            y_coords = []
+            for seg in segs:
+                x_coords.extend([seg[0], seg[2], None])  # None breaks the line
+                y_coords.extend([seg[1], seg[3], None])
+            ax.plot(x_coords, y_coords, color=color, linewidth=0.5, alpha=0.7)
+    
+    # Draw vias
+    if via_positions:
+        print(f"Drawing {len(via_positions)} vias...")
+        via_x = [v[0] for v in via_positions]
+        via_y = [v[1] for v in via_positions]
+        ax.plot(via_x, via_y, 'ko', markersize=2, zorder=5)
     
     # Set plot properties
     ax.set_aspect('equal')
@@ -108,10 +148,12 @@ def plot_routing(data_file):
     
     # Save plot
     output_file = data_file.replace('.txt', '.png')
-    plt.savefig(output_file, dpi=150, bbox_inches='tight')
+    print(f"Saving visualization to: {output_file}")
+    plt.savefig(output_file, dpi=100, bbox_inches='tight')
     plt.close()
     
-    print(f"Visualization saved as: {output_file}")
+    print(f"Visualization saved successfully!")
+    print(f"File size: {output_file}")
 
 if __name__ == "__main__":
     if len(sys.argv) != 2:

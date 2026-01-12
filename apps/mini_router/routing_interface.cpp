@@ -372,11 +372,8 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             if (iter == 0) {
                 // Iteration 0: Full routing to establish baseline congestion map
                 routing_grid.clearRoutes();
-            } else if (iter == 1) {
-                // Iteration 1: Still full routing to let algorithm settle
-                routing_grid.clearRoutes();
             } else {
-                // Iteration 2+: Enable stabilizer - only reroute conflicting nets
+                // Iteration 1+: Enable stabilizer - only reroute conflicting nets
                 // Good nets become "concrete pillars", bad nets must find gaps
                 
                 // Get list of conflicting net IDs
@@ -497,10 +494,24 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                             }
                             
                             // 3. Divergence detected - conflicts getting much worse than best
-                            // Allow some divergence but stop if it gets too bad
-                            if (conflicts > router.getMinConflicts() + 50) {
+                            // Allow more divergence for small conflict counts to enable exploration
+                            int min_conflicts = router.getMinConflicts();
+                            int divergence_threshold;
+                            
+                            // Dynamic threshold based on conflict count magnitude
+                            if (min_conflicts > 10000) {
+                                divergence_threshold = min_conflicts * 2;  // Large conflicts: 2x
+                            } else if (min_conflicts > 1000) {
+                                divergence_threshold = min_conflicts * 3;  // Medium conflicts: 3x
+                            } else if (min_conflicts > 100) {
+                                divergence_threshold = min_conflicts * 5;  // Small conflicts: 5x
+                            } else {
+                                divergence_threshold = min_conflicts * 10;  // Very small conflicts: 10x
+                            }
+                            
+                            if (conflicts > divergence_threshold) {
                                 ROUTING_LOG("RoutingInterface", ">>> DIVERGENCE DETECTED: Conflicts (" + std::to_string(conflicts) + 
-                                           ") much worse than best (" + std::to_string(router.getMinConflicts()) + 
+                                           ") much worse than best (" + std::to_string(min_conflicts) + 
                                            "). Stopping early. <<<");
                                 break;
                             }
@@ -794,33 +805,14 @@ std::vector<RoutingResult> RoutingInterface::runRoutingWithVisualization(
     // Run routing first
     auto results = runRouting(config, netlist_db, placer_db);
     
-    // Generate visualization if requested
-    if (visualizer && !results.empty()) {
-        // Create routing grid for visualization
-        LefParser lef_parser(config.lef_file, config.verbose);
-        auto lef_lib = std::make_unique<LefLibrary>(lef_parser.parse());
-        
-        if (lef_lib) {
-            RoutingGrid routing_grid;
-            Rect core_area = placer_db->getCoreArea();
-            double pitch = config.routing_pitch * config.routing_grid_fine_factor;
-            routing_grid.init(core_area, pitch, pitch);
-            
-std::string output_name = "visualizations/" + config.run_id + "/post_routing";
-            
-            // Remove old visualization files
-            std::string old_py = output_name + ".py";
-            std::string old_png = output_name + ".png";
-            std::remove(old_py.c_str());
-            std::remove(old_png.c_str());
-            
-            // Call plot_routing.py to generate correct visualization
-            std::string plot_cmd = "cd visualizations && python3 plot_routing.py " + 
-                                config.run_id + "/post_routing.txt";
-            int result = std::system(plot_cmd.c_str());
-            if (result != 0) {
-                std::cerr << "Warning: Failed to run plot_routing.py" << std::endl;
-            }
+    // Generate visualization automatically (no longer requires visualizer)
+    if (!results.empty()) {
+        // Call plot_routing.py to generate correct visualization
+        std::string plot_cmd = "cd visualizations && python3 plot_routing.py " + 
+                            config.run_id + "/post_routing.txt";
+        int result = std::system(plot_cmd.c_str());
+        if (result != 0) {
+            std::cerr << "Warning: Failed to run plot_routing.py" << std::endl;
         }
     }
     

@@ -165,9 +165,9 @@ bool runRouting(const AppConfig& config, std::shared_ptr<NetlistDB> netlist_db,
         return false;
     }
 
-    // Run routing using AppConfig directly
-    auto routing_results = RoutingInterface::runRouting(
-        config, netlist_db, placer_db);
+    // Run routing with automatic visualization
+    auto routing_results = RoutingInterface::runRoutingWithVisualization(
+        config, netlist_db, placer_db, nullptr);
     
     // Get and report routing statistics
     double total_wirelength;
