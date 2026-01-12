@@ -29,14 +29,14 @@ struct AppConfig {
     // ========================================================================
     std::string verilog_file;                                 ///< Verilog netlist file (required)
     std::string liberty_file = "benchmarks/NangateOpenCellLibrary_typical.lib";  ///< Liberty timing library
-    std::string lef_file;                                     ///< LEF physical library (optional for routing)
+    std::string lef_file = "benchmarks/NangateOpenCellLibrary.macro.lef";  ///< LEF physical library
     std::string output_dir = "visualizations";                ///< Output directory for results
     std::string run_id = "default_run";                       ///< Run identifier for output files
 
     // ========================================================================
     // Physical Design Constraints
     // ========================================================================
-    double utilization = 0.8;                                ///< Target core utilization (0.1-1.0)
+    double utilization = 0.7;                                ///< Target core utilization (0.1-1.0)
     double row_height = 1.4;                                 ///< Standard cell row height (micrometers)
     double routing_pitch = 0.19;                             ///< Routing grid pitch (micrometers)
     double routing_grid_fine_factor = 0.5;                  ///< Fine grid factor for routing (0.5 = half pitch)

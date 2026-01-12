@@ -178,14 +178,24 @@ private:
     int num_layers_;      ///< Number of layers (upgraded to 3: M1, M2, M3)
 
     // --- Core Data Storage ---
-    /// 3D array: [layer][y][x] -> GridNode
-    /// Using nested vectors for dynamic resizing
-    std::vector<std::vector<std::vector<GridNode>>> grid_;
+    /// Flattened 1D array for better cache performance
+    /// Linear index: (layer * height + y) * width + x
+    std::vector<GridNode> grid_flat_;
     
     // --- Congestion Tracking for PathFinder Algorithm ---
-    /// History cost matrix: [layer][y][x] -> accumulated congestion penalty
-    /// This creates "hot spots" that become increasingly expensive over iterations
-    std::vector<std::vector<std::vector<double>>> history_costs_;
+    /// Flattened history cost matrix for better cache performance
+    std::vector<double> history_costs_flat_;
+    
+    // Total size of flattened arrays (width * height * layers)
+    int total_grid_size_;
+    
+    // --- Precomputed Neighbors for Performance ---
+    /// Precomputed neighbors for each grid point to avoid repeated calculations
+    /// Linear index: (layer * height + y) * width + x
+    std::vector<std::vector<GridPoint>> precomputed_neighbors_;
+    
+    /// Flag to enable/disable neighbor precomputation
+    bool enable_neighbor_precomputation_;
     
     // Dynamic history cost increment for aggressive PathFinder
     double history_increment_;
@@ -199,6 +209,12 @@ public:
     GridPoint physToGrid(double x, double y, int layer) const;
     std::vector<GridPoint> getNeighbors(const GridPoint& current, int current_net_id = 0) const;
     void addObstacle(const Rect& phys_rect, int layer);
+    
+    /**
+     * @brief Precompute neighbors for all grid points
+     * @details Called during grid initialization to avoid repeated neighbor calculations
+     */
+    void precomputeNeighbors();
     
     // State Management
     GridState getState(const GridPoint& gp) const;
@@ -316,14 +332,21 @@ public:
     double getPitchX() const { return pitch_x_; }
     double getPitchY() const { return pitch_y_; }
     const Rect& getCoreArea() const { return core_area_; }
-    
-    // Access internal grid data for fuzzy search (used by maze router)
-    std::vector<std::vector<std::vector<GridNode>>>& getGridData() { return grid_; }
 
 private:
     // Helper Methods
     int clamp(int value, int min_val, int max_val) const {
         return std::max(min_val, std::min(value, max_val));
+    }
+
+    /**
+     * @brief Convert 3D grid point to 1D linear index
+     * @param gp Grid point to convert
+     * @return Linear index
+     * @details Linear index formula: (layer * height + y) * width + x
+     */
+    int toLinearIndex(const GridPoint& gp) const {
+        return (gp.layer * grid_height_ + gp.y) * grid_width_ + gp.x;
     }
 
     /**
@@ -336,7 +359,7 @@ private:
         if (!isValid(gp)) {
             throw std::out_of_range("Grid point out of bounds");
         }
-        return grid_[gp.layer][gp.y][gp.x];
+        return grid_flat_[toLinearIndex(gp)];
     }
 
     /**
@@ -349,7 +372,7 @@ private:
         if (!isValid(gp)) {
             throw std::out_of_range("Grid point out of bounds");
         }
-        return grid_[gp.layer][gp.y][gp.x];
+        return grid_flat_[toLinearIndex(gp)];
     }
 };
 

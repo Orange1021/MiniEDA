@@ -73,11 +73,12 @@ public:
                                      const std::string& cell_type,
                                      const std::string& logical_pin_name);
 
+
     /**
-     * @brief Enable/disable debug output
-     * @param enabled True to enable debug logging
+     * @brief Debug logging helper
+     * @param message Debug message to print
      */
-    void setDebugMode(bool enabled) { debug_enabled_ = enabled; }
+    void debugLog(const std::string& message) const;
 
     /**
      * @brief Get mapping statistics

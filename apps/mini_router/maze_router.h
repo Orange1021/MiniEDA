@@ -9,6 +9,7 @@
 
 #include <climits>
 #include "routing_grid.h"
+#include "../../lib/include/steiner_tree.h"
 #include <unordered_map>
 #include <map>
 #include <unordered_set>
@@ -119,6 +120,24 @@ private:
     
     // **BEST SOLUTION**: Store segments with their net IDs for proper restoration
     std::vector<std::pair<std::vector<GridPoint>, int>> best_solution_segments_with_ids_;
+    
+    // **PERFORMANCE OPTIMIZATION**: Linear index data structures for A* algorithm
+    // Replaces unordered_map with vector for O(1) access and better cache locality
+    std::vector<double> g_score_linear_;      // G-cost for each grid point
+    std::vector<int> came_from_linear_;      // Parent node linear index (-1 if unvisited)
+    std::vector<bool> visited_linear_;       // Visited flag for each grid point
+    int linear_array_size_;                  // Total size of linear arrays (width * height * layers)
+    bool linear_arrays_initialized_;         // Flag to check if arrays are initialized
+    
+    // **PERFORMANCE OPTIMIZATION**: Incremental congestion tracking
+    // Only update history costs for congested points instead of traversing entire grid
+    std::vector<std::tuple<int, int, int>> congested_points_;  // List of (x, y, layer) congested points
+    bool track_congestion_;                 // Enable incremental congestion tracking
+    
+    // **PERFORMANCE OPTIMIZATION**: MST caching for PathFinder iterations
+    // Cache MST topology for each net to avoid rebuilding in every iteration
+    std::unordered_map<int, std::vector<Segment>> mst_cache_;  // net_id -> MST segments
+    bool enable_mst_cache_;                 // Enable MST caching
 
 public:
     /**
@@ -278,6 +297,44 @@ private:
      * @return Number of vias
      */
     int countVias(const std::vector<GridPoint>& path) const;
+    
+    /**
+     * @brief Convert 3D grid point to 1D linear index
+     * @param gp Grid point to convert
+     * @return Linear index
+     */
+    int toLinearIndex(const GridPoint& gp) const;
+    
+    /**
+     * @brief Convert 1D linear index to 3D grid point
+     * @param idx Linear index
+     * @return Grid point
+     */
+    GridPoint fromLinearIndex(int idx) const;
+    
+    /**
+     * @brief Initialize linear index arrays for A* algorithm
+     * Must be called before findPath()
+     */
+    void initializeLinearArrays();
+    
+    /**
+     * @brief Reset linear index arrays for a new A* search
+     */
+    void resetLinearArrays();
+    
+    /**
+     * @brief Record a congested point for incremental history cost update
+     * @param x Grid X coordinate
+     * @param y Grid Y coordinate
+     * @param z Grid layer
+     */
+    void recordCongestedPoint(int x, int y, int z);
+    
+    /**
+     * @brief Clear the list of congested points
+     */
+    void clearCongestedPoints();
 };
 
 } // namespace mini

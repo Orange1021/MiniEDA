@@ -200,7 +200,7 @@ Usage: MiniEDA [options] <verilog_file>
 Required Files:
   -v <file>              Verilog netlist file
   -lib <file>            Liberty timing library (default: NangateOpenCellLibrary_typical.lib)
-  -lef <file>            LEF physical library (required for routing)
+  -lef <file>            LEF physical library (default: NangateOpenCellLibrary.macro.lef)
 
 Output Configuration:
   -o <dir>               Output directory (default: visualizations)

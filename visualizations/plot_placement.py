@@ -72,6 +72,9 @@ def plot_placement(csv_file, output_file=None, title=None):
     movable_cells = 0
     fixed_cells = 0
     
+    # Determine whether to show cell labels based on cell count
+    show_labels = len(cells) <= 1000
+    
     for cell in cells:
         # Color based on whether cell is fixed
         if cell['fixed']:
@@ -94,13 +97,13 @@ def plot_placement(csv_file, output_file=None, title=None):
         )
         ax.add_patch(cell_rect)
         
-        # Add cell name label for all cells
-        # Use same font size as plot_routing.py
-        ax.text(cell['x'] + cell['width']/2,
-               cell['y'] + cell['height']/2,
-               cell['cell_name'],
-               ha='center', va='center',
-               fontsize=6, alpha=0.7)
+        # Add cell name label (only if cell count <= 1000)
+        if show_labels:
+            ax.text(cell['x'] + cell['width']/2,
+                   cell['y'] + cell['height']/2,
+                   cell['cell_name'],
+                   ha='center', va='center',
+                   fontsize=6, alpha=0.7)
     
     # Set plot properties
     ax.set_aspect('equal')
@@ -139,6 +142,10 @@ def plot_placement(csv_file, output_file=None, title=None):
     
     print(f"Visualization saved as: {output_file}")
     print(f"  Total cells: {len(cells)} (movable: {movable_cells}, fixed: {fixed_cells})")
+    if show_labels:
+        print(f"  Cell labels: Enabled (cell count <= 1000)")
+    else:
+        print(f"  Cell labels: Disabled (cell count > 1000 to avoid overlap)")
 
 def main():
     parser = argparse.ArgumentParser(description='Plot placement visualization from CSV')

@@ -12,6 +12,7 @@
 
 #include "../../lib/include/placer_db.h"
 #include "../../apps/mini_placement/macro_mapper.h"
+#include "../../lib/include/debug_log.h"
 #include <iostream>
 #include <iomanip>
 #include <algorithm>
@@ -229,7 +230,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         router.setDistanceWeight(config.distance_weight);
         
         if (config.verbose) {
-            std::cout << "Routing " << netlist_db->getNumNets() << " nets..." << std::endl;
+            ROUTING_LOG("RoutingInterface", "Routing " + std::to_string(netlist_db->getNumNets()) + " nets...");
         }
         
         
@@ -330,21 +331,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                 return hpwl_a < hpwl_b;
             });
         
-        // **DEBUG**: Print first and last few nets to verify smallest-first sorting
-        std::cout << "Net ordering (first 5, last 5):" << std::endl;
-        for (int i = 0; i < std::min(5, static_cast<int>(nets_to_route.size())); ++i) {
-            std::cout << "  [" << i << "] " << nets_to_route[i]->getName() 
-                      << " (" << nets_to_route[i]->getAllPins().size() << " pins)" << std::endl;
-        }
-        if (nets_to_route.size() > 10) {
-            std::cout << "  ... (" << (nets_to_route.size() - 10) << " nets in between) ..." << std::endl;
-            for (int i = std::max(0, static_cast<int>(nets_to_route.size()) - 5); i < static_cast<int>(nets_to_route.size()); ++i) {
-                std::cout << "  [" << i << "] " << nets_to_route[i]->getName() 
-                          << " (" << nets_to_route[i]->getAllPins().size() << " pins)" << std::endl;
-            }
-        }
-        
-// PathFinder parameters
+        // PathFinder parameters
         const int max_iterations = 50;  // **TACTICAL VICTORY**: More iterations for alley fighting resolution
         bool solution_found = false;
         
@@ -362,9 +349,12 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         double current_history_increment = config.initial_history_increment;
         
         for (int iter = 0; iter < max_iterations && !solution_found; ++iter) {
-            std::cout << "\n>>> PathFinder Iteration " << iter << " <<<" << std::endl;
-            std::cout << "Current collision penalty: " << current_penalty << std::endl;
-            std::cout << "Current history increment: " << current_history_increment << std::endl;
+            // Record iteration start time
+            auto iter_start = std::chrono::high_resolution_clock::now();
+            
+            ROUTING_LOG("RoutingInterface", ">>> PathFinder Iteration " + std::to_string(iter) + " <<<");
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Current collision penalty: " + std::to_string(current_penalty));
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Current history increment: " + std::to_string(current_history_increment));
             
             // Set collision penalty for this iteration (AGGRESSIVE exponential growth)
             // This creates massive pressure to find alternative routes
@@ -401,9 +391,9 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                     }
                 }
 
-                std::cout << ">>> Selective Mode: Rerouting " << nets_to_reroute.size()
-                          << " / " << nets_to_route.size() << " nets ("
-                          << conflicted_net_ids.size() << " conflicted) <<<" << std::endl;
+                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", ">>> Selective Mode: Rerouting " + std::to_string(nets_to_reroute.size()) +
+                          " / " + std::to_string(nets_to_route.size()) + " nets (" +
+                          std::to_string(conflicted_net_ids.size()) + " conflicted) <<<");
 
                 // **CRITICAL**: Only rip up the conflicting nets
                 // Good nets remain as obstacles in the grid
@@ -442,99 +432,107 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                         return nets_to_route[a]->getAllPins().size() < 
                                nets_to_route[b]->getAllPins().size();
                     });
-                std::cout << "  Iteration 0: Routing in Smallest First order (2-pin networks first)" << std::endl;
+                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Iteration 0: Routing in Smallest First order (2-pin networks first)");
             } else {
                 // **CRITICAL**: Complete shuffle from iteration 1 onwards
                 // This breaks the persistent deadlock where same networks always win/lose
                 std::mt19937 rng(seed);
                 std::shuffle(net_indices.begin(), net_indices.end(), rng);
-                std::cout << "  Iteration " << iter << ": Complete shuffle (seed=" << seed << ")" << std::endl;
+                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Iteration " + std::to_string(iter) + ": Complete shuffle (seed=" + std::to_string(seed) + ")");
             }
             
-            std::cout << "  Routing " << nets_to_route.size() << " nets in randomized order (seed=" << seed << ")" << std::endl;
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Routing " + std::to_string(nets_to_route.size()) + " nets in randomized order (seed=" + std::to_string(seed) + ")");
             
             for (int net_idx : net_indices) {
                 Net* net = nets_to_route[net_idx];
-                RoutingResult result = router.routeNet(net, pin_locations);
+                                RoutingResult result = router.routeNet(net, pin_locations);
+                                
+                                if (!result.success) {
+                                    ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "FAILED NET: " + net->getName() + 
+                                               " - Reason: " + result.error_message);
+                                }
+                                
+                                results.push_back(result);  // Push all results for accurate statistics
+                            }
+                            
+                            // Check for convergence
+                            int conflicts = routing_grid.countConflicts();
+                            double total_wirelength;
+                            int total_vias, routed_count, failed_count;
+                            getRoutingStatistics(results, total_wirelength, total_vias, routed_count, failed_count);
+                            
+                            // Record conflict history for final analysis
+                            conflict_history.push_back(conflicts);
+                            
+                            // **STAGNATION DETECTION**: Check for improvement or stagnation
+                            if (conflicts < last_conflicts) {
+                                // Found improvement - reset stagnation counter
+                                stagnation_count = 0;
+                                ROUTING_LOG("RoutingInterface", "Improvement: " + std::to_string(last_conflicts) + 
+                                           " -> " + std::to_string(conflicts) + " conflicts");
+                            } else {
+                                // No improvement - increment stagnation counter
+                                stagnation_count++;
+                                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Stagnation count: " + std::to_string(stagnation_count) + 
+                                           " (conflicts stuck at " + std::to_string(conflicts) + ")");
+                            }
+                            last_conflicts = conflicts;
+                            
+                            // **BEST SOLUTION TRACKING**: Save if this is the best solution found
+                            router.saveBestSolution(results, iter, conflicts);
+                            
+                            // **EARLY TERMINATION CONDITIONS**
+                            // 1. Perfect solution found
+                            if (conflicts == 0 && routed_count == static_cast<int>(nets_to_route.size())) {
+                                ROUTING_LOG("RoutingInterface", "*** PERFECT SOLUTION FOUND! Early termination. ***");
+                                solution_found = true;
+                                break;
+                            }
+                            
+                            // 2. Stagnation detected - no improvement for too long
+                            if (stagnation_count >= 5) {
+                                ROUTING_LOG("RoutingInterface", ">>> STAGNATION DETECTED: No improvement for " + 
+                                           std::to_string(stagnation_count) + " iterations. Stopping early. <<<");
+                                break;
+                            }
+                            
+                            // 3. Divergence detected - conflicts getting much worse than best
+                            // Allow some divergence but stop if it gets too bad
+                            if (conflicts > router.getMinConflicts() + 50) {
+                                ROUTING_LOG("RoutingInterface", ">>> DIVERGENCE DETECTED: Conflicts (" + std::to_string(conflicts) + 
+                                           ") much worse than best (" + std::to_string(router.getMinConflicts()) + 
+                                           "). Stopping early. <<<");
+                                break;
+                            }
+                            
+                            int segments_attempted = router.getTotalSegmentsAttempted();
+                            int segments_succeeded = router.getTotalSegmentsSucceeded();
+                            int segments_failed = router.getTotalSegmentsFailed();
+                            double segment_success_rate = router.getSegmentSuccessRate();
+                            
+                            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Success: " + std::to_string(routed_count) + "/" + 
+                                       std::to_string(nets_to_route.size()) + " nets, Conflicts: " + std::to_string(conflicts));
+                            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Segments: " + std::to_string(segments_succeeded) + "/" + 
+                                       std::to_string(segments_attempted) + " (" + 
+                                       std::to_string(static_cast<int>(segment_success_rate * 10) / 10.0) + "%)");
+                            
+                            // Check if we have a valid solution (all nets routed, no conflicts)
+                            if (conflicts == 0 && routed_count == static_cast<int>(nets_to_route.size())) {
+                                ROUTING_LOG("RoutingInterface", "*** VALID SOLUTION FOUND! ***");
+                                solution_found = true;
+                            }
                 
-                if (!result.success) {
-                    std::cout << "  FAILED NET: " << net->getName() 
-                              << " - Reason: " << result.error_message << std::endl;
-                }
-                
-                results.push_back(result);  // Push all results for accurate statistics
-            }
-            
-            // Check for convergence
-            int conflicts = routing_grid.countConflicts();
-            double total_wirelength;
-            int total_vias, routed_count, failed_count;
-            getRoutingStatistics(results, total_wirelength, total_vias, routed_count, failed_count);
-            
-            // Record conflict history for final analysis
-            conflict_history.push_back(conflicts);
-            
-            // **STAGNATION DETECTION**: Check for improvement or stagnation
-            if (conflicts < last_conflicts) {
-                // Found improvement - reset stagnation counter
-                stagnation_count = 0;
-                std::cout << "  Improvement: " << last_conflicts << " -> " << conflicts << " conflicts" << std::endl;
-            } else {
-                // No improvement - increment stagnation counter
-                stagnation_count++;
-                std::cout << "  Stagnation count: " << stagnation_count << " (conflicts stuck at " << conflicts << ")" << std::endl;
-            }
-            last_conflicts = conflicts;
-            
-            // **BEST SOLUTION TRACKING**: Save if this is the best solution found
-            router.saveBestSolution(results, iter, conflicts);
-            
-            // **EARLY TERMINATION CONDITIONS**
-            // 1. Perfect solution found
-            if (conflicts == 0 && routed_count == static_cast<int>(nets_to_route.size())) {
-                std::cout << "\n*** PERFECT SOLUTION FOUND! Early termination. ***" << std::endl;
-                solution_found = true;
-                break;
-            }
-            
-            // 2. Stagnation detected - no improvement for too long
-            if (stagnation_count >= 5) {
-                std::cout << "\n>>> STAGNATION DETECTED: No improvement for " << stagnation_count 
-                          << " iterations. Stopping early. <<<" << std::endl;
-                break;
-            }
-            
-            // 3. Divergence detected - conflicts getting much worse than best
-            // Allow some divergence but stop if it gets too bad
-            if (conflicts > router.getMinConflicts() + 50) {
-                std::cout << "\n>>> DIVERGENCE DETECTED: Conflicts (" << conflicts 
-                          << ") much worse than best (" << router.getMinConflicts() 
-                          << "). Stopping early. <<<" << std::endl;
-                break;
-            }
-            
-            int segments_attempted = router.getTotalSegmentsAttempted();
-            int segments_succeeded = router.getTotalSegmentsSucceeded();
-            int segments_failed = router.getTotalSegmentsFailed();
-            double segment_success_rate = router.getSegmentSuccessRate();
-            
-            std::cout << "  Success: " << routed_count << "/" << nets_to_route.size() 
-                      << " nets, Conflicts: " << conflicts << std::endl;
-            std::cout << "  Segments: " << segments_succeeded << "/" << segments_attempted 
-                      << " (" << std::fixed << std::setprecision(1) << segment_success_rate << "%)" << std::endl;
-            
-            // Check if we have a valid solution (all nets routed, no conflicts)
-            if (conflicts == 0 && routed_count == static_cast<int>(nets_to_route.size())) {
-                std::cout << "\n*** VALID SOLUTION FOUND! ***" << std::endl;
-                solution_found = true;
-            }
-            
-            // [MISSING LINK] Congestion History Update Loop
-            // This is the critical missing piece that connects conflict detection to history costs
-            if (conflicts > 0) {
-                std::cout << "  Updating history costs based on " << conflicts << " conflicts" << std::endl;
-                router.updateHistoryCosts(current_history_increment);
-            }
+                            // [MISSING LINK] Congestion History Update Loop
+                            // This is the critical missing piece that connects conflict detection to history costs
+                            if (conflicts > 0) {
+                                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Updating history costs based on " + std::to_string(conflicts) + " conflicts");
+                                router.updateHistoryCosts(current_history_increment);
+                            }
+                            
+                            // Calculate and report iteration time
+                            auto iter_end = std::chrono::high_resolution_clock::now();
+                            auto iter_duration = std::chrono::duration_cast<std::chrono::milliseconds>(iter_end - iter_start).count();
+                            ROUTING_LOG("RoutingInterface", "Iteration " + std::to_string(iter) + " completed in " + std::to_string(iter_duration) + " ms");
             
             // Early termination if no improvement in recent iterations
             // DISABLED: Let PathFinder run through all iterations as intended
@@ -575,7 +573,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         }
         
         // **RESTORE BEST SOLUTION**: Restore the best solution found during iterations
-        std::cout << "\n=== RESTORING BEST SOLUTION ===" << std::endl;
+        ROUTING_LOG("RoutingInterface", "=== RESTORING BEST SOLUTION ===");
         router.restoreBestSolution();
         
         // **INTEGRATED VISUALIZATION**: Export data immediately after restoration
@@ -586,31 +584,32 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         
         
         // **CONFLICT EVOLUTION ANALYSIS**: Report conflict changes over all iterations
-        std::cout << "\n=== CONFLICT EVOLUTION ANALYSIS ===" << std::endl;
-        std::cout << "Total iterations: " << conflict_history.size() << std::endl;
+        ROUTING_LOG("RoutingInterface", "=== CONFLICT EVOLUTION ANALYSIS ===");
+        ROUTING_LOG("RoutingInterface", "Total iterations: " + std::to_string(conflict_history.size()));
         
         if (!conflict_history.empty()) {
-            std::cout << "Initial conflicts: " << conflict_history[0] << std::endl;
-            std::cout << "Final conflicts: " << conflict_history.back() << std::endl;
+            ROUTING_LOG("RoutingInterface", "Initial conflicts: " + std::to_string(conflict_history[0]));
+            ROUTING_LOG("RoutingInterface", "Final conflicts: " + std::to_string(conflict_history.back()));
             
             // Find minimum conflicts and when it occurred
             auto min_it = std::min_element(conflict_history.begin(), conflict_history.end());
             int min_conflicts = *min_it;
             int min_iteration = std::distance(conflict_history.begin(), min_it);
-            std::cout << "Minimum conflicts: " << min_conflicts << " (at iteration " << min_iteration << ")" << std::endl;
+            ROUTING_LOG("RoutingInterface", "Minimum conflicts: " + std::to_string(min_conflicts) + 
+                       " (at iteration " + std::to_string(min_iteration) + ")");
             
             // Calculate conflict reduction
             int total_reduction = conflict_history[0] - conflict_history.back();
             double reduction_percentage = (conflict_history[0] > 0) ? 
                 (static_cast<double>(total_reduction) / conflict_history[0] * 100.0) : 0.0;
-            std::cout << "Total conflict reduction: " << total_reduction 
-                      << " (" << std::fixed << std::setprecision(1) << reduction_percentage << "%)" << std::endl;
+            ROUTING_LOG("RoutingInterface", "Total conflict reduction: " + std::to_string(total_reduction) + 
+                       " (" + std::to_string(static_cast<int>(reduction_percentage * 10) / 10.0) + "%)");
             
             // Show conflict trend at key iterations
-            std::cout << "Conflict trend at key iterations:" << std::endl;
+            ROUTING_LOG("RoutingInterface", "Conflict trend at key iterations:");
             int report_interval = std::max(1, static_cast<int>(conflict_history.size() / 5));
             for (size_t i = 0; i < conflict_history.size(); i += report_interval) {
-                std::cout << "  Iter " << i << ": " << conflict_history[i] << " conflicts" << std::endl;
+                ROUTING_LOG("RoutingInterface", "  Iter " + std::to_string(i) + ": " + std::to_string(conflict_history[i]) + " conflicts");
             }
             // Always show the last iteration
             if (conflict_history.size() % report_interval != 0) {
@@ -746,41 +745,42 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             int segments_failed = router.getTotalSegmentsFailed();
             double segment_success_rate = router.getSegmentSuccessRate();
             
-            std::cout << "\n  **PATHFINDER FINAL RESULTS:**" << std::endl;
+            ROUTING_LOG("RoutingInterface", "**PATHFINDER FINAL RESULTS:**");
             // Get the complete routing registry
             const auto& all_routed = router.getAllRoutedNetworks();
-            std::cout << "    Networks routed: " << routed_count << " (current iteration) / " 
-                      << all_routed.size() << " (total in registry)" << std::endl;
-            std::cout << "    Note: " << (all_routed.size() - routed_count) 
-                      << " networks were 'frozen' after finding conflict-free routes" << std::endl;
+            ROUTING_LOG("RoutingInterface", "  Networks routed: " + std::to_string(routed_count) + 
+                       " (current iteration) / " + std::to_string(all_routed.size()) + " (total in registry)");
+            ROUTING_LOG("RoutingInterface", "  Note: " + std::to_string(all_routed.size() - routed_count) + 
+                       " networks were 'frozen' after finding conflict-free routes");
             
             // Show conflict evolution summary
             if (!conflict_history.empty()) {
                 int initial_conflicts = conflict_history[0];
                 int final_conflicts = conflict_history.back();
                 int min_conflicts = *std::min_element(conflict_history.begin(), conflict_history.end());
-                std::cout << "    Conflicts evolution: " << initial_conflicts << " → " << min_conflicts << " → " << final_conflicts << std::endl;
+                ROUTING_LOG("RoutingInterface", "  Conflicts evolution: " + std::to_string(initial_conflicts) + 
+                           " → " + std::to_string(min_conflicts) + " → " + std::to_string(final_conflicts));
                 
                 // Show conflict trend at key points
                 if (conflict_history.size() > 1) {
-                    std::cout << "    Conflict trend: ";
+                    std::string trend = "  Conflict trend: ";
                     int report_points = std::min(5, static_cast<int>(conflict_history.size()));
                     int step = std::max(1, static_cast<int>(conflict_history.size()) / report_points);
                     for (int i = 0; i < static_cast<int>(conflict_history.size()); i += step) {
-                        std::cout << "Iter" << i << ":" << conflict_history[i];
-                        if (i + step < static_cast<int>(conflict_history.size())) std::cout << " → ";
+                        trend += "Iter" + std::to_string(i) + ":" + std::to_string(conflict_history[i]);
+                        if (i + step < static_cast<int>(conflict_history.size())) trend += " → ";
                     }
-                    std::cout << std::endl;
+                    ROUTING_LOG("RoutingInterface", trend);
                 }
             }
             
-            std::cout << "    Segments attempted: " << segments_attempted << std::endl;
-            std::cout << "    Segments succeeded: " << segments_succeeded << std::endl;
-            std::cout << "    Real success rate: " << std::fixed << std::setprecision(1) 
-                      << segment_success_rate << "%" << std::endl;
-            std::cout << "  Traditional Statistics:" << std::endl;
-            std::cout << "    Total wirelength: " << total_wirelength << std::endl;
-            std::cout << "    Total vias: " << total_vias << std::endl;
+            ROUTING_LOG("RoutingInterface", "  Segments attempted: " + std::to_string(segments_attempted));
+            ROUTING_LOG("RoutingInterface", "  Segments succeeded: " + std::to_string(segments_succeeded));
+            ROUTING_LOG("RoutingInterface", "  Real success rate: " + 
+                       std::to_string(static_cast<int>(segment_success_rate * 10) / 10.0) + "%");
+            ROUTING_LOG("RoutingInterface", "  Traditional Statistics:");
+            ROUTING_LOG("RoutingInterface", "    Total wirelength: " + std::to_string(total_wirelength));
+            ROUTING_LOG("RoutingInterface", "    Total vias: " + std::to_string(total_vias));
         }
     return results;
 }

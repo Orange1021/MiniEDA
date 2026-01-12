@@ -5,6 +5,7 @@
 #include "steiner_tree.h"
 #include "lef_parser.h"
 #include "lef_pin_mapper.h"
+#include "../include/debug_log.h"
 #include <cmath>
 #include <limits>
 #include <algorithm>
@@ -150,9 +151,8 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db,
         pin_points.push_back(driver_pos);
         pin_ptrs.push_back(driver_pin);
         
-        // Debug: Log driver pin position
-        std::cout << "  Driver pin " << driver_pin->getName() 
-                  << " at (" << driver_pos.x << ", " << driver_pos.y << ")" << std::endl;
+        ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "SteinerTree", "Driver pin " + driver_pin->getName() + 
+                   " at (" + std::to_string(driver_pos.x) + ", " + std::to_string(driver_pos.y) + ")");
     }
     
     // Extract load pins with precise coordinates
@@ -161,19 +161,18 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db,
         pin_points.push_back(load_pos);
         pin_ptrs.push_back(load_pin);
         
-        // Debug: Log load pin position
-        std::cout << "  Load pin " << load_pin->getName() 
-                  << " at (" << load_pos.x << ", " << load_pos.y << ")" << std::endl;
+        ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "SteinerTree", "Load pin " + load_pin->getName() + 
+                   " at (" + std::to_string(load_pos.x) + ", " + std::to_string(load_pos.y) + ")");
     }
     
     if (pin_points.size() < 2) {
-        std::cout << "  Warning: Net " << net->getName() 
-                  << " has fewer than 2 pins, skipping MST construction" << std::endl;
+        ROUTING_LOG("SteinerTree", "Warning: Net " + net->getName() + 
+                   " has fewer than 2 pins, skipping MST construction");
         return segments;
     }
     
-    std::cout << "  Building MST for " << pin_points.size() << " pins in net " 
-              << net->getName() << std::endl;
+    ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "SteinerTree", "Building MST for " + std::to_string(pin_points.size()) + 
+               " pins in net " + net->getName());
     
     // Build Minimum Spanning Tree using Prim's algorithm
     size_t n = pin_points.size();
@@ -203,12 +202,10 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db,
                        pin_ptrs[parent[u]], pin_ptrs[u]);
             segments.push_back(seg);
             
-            // Debug: Log segment creation
-            std::cout << "    Segment: " << pin_ptrs[parent[u]]->getName() 
-                      << " (" << pin_points[parent[u]].x << ", " << pin_points[parent[u]].y << ")"
-                      << " -> " << pin_ptrs[u]->getName()
-                      << " (" << pin_points[u].x << ", " << pin_points[u].y << ")"
-                      << " length=" << seg.manhattanLength() << std::endl;
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "SteinerTree", 
+                          "Segment: " + pin_ptrs[parent[u]]->getName() + 
+                          " -> " + pin_ptrs[u]->getName() +
+                          " length=" + std::to_string(seg.manhattanLength()));
         }
         
         // Update distances to remaining vertices
@@ -223,7 +220,7 @@ std::vector<Segment> SteinerTreeBuilder::build(Net* net, PlacerDB* db,
         }
     }
     
-    std::cout << "  MST complete: " << segments.size() << " segments created" << std::endl;
+    ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "SteinerTree", "MST complete: " + std::to_string(segments.size()) + " segments created");
     return segments;
 }
 

@@ -14,7 +14,7 @@ echo -e "${GREEN}=== MiniEDA 批量测试脚本 ===${NC}"
 
 # 编译项目
 echo -e "${YELLOW}编译项目...${NC}"
-make -j$(nproc)
+make BUILD_MODE=release -j$(nproc)
 if [ $? -ne 0 ]; then
     echo -e "${RED}编译失败！${NC}"
     exit 1
@@ -31,11 +31,11 @@ for circuit in "${circuits[@]}"; do
     echo -e "${YELLOW}========================================${NC}"
     
     # 运行完整流程（包含布局和布线），输出保存到日志文件
-    ./build/bin/mini_flow \
+    ./build/release/bin/mini_flow \
         -v benchmarks/ISCAS/Verilog/${circuit}.v \
         -lib benchmarks/NangateOpenCellLibrary_typical.lib \
         -lef benchmarks/NangateOpenCellLibrary.macro.lef \
-        > ${circuit}_output.log 2>&1
+        > ${circuit}.log 2>&1
     
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}$circuit 运行完成！${NC}"

@@ -73,4 +73,52 @@
 // Conditional logging with function name
 #define DEBUG_LOG_FUNC_IF(cond, msg) DEBUG_LOG_IF(cond, __func__, msg)
 
+// ============================================================================
+// Routing-Specific Logging
+// ============================================================================
+
+// Routing log level (separate control for routing verbosity)
+#ifndef ROUTING_LOG_LEVEL
+#define ROUTING_LOG_LEVEL 1  // Default: show only important routing messages
+#endif
+
+#if DEBUG_LOG_ENABLED == 0
+    // Disable all routing logs when debug is disabled
+    #define ROUTING_LOG(tag, msg)
+    #define ROUTING_LOG_IF(cond, tag, msg)
+#else
+    // Routing-specific logging
+    #if ROUTING_LOG_LEVEL >= 2
+        // Show all routing details
+        #define ROUTING_LOG(tag, msg) \
+            do { \
+                std::cout << "[ROUTING] " << msg << std::endl; \
+            } while(0)
+        
+        #define ROUTING_LOG_IF(cond, tag, msg) \
+            do { \
+                if (cond) { \
+                    std::cout << "[ROUTING] " << msg << std::endl; \
+                } \
+            } while(0)
+    #elif ROUTING_LOG_LEVEL >= 1
+        // Show only important routing messages (milestones + iteration time)
+        #define ROUTING_LOG(tag, msg) \
+            do { \
+                std::cout << "[ROUTING] " << msg << std::endl; \
+            } while(0)
+        
+        #define ROUTING_LOG_IF(cond, tag, msg) \
+            do { \
+                if (cond) { \
+                    std::cout << "[ROUTING] " << msg << std::endl; \
+                } \
+            } while(0)
+    #else
+        // Disable all routing logs
+        #define ROUTING_LOG(tag, msg)
+        #define ROUTING_LOG_IF(cond, tag, msg)
+    #endif
+#endif
+
 #endif // MINI_DEBUG_LOG_H

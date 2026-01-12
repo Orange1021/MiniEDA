@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <iostream>
 #include <unordered_set>
+#include "../../lib/include/debug_log.h"
 
 namespace mini {
 
@@ -15,7 +16,8 @@ namespace mini {
 // ============================================================================
 
 RoutingGrid::RoutingGrid() 
-    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(3), history_increment_(0.0) {
+    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(3), 
+      total_grid_size_(0), enable_neighbor_precomputation_(true), history_increment_(0.0) {
     // Grid will be initialized in init() method
 }
 
@@ -41,69 +43,61 @@ void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y) {
     grid_width_ = static_cast<int>(std::ceil(core_width / pitch_x_));
     grid_height_ = static_cast<int>(std::ceil(core_height / pitch_y_));
     
-    // Resize 3D grid: [layer][y][x]
-    grid_.resize(num_layers_);
-    for (int layer = 0; layer < num_layers_; ++layer) {
-        grid_[layer].resize(grid_height_);
-        for (int y = 0; y < grid_height_; ++y) {
-            grid_[layer][y].resize(grid_width_, GridNode(GridState::FREE, 0));
-        }
-    }
+    // Calculate total grid size for flattened arrays
+    total_grid_size_ = grid_width_ * grid_height_ * num_layers_;
     
-    std::cout << "RoutingGrid initialized: " << grid_width_ << "x" << grid_height_ 
-              << " x" << num_layers_ << " layers" << std::endl;
-    std::cout << "Core area: (" << core_area_.x_min << "," << core_area_.y_min 
-              << ") to (" << core_area_.x_max << "," << core_area_.y_max << ")" << std::endl;
-    std::cout << "Pitch: X=" << pitch_x_ << "um, Y=" << pitch_y_ << "um" << std::endl;
+    // Resize flattened grid array
+    grid_flat_.resize(total_grid_size_, GridNode(GridState::FREE, 0));
+    
+    ROUTING_LOG("RoutingGrid", "RoutingGrid initialized: " + std::to_string(grid_width_) + "x" + std::to_string(grid_height_) + 
+               " x" + std::to_string(num_layers_) + " layers");
+    ROUTING_LOG("RoutingGrid", "Core area: (" + std::to_string(core_area_.x_min) + "," + std::to_string(core_area_.y_min) + 
+               ") to (" + std::to_string(core_area_.x_max) + "," + std::to_string(core_area_.y_max) + ")");
+    ROUTING_LOG("RoutingGrid", "Pitch: X=" + std::to_string(pitch_x_) + "um, Y=" + std::to_string(pitch_y_) + "um");
     
     // Initialize congestion tracking
     initializeHistoryCosts();
+    
+    // Precompute neighbors for performance
+    if (enable_neighbor_precomputation_) {
+        precomputeNeighbors();
+    }
 }
 
 void RoutingGrid::initializeHistoryCosts() {
-    // Resize history costs matrix to match grid dimensions
-    history_costs_.resize(num_layers_);
-    for (int layer = 0; layer < num_layers_; ++layer) {
-        history_costs_[layer].resize(grid_height_);
-        for (int y = 0; y < grid_height_; ++y) {
-            history_costs_[layer][y].resize(grid_width_, 1.0);  // Base cost = 1.0
-        }
-    }
+    // Resize flattened history costs array
+    history_costs_flat_.resize(total_grid_size_, 1.0);  // Base cost = 1.0
 }
 
 void RoutingGrid::addHistoryCost(int x, int y, int z, double increment) {
     GridPoint gp(x, y, z);
     if (isValid(gp)) {
-        history_costs_[z][y][x] += increment;
+        history_costs_flat_[toLinearIndex(gp)] += increment;
     }
 }
 
 double RoutingGrid::getHistoryCost(int x, int y, int z) const {
     GridPoint gp(x, y, z);
     if (isValid(gp)) {
-        return history_costs_[z][y][x];
+        return history_costs_flat_[toLinearIndex(gp)];
     }
     return 1e9;  // Out of bounds protection - very expensive
 }
 
 void RoutingGrid::setHistoryCost(int x, int y, int z, double cost) {
     if (!isValid(GridPoint(x, y, z))) return;
-    history_costs_[z][y][x] = cost;
+    history_costs_flat_[toLinearIndex(GridPoint(x, y, z))] = cost;
 }
 
 void RoutingGrid::clearRoutes() {
     // Clear all ROUTED states but preserve history costs
-    for (int z = 0; z < num_layers_; ++z) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].isRouted()) {
-                    grid_[z][y][x].state = GridState::FREE;
-                    grid_[z][y][x].net_id = 0;
-                }
-                // **CRITICAL FIX**: Don't reset PIN net_id - it should persist across iterations
-                // PIN states represent physical pins and should keep their net association
-            }
+    for (int i = 0; i < total_grid_size_; ++i) {
+        if (grid_flat_[i].isRouted()) {
+            grid_flat_[i].state = GridState::FREE;
+            grid_flat_[i].net_id = 0;
         }
+        // **CRITICAL FIX**: Don't reset PIN net_id - it should persist across iterations
+        // PIN states represent physical pins and should keep their net association
     }
 }
 
@@ -111,20 +105,15 @@ void RoutingGrid::ripUpNet(int net_id) {
     // **STABILIZER**: Remove routes for a specific net while preserving others as obstacles
     // This is the key to selective rerouting - good nets become "concrete pillars"
 
-    for (int z = 0; z < num_layers_; ++z) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].isRouted() &&
-                    grid_[z][y][x].net_id == net_id) {
-                    // Clear this specific net's route
-                    grid_[z][y][x].state = GridState::FREE;
-                    grid_[z][y][x].net_id = 0;
+    for (int i = 0; i < total_grid_size_; ++i) {
+        if (grid_flat_[i].isRouted() && grid_flat_[i].net_id == net_id) {
+            // Clear this specific net's route
+            grid_flat_[i].state = GridState::FREE;
+            grid_flat_[i].net_id = 0;
 
-                    // Decrease usage count for this location
-                    if (grid_[z][y][x].usage_count > 0) {
-                        grid_[z][y][x].usage_count--;
-                    }
-                }
+            // Decrease usage count for this location
+            if (grid_flat_[i].usage_count > 0) {
+                grid_flat_[i].usage_count--;
             }
         }
     }
@@ -135,14 +124,10 @@ int RoutingGrid::countConflicts(bool verbose) const {
 
     // Count actual conflicts: grid points used by multiple different nets
     // This is the real PathFinder conflict metric, not self-collision
-    for (int z = 0; z < num_layers_; ++z) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].isConflicted()) {
-                    // This point was used by multiple different nets (true conflict)
-                    conflicts++;
-                }
-            }
+    for (int i = 0; i < total_grid_size_; ++i) {
+        if (grid_flat_[i].isConflicted()) {
+            // This point was used by multiple different nets (true conflict)
+            conflicts++;
         }
     }
 
@@ -153,14 +138,10 @@ std::unordered_set<int> RoutingGrid::getConflictedNetIDs() const {
     std::unordered_set<int> conflicted_nets;
 
     // Find all nets that are involved in conflicts
-    for (int z = 0; z < num_layers_; ++z) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].isConflicted()) {
-                    // This point has conflicts, add the net ID to our set
-                    conflicted_nets.insert(grid_[z][y][x].net_id);
-                }
-            }
+    for (int i = 0; i < total_grid_size_; ++i) {
+        if (grid_flat_[i].isConflicted()) {
+            // This point has conflicts, add the net ID to our set
+            conflicted_nets.insert(grid_flat_[i].net_id);
         }
     }
 
@@ -170,78 +151,90 @@ std::unordered_set<int> RoutingGrid::getConflictedNetIDs() const {
 void RoutingGrid::printConflictLocations(int current_net_id, bool verbose) const {
     int conflict_count = 0;
 
-    for (int z = 0; z < num_layers_; ++z) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                if (grid_[z][y][x].isConflicted()) {
+    for (int i = 0; i < total_grid_size_; ++i) {
+        if (grid_flat_[i].isConflicted()) {
+            // Convert linear index to 3D coordinates
+            int layer = i / (grid_width_ * grid_height_);
+            int remaining = i % (grid_width_ * grid_height_);
+            int y = remaining / grid_width_;
+            int x = remaining % grid_width_;
 
-                    // **CONFLICT DETECTED**: Print detailed information
-                    conflict_count++;
+            // **CONFLICT DETECTED**: Print detailed information
+            conflict_count++;
 
-                    // Always print conflict info (not just verbose mode)
-                    std::cout << "\n>>> CONFLICT #" << conflict_count << " <<<" << std::endl;
-                    std::cout << "  Location: (" << x << ", " << y << ", " << z << ")" << std::endl;
-                    std::cout << "  Usage Count: " << (grid_[z][y][x].usage_count + 1) << std::endl;
+            // Always print conflict info (not just verbose mode)
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                          ">>> CONFLICT #" + std::to_string(conflict_count) + " <<<");
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                          "  Location: (" + std::to_string(x) + ", " + std::to_string(y) + ", " + std::to_string(layer) + ")");
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                          "  Usage Count: " + std::to_string(grid_flat_[i].usage_count + 1));
 
-                    // **CRITICAL**: Show that this is a multi-net conflict
-                    if (grid_[z][y][x].usage_count > 0) {
-                        std::cout << "  >>> MULTI-NET CONFLICT: " << (grid_[z][y][x].usage_count + 1)
-                                  << " nets competing for this location!" << std::endl;
-                    }
+            // **CRITICAL**: Show that this is a multi-net conflict
+            if (grid_flat_[i].usage_count > 0) {
+                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                              "  >>> MULTI-NET CONFLICT: " + std::to_string(grid_flat_[i].usage_count + 1) +
+                              " nets competing for this location!");
+            }
 
-                    if (verbose) {
-                        std::cout << "  (Additional verbose info would follow...)" << std::endl;
-                    }
+            if (verbose) {
+                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                              "  (Additional verbose info would follow...)");
+            }
 
-                    // Check if this is a Pin Access bottleneck
-                    bool below_is_pin = (z > 0 && isValid(GridPoint(x, y, z-1)) &&
-                                       grid_[z-1][y][x].isPin());
-                    std::cout << "  Is Pin Access? " << (below_is_pin ? "YES" : "NO") << std::endl;
-                    
-                    if (below_is_pin) {
-                        // Get the pin's net ID for analysis
-                        int pin_net_id = grid_[z-1][y][x].net_id;
-                        std::cout << "  Pin Net ID: " << pin_net_id << std::endl;
-                        
-                        // Check if the pin net matches the routed net (should be true)
-                        if (pin_net_id != grid_[z][y][x].net_id) {
-                            std::cout << "  WARNING: Pin net ID mismatch!" << std::endl;
-                        }
-                    }
-                    
-                    // Check history cost at this location
-                    double history_cost = getHistoryCost(x, y, z);
-                    std::cout << "  History Cost: " << history_cost << std::endl;
-                    
-                    // Check surrounding cells for congestion analysis
-                    std::cout << "  Surrounding cell states:" << std::endl;
-                    for (int dz = -1; dz <= 1; ++dz) {
-                        for (int dy = -1; dy <= 1; ++dy) {
-                            for (int dx = -1; dx <= 1; ++dx) {
-                                if (dx == 0 && dy == 0 && dz == 0) continue;
-                                
-                                int nx = x + dx, ny = y + dy, nz = z + dz;
-                                if (isValid(GridPoint(nx, ny, nz))) {
-                                    const GridNode& node = grid_[nz][ny][nx];
-                                    std::string state_str;
-                                    switch (node.state) {
-                                        case GridState::FREE: state_str = "FREE"; break;
-                                        case GridState::OBSTACLE: state_str = "OBSTACLE"; break;
-                                        case GridState::ROUTED: state_str = "ROUTED"; break;
-                                        case GridState::PIN: state_str = "PIN"; break;
-                                    }
-                                    std::cout << "    (" << nx << "," << ny << "," << nz << "): " << state_str << std::endl;
-                                }
-                            }
-                        }
-                    }
-                    std::cout << std::endl;
+            // Check if this is a Pin Access bottleneck
+            bool below_is_pin = (layer > 0 && isValid(GridPoint(x, y, layer-1)) &&
+                               grid_flat_[toLinearIndex(GridPoint(x, y, layer-1))].isPin());
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                          "  Is Pin Access? " + std::string(below_is_pin ? "YES" : "NO"));
+            
+            if (below_is_pin) {
+                // Get the pin's net ID for analysis
+                int pin_net_id = grid_flat_[toLinearIndex(GridPoint(x, y, layer-1))].net_id;
+                ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                              "  Pin Net ID: " + std::to_string(pin_net_id));
+                
+                // Check if the pin net matches the routed net (should be true)
+                if (pin_net_id != grid_flat_[i].net_id) {
+                    ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                                  "  WARNING: Pin net ID mismatch!");
                 }
             }
+            
+            // Check history cost at this location
+            double history_cost = getHistoryCost(x, y, layer);
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                          "  History Cost: " + std::to_string(history_cost));
+            
+            // Check surrounding cells for congestion analysis
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                          "  Surrounding cell states:");
+            for (int dz = -1; dz <= 1; ++dz) {
+                for (int dy = -1; dy <= 1; ++dy) {
+                    for (int dx = -1; dx <= 1; ++dx) {
+                        if (dx == 0 && dy == 0 && dz == 0) continue;
+                        
+                        int nx = x + dx, ny = y + dy, nz = layer + dz;
+                        if (isValid(GridPoint(nx, ny, nz))) {
+                            const GridNode& node = grid_flat_[toLinearIndex(GridPoint(nx, ny, nz))];
+                            std::string state_str;
+                            switch (node.state) {
+                                case GridState::FREE: state_str = "FREE"; break;
+                                case GridState::OBSTACLE: state_str = "OBSTACLE"; break;
+                                case GridState::ROUTED: state_str = "ROUTED"; break;
+                                case GridState::PIN: state_str = "PIN"; break;
+                            }
+                            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
+                                          "    (" + std::to_string(nx) + "," + std::to_string(ny) + "," + std::to_string(nz) + "): " + state_str);
+                        }
+                    }
+                }
+            }
+            ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", "");
         }
     }
     
-    std::cout << "Total conflicts found: " << conflict_count << std::endl;
+    ROUTING_LOG("RoutingGrid", "Total conflicts found: " + std::to_string(conflict_count));
     std::cout << "===============================" << std::endl;
 }
 
@@ -256,7 +249,7 @@ double RoutingGrid::calculateMovementCost(const GridPoint& from, const GridPoint
     // Check for collision penalty (short circuit cost)
     double collision_cost = 0.0;
     if (isValid(to)) {
-        const GridNode& node = grid_[to.layer][to.y][to.x];
+        const GridNode& node = grid_flat_[toLinearIndex(to)];
         if (node.isRouted() && node.net_id != current_net_id) {
             // This is a short circuit - add collision penalty
             collision_cost = collision_penalty;
@@ -297,72 +290,139 @@ std::vector<GridPoint> RoutingGrid::getNeighbors(const GridPoint& current, int c
         return neighbors;  // Empty list for invalid points
     }
     
-    int cx = current.x;
-    int cy = current.y;
-    int cz = current.layer;
+    int idx = toLinearIndex(current);
     
-    // Define directions: North, South, West, East
-    // dirs[0] = North (0, +1), dirs[1] = South (0, -1), dirs[2] = West (-1, 0), dirs[3] = East (+1, 0)
-    const int dirs[4][2] = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
-    
-    // === 3-LAYER ROUTING STRATEGY ===
-    // M1 (Layer 0): Access layer - restricted to horizontal (East/West) due to cell obstacles
-    // M2 (Layer 1): Vertical layer - preferred direction North/South for Manhattan routing
-    // M3 (Layer 2): Horizontal layer - preferred direction East/West for long-distance routing
-    
-    // Determine direction range based on layer
-    int start_dir = 0;
-    int end_dir = 4; // Default: try all 4 directions
-    
-    if (cz == 0) {
-        // M1: Only allow horizontal (East/West -> dirs[2], dirs[3])
-        // M1 is heavily blocked by cells, vertical movement is meaningless
-        start_dir = 2;
-        end_dir = 4;
-    } else if (cz == 1) {
-        // M2: Preferred vertical direction (North/South -> dirs[0], dirs[1])
-        // Allow horizontal but with penalty (handled in calculateMovementCost)
-        start_dir = 0;
-        end_dir = 2; // Only North/South for preferred routing
-    } else if (cz == 2) {
-        // M3: Preferred horizontal direction (East/West -> dirs[2], dirs[3])
-        // This is the new horizontal freeway!
-        start_dir = 2;
-        end_dir = 4;
-    }
-    
-    for (int i = start_dir; i < end_dir; ++i) {
-        int nx = cx + dirs[i][0];
-        int ny = cy + dirs[i][1];
-        GridPoint neighbor(nx, ny, cz);
+    if (enable_neighbor_precomputation_) {
+        // Use precomputed neighbors
+        const std::vector<GridPoint>& precomputed = precomputed_neighbors_[idx];
         
-        // Check if planar neighbor is valid with enemy/friend identification
-        if (isValid(neighbor) && isFree(neighbor, current_net_id)) {
-            neighbors.emplace_back(neighbor);
+        // Filter by isFree check (since precomputed neighbors don't consider current_net_id)
+        for (const GridPoint& neighbor : precomputed) {
+            if (isFree(neighbor, current_net_id)) {
+                neighbors.emplace_back(neighbor);
+            }
         }
-    }
-    
-    // === 3. Vertical movement (Via) - 3-LAYER ESCAPE ROUTES ===
-    // Support M1<->M2 and M2<->M3 vias
-    
-    // Try to go up (Up)
-    if (cz + 1 < num_layers_) {
-        GridPoint up_neighbor(cx, cy, cz + 1);
-        // Via requires both current and target to be valid
-        if (isValid(up_neighbor) && isFree(up_neighbor, current_net_id)) {
-            neighbors.emplace_back(up_neighbor);
+    } else {
+        // Legacy mode: compute neighbors on-the-fly
+        int cx = current.x;
+        int cy = current.y;
+        int cz = current.layer;
+        
+        // Define directions: North, South, West, East
+        const int dirs[4][2] = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
+        
+        // Determine direction range based on layer
+        int start_dir = 0;
+        int end_dir = 4;
+        
+        if (cz == 0) {
+            start_dir = 2;
+            end_dir = 4;
+        } else if (cz == 1) {
+            start_dir = 0;
+            end_dir = 2;
+        } else if (cz == 2) {
+            start_dir = 2;
+            end_dir = 4;
         }
-    }
-    
-    // Try to go down (Down)
-    if (cz - 1 >= 0) {
-        GridPoint down_neighbor(cx, cy, cz - 1);
-        if (isValid(down_neighbor) && isFree(down_neighbor, current_net_id)) {
-            neighbors.emplace_back(down_neighbor);
+        
+        for (int i = start_dir; i < end_dir; ++i) {
+            int nx = cx + dirs[i][0];
+            int ny = cy + dirs[i][1];
+            GridPoint neighbor(nx, ny, cz);
+            
+            if (isValid(neighbor) && isFree(neighbor, current_net_id)) {
+                neighbors.emplace_back(neighbor);
+            }
+        }
+        
+        // Try to go up
+        if (cz + 1 < num_layers_) {
+            GridPoint up_neighbor(cx, cy, cz + 1);
+            if (isValid(up_neighbor) && isFree(up_neighbor, current_net_id)) {
+                neighbors.emplace_back(up_neighbor);
+            }
+        }
+        
+        // Try to go down
+        if (cz - 1 >= 0) {
+            GridPoint down_neighbor(cx, cy, cz - 1);
+            if (isValid(down_neighbor) && isFree(down_neighbor, current_net_id)) {
+                neighbors.emplace_back(down_neighbor);
+            }
         }
     }
     
     return neighbors;
+}
+
+void RoutingGrid::precomputeNeighbors() {
+    ROUTING_LOG("RoutingGrid", "Precomputing neighbors for all grid points...");
+    
+    // Resize precomputed neighbors array
+    precomputed_neighbors_.resize(total_grid_size_);
+    
+    // Define directions: North, South, West, East
+    const int dirs[4][2] = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
+    
+    // Precompute neighbors for each grid point
+    for (int z = 0; z < num_layers_; ++z) {
+        for (int y = 0; y < grid_height_; ++y) {
+            for (int x = 0; x < grid_width_; ++x) {
+                GridPoint current(x, y, z);
+                int idx = toLinearIndex(current);
+                
+                // Determine direction range based on layer
+                int start_dir = 0;
+                int end_dir = 4;
+                
+                if (z == 0) {
+                    // M1: Only allow horizontal (East/West)
+                    start_dir = 2;
+                    end_dir = 4;
+                } else if (z == 1) {
+                    // M2: Preferred vertical direction (North/South)
+                    start_dir = 0;
+                    end_dir = 2;
+                } else if (z == 2) {
+                    // M3: Preferred horizontal direction (East/West)
+                    start_dir = 2;
+                    end_dir = 4;
+                }
+                
+                // Add planar neighbors
+                for (int i = start_dir; i < end_dir; ++i) {
+                    int nx = x + dirs[i][0];
+                    int ny = y + dirs[i][1];
+                    GridPoint neighbor(nx, ny, z);
+                    
+                    if (isValid(neighbor)) {
+                        precomputed_neighbors_[idx].push_back(neighbor);
+                    }
+                }
+                
+                // Add vertical neighbors (vias)
+                // Try to go up
+                if (z + 1 < num_layers_) {
+                    GridPoint up_neighbor(x, y, z + 1);
+                    if (isValid(up_neighbor)) {
+                        precomputed_neighbors_[idx].push_back(up_neighbor);
+                    }
+                }
+                
+                // Try to go down
+                if (z - 1 >= 0) {
+                    GridPoint down_neighbor(x, y, z - 1);
+                    if (isValid(down_neighbor)) {
+                        precomputed_neighbors_[idx].push_back(down_neighbor);
+                    }
+                }
+            }
+        }
+    }
+    
+    ROUTING_LOG("RoutingGrid", "Precomputed " + std::to_string(total_grid_size_) + 
+               " grid points with " + std::to_string(precomputed_neighbors_.size()) + " neighbor lists");
 }
 
 void RoutingGrid::addObstacle(const Rect& phys_rect, int layer) {
@@ -384,9 +444,10 @@ void RoutingGrid::addObstacle(const Rect& phys_rect, int layer) {
     // Don't override ROUTED cells with OBSTACLE (improvement)
     for (int y = min_y; y <= max_y; ++y) {
         for (int x = min_x; x <= max_x; ++x) {
-            if (!grid_[layer][y][x].isRouted()) {
-                grid_[layer][y][x].state = GridState::OBSTACLE;
-                grid_[layer][y][x].net_id = 0;
+            int idx = toLinearIndex(GridPoint(x, y, layer));
+            if (!grid_flat_[idx].isRouted()) {
+                grid_flat_[idx].state = GridState::OBSTACLE;
+                grid_flat_[idx].net_id = 0;
             }
         }
     }
@@ -446,21 +507,17 @@ bool RoutingGrid::isValid(const GridPoint& gp) const {
 
 void RoutingGrid::clear() {
     // Reset all cells to FREE
-    for (int layer = 0; layer < num_layers_; ++layer) {
-        for (int y = 0; y < grid_height_; ++y) {
-            for (int x = 0; x < grid_width_; ++x) {
-                grid_[layer][y][x].state = GridState::FREE;
-                grid_[layer][y][x].net_id = 0;
-                grid_[layer][y][x].usage_count = 0;
-            }
-        }
+    for (int i = 0; i < total_grid_size_; ++i) {
+        grid_flat_[i].state = GridState::FREE;
+        grid_flat_[i].net_id = 0;
+        grid_flat_[i].usage_count = 0;
     }
 }
 
 void RoutingGrid::markPath(const std::vector<GridPoint>& path, int net_id) {
     for (const auto& gp : path) {
         if (isValid(gp)) {
-            GridNode& node = grid_[gp.layer][gp.y][gp.x];
+            GridNode& node = grid_flat_[toLinearIndex(gp)];
 
             // Don't override PIN states, but mark everything else as ROUTED
             if (!node.isPin()) {

@@ -140,7 +140,9 @@ void STAEngine::updateArcDelays() {
                         driver_pin, load_pin, input_slew_max, wire_r_per_unit, wire_c_per_unit);
                     
                     // Calculate Elmore delay and slew degradation for min path
-                    auto [interconnect_delay_min, output_slew_min] = delay_model_->calculateInterconnectDelay(
+                    // Note: Min path values are calculated but not used in current implementation
+                    // TODO: Add setOutputSlewMin() to TimingArc to support min slew
+                    [[maybe_unused]] auto [interconnect_delay_min, output_slew_min] = delay_model_->calculateInterconnectDelay(
                         driver_pin, load_pin, input_slew_min, wire_r_per_unit, wire_c_per_unit);
                     
                     // For now, use max delay (both paths share same physical delay)
@@ -282,6 +284,8 @@ void STAEngine::updateArrivalTimes() {
         }
 
         start->setArrivalTime(at_value);
+        start->setArrivalTimeMax(at_value);  // Setup analysis (max path)
+        start->setArrivalTimeMin(at_value);  // Hold analysis (min path)
         start->setSlew(0.0);  // Ideal waveform
 
         if (at_value == 0.0) {
@@ -919,13 +923,24 @@ void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted
         // ==================== Setup Constraint Check ====================
         double lib_setup_time = lookupConstraintTime("setup_rising", 0.1); // Default: 100ps
 
+        // Check if clock and data arrival times are initialized
+        double clk_at_max = clk_node->getArrivalTimeMax();
+        double data_at_max = node->getArrivalTimeMax();
+        
+        if (clk_at_max <= -TimingNode::UNINITIALIZED / 2 || 
+            data_at_max <= -TimingNode::UNINITIALIZED / 2) {
+            std::cout << "  Skipping DFF " << cell->getName() 
+                      << ": Clock or data arrival time not initialized" << std::endl;
+            continue;
+        }
+
         // Calculate Setup Required Time
         // Formula: Required_Time = Clock_Capture_Edge - Setup_Time - Uncertainty
-        double clk_arrival = clk_node->getArrivalTimeMax() * 1e9; // Convert to ns
+        double clk_arrival = clk_at_max * 1e9; // Convert to ns
         double setup_required = clk_arrival + clock_period - lib_setup_time - clock_uncertainty;
 
         // Calculate Setup Slack
-        double data_arrival = node->getArrivalTimeMax() * 1e9; // Convert to ns
+        double data_arrival = data_at_max * 1e9; // Convert to ns
         double setup_slack = setup_required - data_arrival;
 
         // Update node's setup slack
@@ -936,12 +951,21 @@ void STAEngine::checkSetupHoldConstraints(const std::vector<TimingNode*>& sorted
         // ==================== Hold Constraint Check ====================
         double lib_hold_time = lookupConstraintTime("hold_rising", 0.05); // Default: 50ps
 
+        // Check if data arrival time min is initialized
+        double data_at_min = node->getArrivalTimeMin();
+        
+        if (data_at_min >= TimingNode::UNINITIALIZED / 2) {
+            std::cout << "  Skipping DFF " << cell->getName() 
+                      << ": Data arrival time min not initialized" << std::endl;
+            continue;
+        }
+
         // Calculate Hold Required Time
         // Formula: Required_Time = Clock_Launch_Edge + Hold_Time + Uncertainty
         double hold_required = clk_arrival + lib_hold_time + clock_uncertainty;
 
         // Calculate Hold Slack
-        double data_arrival_min = node->getArrivalTimeMin() * 1e9; // Convert to ns
+        double data_arrival_min = data_at_min * 1e9; // Convert to ns
         double hold_slack = data_arrival_min - hold_required;
 
         // Update node's hold slack

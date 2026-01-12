@@ -255,7 +255,7 @@ make clean
 ./run_tests.sh
 ```
 
-After successful compilation, executables will be in the `build/bin/` directory.
+After successful compilation, executables will be in the `build/debug/bin/` or `build/release/bin/` directory.
 
 ## Usage Examples
 
@@ -263,37 +263,30 @@ After successful compilation, executables will be in the `build/bin/` directory.
 
 ```bash
 # Run complete flow (placement + routing + timing)
-./build/bin/mini_flow \
-  -v benchmarks/ISCAS/Verilog/s27.v \
-  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
-  -lef benchmarks/NangateOpenCellLibrary.macro.lef \
-  -clk 5.0
+./build/release/bin/mini_flow \
+  -v benchmarks/ISCAS/Verilog/s27.v
 
 # Run with custom utilization
-./build/bin/mini_flow \
+./build/release/bin/mini_flow \
   -v benchmarks/ISCAS/Verilog/s344.v \
-  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
-  -lef benchmarks/NangateOpenCellLibrary.macro.lef \
   -util 0.7 \
   -clk 8.0
 
 # Run with specific placement algorithm
-MINIEDA_PLACEMENT_ALGO=basic ./build/bin/mini_flow \
-  -v benchmarks/ISCAS/Verilog/s27.v \
-  -lib benchmarks/NangateOpenCellLibrary_typical.lib \
-  -lef benchmarks/NangateOpenCellLibrary.macro.lef
+MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
+  -v benchmarks/ISCAS/Verilog/s27.v
 ```
 
 **Command Line Options:**
 - `-v <file>`: Verilog netlist file (required)
-- `-lib <file>`: Liberty library file (required)
-- `-lef <file>`: LEF physical library file (required)
+- `-lib <file>`: Liberty library file (default: NangateOpenCellLibrary_typical.lib)
+- `-lef <file>`: LEF physical library file (default: NangateOpenCellLibrary.macro.lef)
 - `-clk <period>`: Clock period in ns (default: 10.0)
 - `-uncertainty <value>`: Clock uncertainty in ns (default: 0.05)
 - `-input_delay <value>`: Default input delay in ns (default: 0.0)
 - `-output_delay <value>`: Default output delay in ns (default: 0.0)
 - `-max_transition <value>`: Maximum transition time constraint (default: 0.5)
-- `-util <value>`: Target utilization (default: 0.8)
+- `-util <value>`: Target utilization (default: 0.7)
 - `-rowheight <val>`: Row height in micrometers (default: 1.4)
 - `-help`: Show help message
 
@@ -309,14 +302,14 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/bin/mini_flow \
 
 ```bash
 # Run specific tests
-./build/bin/test_liberty_parser
-./build/bin/test_verilog_parser
-./build/bin/test_netlist_db
-./build/bin/test_timing_graph_build
-./build/bin/test_sta_full
-./build/bin/test_global_placer
-./build/bin/test_poisson_solver
-./build/bin/test_hybrid_placement
+./build/debug/bin/test_liberty_parser
+./build/debug/bin/test_verilog_parser
+./build/debug/bin/test_netlist_db
+./build/debug/bin/test_timing_graph_build
+./build/debug/bin/test_sta_full
+./build/debug/bin/test_global_placer
+./build/debug/bin/test_poisson_solver
+./build/debug/bin/test_hybrid_placement
 ```
 
 **Test Results:**

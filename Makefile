@@ -15,10 +15,10 @@ BUILD_MODE ?= debug
 
 # Debug configuration (default)
 ifeq ($(BUILD_MODE),debug)
-    CXXFLAGS += -g -O0 -DDEBUG
+    CXXFLAGS += -g -O0 -DDEBUG -DDEBUG_LOG_LEVEL=1
     BUILD_DIR := build/debug
 else ifeq ($(BUILD_MODE),release)
-    CXXFLAGS += -O3 -DNDEBUG
+    CXXFLAGS += -O3 -DNDEBUG -DDEBUG_LOG_LEVEL=1
     BUILD_DIR := build/release
 else
     $(error Unknown BUILD_MODE: $(BUILD_MODE). Use 'debug' or 'release')
