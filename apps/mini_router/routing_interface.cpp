@@ -186,7 +186,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         RoutingGrid routing_grid;
         Rect core_area = placer_db->getCoreArea();
         double pitch = config.routing_pitch * config.routing_grid_fine_factor;  // Use configured fine grid
-        routing_grid.init(core_area, pitch, pitch);
+        routing_grid.init(core_area, pitch, pitch, config.num_routing_layers);
         
         if (config.verbose) {
             std::cout << "  Routing grid initialized: " << routing_grid.getGridWidth()

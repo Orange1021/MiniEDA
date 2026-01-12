@@ -1,0 +1,292 @@
+MiniEDA Integrated Flow - Unified Configuration
+================================================
+
+=== Parsing Verilog Netlist ===
+Reading: benchmarks/ISCAS/Verilog/s5378.v
+
+=== Running Placement ===
+  Using Placement Algorithm: hybrid
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+
+>>> DESIGN INFO (UTILIZATION DIAGNOSIS) <<<
+Total Cell Area: 2664.26 μm²
+Core Area: 3890.25 μm²
+Actual Utilization: 0.684855 (68.4855%)
+Target Utilization: 0.7 (70%)
+[GOOD] Reasonable utilization for standard placement.
+==========================================
+
+Exported placement to CSV: visualizations/s5378/00_random.csv
+Visualization saved as: s5378/00_random.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+
+=== Starting Global Placement ===
+Algorithm: hybrid
+Mode: Hybrid Cascade (Warmup + Nesterov)
+  Running Hybrid Cascade Algorithm...
+
+  === Phase 1: Warm-up (Basic Force-Directed) ===
+  Initial HPWL: 142051
+  Force-directed iteration 0 (moved 3043 cells)
+  Warmup iteration 0: HPWL = 75012.2 (ratio: 0.528)
+Exported placement to CSV: visualizations/s5378/warmup_iter_0.csv
+Visualization saved as: s5378/warmup_iter_0.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Warm-up stopped early: HPWL ratio reached 0.280
+  Warm-up completed. Cells are initially spread.
+  HPWL after warm-up: 39708.352
+  [PlacerDB] Synced 3044 cell positions to Netlist.
+  >> Synchronization: Warm-up results committed to Netlist.
+
+  === Phase 2: Refinement (Electrostatic Nesterov) ===
+Iter   0: Movement=369.970, HPWL=40172.3, Lambda=3.00e+01, MaxDensity=24.802
+Exported placement to CSV: visualizations/s5378/placement_iter_0.csv
+[GlobalPlacer] Placement exported to placement_iter_0.csv
+Visualization saved as: s5378/electro_iter_0.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 0 PNG exported
+Iter   1: Movement=703.408, HPWL=41060.5, Lambda=3.00e+01, MaxDensity=23.624
+Iter   2: Movement=1003.210, HPWL=42341.3, Lambda=3.00e+01, MaxDensity=21.388
+Iter   3: Movement=1272.431, HPWL=43981.9, Lambda=3.00e+01, MaxDensity=20.522
+Iter   4: Movement=1513.771, HPWL=45957.2, Lambda=3.00e+01, MaxDensity=19.222
+Iter   5: Movement=1730.926, HPWL=48233.9, Lambda=3.00e+01, MaxDensity=17.465
+Iter   6: Movement=1925.993, HPWL=50790.7, Lambda=3.00e+01, MaxDensity=17.012
+Iter   7: Movement=2098.891, HPWL=53604.2, Lambda=3.00e+01, MaxDensity=18.040
+Iter   8: Movement=2251.702, HPWL=56654.8, Lambda=3.00e+01, MaxDensity=16.727
+Iter   9: Movement=2387.588, HPWL=59923.2, Lambda=3.00e+01, MaxDensity=16.406
+Iter  10: Movement=2506.426, HPWL=63396.4, Lambda=3.15e+01, MaxDensity=16.588
+Iter  20: Movement=3231.187, HPWL=106493.1, Lambda=5.39e+01, MaxDensity=13.367
+Exported placement to CSV: visualizations/s5378/placement_iter_20.csv
+[GlobalPlacer] Placement exported to placement_iter_20.csv
+Visualization saved as: s5378/electro_iter_20.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 20 PNG exported
+Iter  30: Movement=3506.321, HPWL=158114.3, Lambda=9.22e+01, MaxDensity=10.041
+Iter  40: Movement=3529.960, HPWL=211570.5, Lambda=1.58e+02, MaxDensity=10.726
+Exported placement to CSV: visualizations/s5378/placement_iter_40.csv
+[GlobalPlacer] Placement exported to placement_iter_40.csv
+Visualization saved as: s5378/electro_iter_40.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 40 PNG exported
+
+========== [Decisive] 50th Iteration Gradient Balance Diagnosis ==========
+Average Wire Gradient Magnitude (Avg |∇_wire|):     54.185540
+Average Raw Density Gradient Magnitude (Avg |∇_dens_raw|): 0.207372
+Current Lambda (current_lambda):        2.446e+02
+Effective Density Gradient (Lambda * ∇_dens_raw):    50.733039
+Raw Gradient Ratio (∇_wire / ∇_dens_raw):      261.296
+Effective Gradient Ratio (∇_wire / Lambda*∇_dens):   1.068
+[IDEAL] Force balance is good (around 1:1), expect gentle diffusion.
+====================================================
+
+Iter  50: Movement=2774.297, HPWL=256531.8, Lambda=2.70e+02, MaxDensity=48.572
+Iter  60: Movement=2208.054, HPWL=267253.3, Lambda=4.61e+02, MaxDensity=44.224
+Exported placement to CSV: visualizations/s5378/placement_iter_60.csv
+[GlobalPlacer] Placement exported to placement_iter_60.csv
+Visualization saved as: s5378/electro_iter_60.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 60 PNG exported
+Iter  70: Movement=2835.222, HPWL=256699.9, Lambda=7.89e+02, MaxDensity=28.318
+Iter  80: Movement=2673.156, HPWL=243001.2, Lambda=1.35e+03, MaxDensity=17.946
+Exported placement to CSV: visualizations/s5378/placement_iter_80.csv
+[GlobalPlacer] Placement exported to placement_iter_80.csv
+Visualization saved as: s5378/electro_iter_80.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 80 PNG exported
+Iter  90: Movement=2358.048, HPWL=232421.4, Lambda=2.31e+03, MaxDensity=13.751
+Iter 100: Movement=1903.558, HPWL=226083.7, Lambda=3.95e+03, MaxDensity=9.430
+Exported placement to CSV: visualizations/s5378/placement_iter_100.csv
+[GlobalPlacer] Placement exported to placement_iter_100.csv
+Visualization saved as: s5378/electro_iter_100.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 100 PNG exported
+Iter 110: Movement=1633.632, HPWL=227156.1, Lambda=6.75e+03, MaxDensity=5.999
+Iter 120: Movement=1155.293, HPWL=224898.2, Lambda=1.15e+04, MaxDensity=4.599
+Exported placement to CSV: visualizations/s5378/placement_iter_120.csv
+[GlobalPlacer] Placement exported to placement_iter_120.csv
+Visualization saved as: s5378/electro_iter_120.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 120 PNG exported
+Iter 130: Movement=954.065, HPWL=226536.6, Lambda=1.95e+04, MaxDensity=3.681
+Iter 140: Movement=809.238, HPWL=225234.9, Lambda=3.33e+04, MaxDensity=3.401
+Exported placement to CSV: visualizations/s5378/placement_iter_140.csv
+[GlobalPlacer] Placement exported to placement_iter_140.csv
+Visualization saved as: s5378/electro_iter_140.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 140 PNG exported
+Iter 150: Movement=763.942, HPWL=226632.9, Lambda=4.96e+04, MaxDensity=2.406
+Iter 160: Movement=690.201, HPWL=227266.8, Lambda=6.75e+04, MaxDensity=2.236
+Exported placement to CSV: visualizations/s5378/placement_iter_160.csv
+[GlobalPlacer] Placement exported to placement_iter_160.csv
+Visualization saved as: s5378/electro_iter_160.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 160 PNG exported
+Iter 170: Movement=761.619, HPWL=226057.2, Lambda=7.41e+04, MaxDensity=2.412
+Iter 180: Movement=769.353, HPWL=225757.2, Lambda=9.51e+04, MaxDensity=2.056
+Exported placement to CSV: visualizations/s5378/placement_iter_180.csv
+[GlobalPlacer] Placement exported to placement_iter_180.csv
+Visualization saved as: s5378/electro_iter_180.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 180 PNG exported
+Iter 190: Movement=762.661, HPWL=227246.8, Lambda=9.99e+04, MaxDensity=2.815
+Exported placement to CSV: visualizations/s5378/placement_iter_200.csv
+[GlobalPlacer] Placement exported to placement_iter_200.csv
+Visualization saved as: s5378/electro_iter_200.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 200 PNG exported
+
+=== Global Placement Final Statistics ===
+Final HPWL: 225935.7
+Final Max Density: 3.170
+Final Total Overflow: 642.148
+Final Lambda: 9.99e+04
+Total Iterations: 200
+HPWL Improvement: -462.4%
+
+=== Density Grid Statistics ===
+Grid size: 64x64 (4096 bins)
+Target density: 0.7
+Average density: 0.685
+Maximum density: 3.170
+Overcrowded bins: 1973 (48.169%)
+Total overflow: 642.148
+===============================
+
+=== Poisson Solver Statistics ===
+Solution status: SUCCESS
+Maximum potential: 0.020858
+Maximum force magnitude: 0.004810
+Average force magnitude: 0.001109
+=================================
+==========================================
+Density heatmap saved to visualizations/s5378/density_heatmap.png
+  Hybrid strategy completed. Final HPWL: 225935.701121
+Global Placement completed in 66818 ms
+Final HPWL: 225935.701121
+>>> Starting Legalization...
+Algorithm: Abacus (Optimization-based)
+Warning: Row 2 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 3 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 7 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 8 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 11 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 13 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 15 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 16 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 23 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 29 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 31 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 33 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 37 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 39 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 40 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 44 is OVER-UTILIZED! Cells cannot fit.
+  Snapping cells to site grid (width = 0.190000 um)
+  Site alignment completed
+  Final HPWL: 213804.855000
+  Overlap check: No overlaps
+  Final HPWL: 213804.855000
+  Overlap check: No overlaps
+Exported placement to CSV: visualizations/s5378/legalized.csv
+Visualization saved as: s5378/legalized.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+Legalization completed!
+Starting Detailed Placement Optimization...
+  Initial HPWL: 213804.855000
+  Running 3 iterations of detailed reordering...
+  Iteration 1/3
+  Swaps performed: 1345
+  Iteration 2/3
+  Swaps performed: 931
+  Iteration 3/3
+  Swaps performed: 724
+  Final HPWL: 210612.190000
+  HPWL improvement: 1.49%
+  Site alignment: 3044/3044 (100.0%)
+  Final HPWL after detailed placement: 210612.2
+
+=== DETAILED PLACEMENT OVERLAP ANALYSIS ===
+Total cells analyzed: 3044
+  Overlap Analysis Results:
+    Total overlapping pairs: 0
+    Boundary touching pairs: 5856
+    Total overlap area: 0.0000 μm²
+=== End DETAILED PLACEMENT OVERLAP ANALYSIS ===
+
+Exported placement to CSV: visualizations/s5378/detailed.csv
+Visualization saved as: s5378/detailed.png
+  Total cells: 3044 (movable: 3044, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+
+=== Running Routing ===
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+Placing I/O ports...
+  Placed 86 I/O ports
+[ROUTING] RoutingGrid initialized: 650x664 x8 layers
+[ROUTING] Core area: (0.000000,0.000000) to (61.750000,63.000000)
+[ROUTING] Pitch: X=0.095000um, Y=0.095000um
+[ROUTING] Precomputing neighbors for all grid points...
+[ROUTING] Precomputed 3452800 grid points with 3452800 neighbor lists
+Building pin locations map...
+  Built pin locations map with 7614 pins
+[ROUTING] Linear index arrays initialized: 3452800 elements
+Skipping HFN (Clock/Reset): Net CK with 180 pins
+High Fanout Net: n1858gat with 9 pins (hash: -1016180483)
+High Fanout Net: n1603gat with 10 pins (hash: 236226514)
+High Fanout Net: n373gat with 10 pins (hash: -1752234522)
+High Fanout Net: n856gat with 10 pins (hash: -369555502)
+High Fanout Net: n740gat with 9 pins (hash: 1936668080)
+High Fanout Net: n374gat with 9 pins (hash: -1556863773)
+High Fanout Net: n219gat with 10 pins (hash: -213957129)
+High Fanout Net: n111gat with 10 pins (hash: -1727879655)
+High Fanout Net: n2353gat with 8 pins (hash: -290718846)
+High Fanout Net: n855gat with 10 pins (hash: -1035096002)
+High Fanout Net: n851gat with 10 pins (hash: 630126407)
+High Fanout Net: n1725gat with 10 pins (hash: 236773990)
+High Fanout Net: n852gat with 10 pins (hash: -63864091)
+High Fanout Net: n2081gat with 9 pins (hash: 126736592)
+High Fanout Net: n2162gat with 9 pins (hash: -828726655)
+High Fanout Net: n1590gat with 11 pins (hash: 1524472523)
+High Fanout Net: n1788gat with 8 pins (hash: 73005351)
+High Fanout Net: n1884gat with 8 pins (hash: -1967524054)
+High Fanout Net: n1784gat with 9 pins (hash: 2054763016)
+High Fanout Net: n1659gat with 10 pins (hash: 2106985105)
+High Fanout Net: n1658gat with 9 pins (hash: -1987675600)
+High Fanout Net: n1111gat with 10 pins (hash: 917326269)
+High Fanout Net: n1112gat with 10 pins (hash: 944955639)
+High Fanout Net: n741gat with 10 pins (hash: -252342012)
+High Fanout Net: n926gat with 10 pins (hash: -1996209621)
+High Fanout Net: n1123gat with 10 pins (hash: 115055054)
+High Fanout Net: n1007gat with 10 pins (hash: 1893512974)
+High Fanout Net: n1006gat with 10 pins (hash: 520226901)
+High Fanout Net: n455gat with 10 pins (hash: -189004452)
+High Fanout Net: n93gat with 10 pins (hash: 838052896)
+High Fanout Net: n420gat with 10 pins (hash: -412559570)
+High Fanout Net: n419gat with 10 pins (hash: 698043181)
+[ROUTING] >>> PathFinder Iteration 0 <<<

@@ -16,7 +16,7 @@ namespace mini {
 // ============================================================================
 
 RoutingGrid::RoutingGrid() 
-    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(3), 
+    : core_area_(0.0, 0.0, 0.0, 0.0), pitch_x_(0.0), pitch_y_(0.0), grid_width_(0), grid_height_(0), num_layers_(0), 
       total_grid_size_(0), enable_neighbor_precomputation_(true), history_increment_(0.0) {
     // Grid will be initialized in init() method
 }
@@ -25,7 +25,10 @@ RoutingGrid::RoutingGrid()
 // Core Methods
 // ============================================================================
 
-void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y) {
+void RoutingGrid::init(const Rect& core_area, double pitch_x, double pitch_y, int num_layers) {
+    // Set number of layers
+    num_layers_ = num_layers;
+    
     // Store physical parameters
     core_area_ = core_area;
     pitch_x_ = pitch_x;
@@ -312,18 +315,19 @@ std::vector<GridPoint> RoutingGrid::getNeighbors(const GridPoint& current, int c
         const int dirs[4][2] = {{0, 1}, {0, -1}, {-1, 0}, {1, 0}};
         
         // Determine direction range based on layer
+        // Even layers (0, 2, 4, ...): Horizontal (East/West)
+        // Odd layers (1, 3, 5, ...): Vertical (North/South)
         int start_dir = 0;
         int end_dir = 4;
         
-        if (cz == 0) {
+        if (cz % 2 == 0) {
+            // Even layers: Horizontal (East/West)
             start_dir = 2;
             end_dir = 4;
-        } else if (cz == 1) {
+        } else {
+            // Odd layers: Vertical (North/South)
             start_dir = 0;
             end_dir = 2;
-        } else if (cz == 2) {
-            start_dir = 2;
-            end_dir = 4;
         }
         
         for (int i = start_dir; i < end_dir; ++i) {
@@ -373,21 +377,19 @@ void RoutingGrid::precomputeNeighbors() {
                 int idx = toLinearIndex(current);
                 
                 // Determine direction range based on layer
+                // Even layers (0, 2, 4, ...): Horizontal (East/West)
+                // Odd layers (1, 3, 5, ...): Vertical (North/South)
                 int start_dir = 0;
                 int end_dir = 4;
                 
-                if (z == 0) {
-                    // M1: Only allow horizontal (East/West)
+                if (z % 2 == 0) {
+                    // Even layers: Horizontal (East/West)
                     start_dir = 2;
                     end_dir = 4;
-                } else if (z == 1) {
-                    // M2: Preferred vertical direction (North/South)
+                } else {
+                    // Odd layers: Vertical (North/South)
                     start_dir = 0;
                     end_dir = 2;
-                } else if (z == 2) {
-                    // M3: Preferred horizontal direction (East/West)
-                    start_dir = 2;
-                    end_dir = 4;
                 }
                 
                 // Add planar neighbors

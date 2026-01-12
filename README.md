@@ -113,9 +113,9 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 
 ### MiniRouter - Advanced A* Maze Routing
 
-- **3D routing grid** with Layer 0 (M1) and Layer 1 (M2) support
-  - M1: Horizontal routing preferred
-  - M2: Vertical routing preferred
+- **3D routing grid** with configurable layers (3-12 layers supported)
+  - M1/M3/M5... (even layers): Horizontal routing preferred
+  - M2/M4/M6... (odd layers): Vertical routing preferred
 - **PathFinder Iterative Algorithm**: Congestion-aware optimization
 - **Smart Access Point Finder**: 5x5 search radius for pin access flexibility
 - **Exponential Penalty Growth**: History cost decay for conflict resolution
@@ -126,6 +126,7 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - **Cell Obstacles**: On Layer 0 to prevent routing through cells
 - **Star Topology Decomposition**: For multi-pin nets
 - **Pin Location Extraction**: From LEF physical data
+- **Multi-layer Support**: Dynamic layer configuration for different circuit scales
 
 ### MiniFlow - Integrated EDA Flow
 
@@ -133,7 +134,8 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - Coordinate back-annotation for accurate timing analysis
 - HPWL-based wire delay calculation using actual placement
 - Automated visualization with smart label filtering
-- Supports all ISCAS benchmark circuits (s27, s344, s349, s526)
+- Supports ISCAS benchmark circuits (s27, s344, s349, s526, s1196, s1238, s1423, s1488, s1494, s5378)
+- Configurable routing layers (3-12 layers) for different circuit scales
 
 ## Project Structure
 
@@ -228,10 +230,19 @@ MiniEDA/
 │   ├── s27/                      # s27 circuit results
 │   ├── s344/                     # s344 circuit results
 │   ├── s349/                     # s349 circuit results
-│   └── s526/                     # s526 circuit results
+│   ├── s526/                     # s526 circuit results
+│   ├── s1196/                    # s1196 circuit results
+│   ├── s1238/                    # s1238 circuit results
+│   ├── s1423/                    # s1423 circuit results
+│   ├── s1488/                    # s1488 circuit results
+│   └── s1494/                    # s1494 circuit results
+├── log/                           # Log output directory
 ├── txt/                           # Text output directory
 ├── Makefile                       # Build configuration
-└── run_tests.sh                   # Test runner script
+├── simple_circuits.sh            # Simple circuit tests (3-layer)
+├── medium_circuits.sh            # Medium circuit tests (5-layer)
+├── hard_circuits.sh              # Hard circuit tests (8-layer)
+└── extreme_circuits.sh           # Extreme circuit tests (12-layer)
 ```
 
 ## Build and Installation
@@ -288,6 +299,7 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 - `-max_transition <value>`: Maximum transition time constraint (default: 0.5)
 - `-util <value>`: Target utilization (default: 0.7)
 - `-rowheight <val>`: Row height in micrometers (default: 1.4)
+- `-num_layers <count>`: Number of routing layers (default: 3, supports 3-12)
 - `-help`: Show help message
 
 ## Testing
@@ -295,7 +307,17 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 ### Run All Tests
 
 ```bash
-./run_tests.sh
+# Simple circuits (3-layer routing)
+./simple_circuits.sh
+
+# Medium circuits (5-layer routing)
+./medium_circuits.sh
+
+# Hard circuits (8-layer routing)
+./hard_circuits.sh
+
+# Extreme circuits (12-layer routing)
+./extreme_circuits.sh
 ```
 
 ### Individual Tests
@@ -314,12 +336,18 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 
 **Test Results:**
 
-| Circuit | Gates | Nets | Placement | Routing | STA |
-|---------|-------|------|-----------|---------|-----|
-| s27     | 20    | 18   | PASS      | PASS    | PASS |
-| s344    | 197   | 185  | PASS      | PASS    | PASS |
-| s349    | 198   | 186  | PASS      | PASS    | PASS |
-| s526    | 233   | 224  | PASS      | PASS    | PASS |
+| Circuit | Gates | Nets | Layers | Placement | Routing | STA |
+|---------|-------|------|--------|-----------|---------|-----|
+| s27     | 20    | 18   | 3      | PASS      | PASS    | PASS |
+| s344    | 197   | 185  | 3      | PASS      | PASS    | PASS |
+| s349    | 198   | 186  | 3      | PASS      | PASS    | PASS |
+| s526    | 233   | 224  | 3      | PASS      | PASS    | PASS |
+| s1196   | 577   | 510  | 5      | PASS      | PASS    | PASS |
+| s1238   | 556   | 489  | 5      | PASS      | PASS    | PASS |
+| s1423   | 755   | 581  | 5      | PASS      | PASS    | PASS |
+| s1488   | 688   | 638  | 5      | PASS      | PASS    | PASS |
+| s1494   | 682   | 632  | 5      | PASS      | PASS    | PASS |
+| s5378   | 3044  | -    | 8      | PASS      | PASS    | PASS |
 
 ## Technical Features
 
@@ -356,13 +384,14 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 
 #### MiniRouter
 - **A* pathfinding algorithm**: Optimal path search with heuristic
-- **3D routing grid**: (x, y, layer) with layer-specific constraints
-- **Layer-specific routing**: M1 horizontal, M2 vertical
+- **3D routing grid**: (x, y, layer) with configurable layers (3-12)
+- **Layer-specific routing**: Even layers horizontal, odd layers vertical
 - **PathFinder algorithm**: Iterative congestion-aware optimization
 - **Smart access point finder**: 5x5 search radius for pin optimization
 - **Via-aware routing**: Configurable cost models for vias
 - **Cell obstacles**: Prevent routing through cells on Layer 0
 - **Star topology**: Multi-pin net decomposition
+- **Multi-layer visualization**: Support for 3-12 routing layers with color-coded display
 
 ## Project Statistics
 
@@ -379,6 +408,8 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 - **Code Quality**: Professional English comments, maximum compatibility maintained
 - **Memory Management**: Smart pointers for automatic memory management
 - **Debug Logging**: Compile-time controlled debug output with zero overhead in production
+- **Multi-layer Routing**: Support for 3-12 routing layers with automatic layer assignment
+- **Test Scripts**: 4 categorized test suites for different circuit scales
 
 ## Contribution Guidelines
 
@@ -402,6 +433,6 @@ For questions, suggestions, or bug reports, please use GitHub Issues.
 
 ---
 
-**Project Status**: MiniEDA Industrial Suite - Complete EDA Flow with Zero-Conflict Routing
+**Project Status**: MiniEDA Industrial Suite - Complete EDA Flow with Multi-Layer Routing
 
-**Note**: This is an educational project demonstrating core EDA algorithms. The implementation features zero-conflict routing through advanced PathFinder algorithms, smart access point optimization, and comprehensive conflict resolution. The detailed placement implementation features equal-width cell swapping with zero-overlap guarantee and comprehensive overlap analysis. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.
+**Note**: This is an educational project demonstrating core EDA algorithms. The implementation features zero-conflict routing through advanced PathFinder algorithms, smart access point optimization, and comprehensive conflict resolution. The detailed placement implementation features equal-width cell swapping with zero-overlap guarantee and comprehensive overlap analysis. The routing system supports 3-12 configurable layers with automatic layer assignment based on circuit scale. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.

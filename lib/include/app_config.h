@@ -80,6 +80,7 @@ struct AppConfig {
     double decay_factor = 0.9;                               ///< History decay factor for cooling hotspots
     double distance_weight = 2.0;                             ///< Distance weight for pin access scoring
     double history_increment_growth_rate = 0.05;             ///< History increment growth rate per iteration
+    int num_routing_layers = 3;                              ///< Number of routing layers (default: 3)
     
     // ========================================================================
     // [NEW] Industrial-Grade Timing Constraints

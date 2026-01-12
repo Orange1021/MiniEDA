@@ -81,6 +81,9 @@ public:
                 else if (arg == "-wire_cost" && i + 1 < argc) {
                     config.wire_cost = std::stod(argv[++i]);
                 }
+                else if (arg == "-num_layers" && i + 1 < argc) {
+                    config.num_routing_layers = std::stoi(argv[++i]);
+                }
                 
                 // [NEW] Industrial-grade timing constraints
                 else if (arg == "-uncertainty" && i + 1 < argc) {
@@ -215,6 +218,7 @@ Algorithm Parameters:
   -clk <period>          Clock period in nanoseconds (default: 10.0)
   -via_cost <value>      Via penalty cost multiplier (default: 5.0)
   -wire_cost <value>     Wire cost per unit length (default: 1.0)
+  -num_layers <count>     Number of routing layers (default: 3)
 
 Industrial-Grade Timing Constraints:
   -uncertainty <value>   Clock uncertainty/jitter in nanoseconds (default: 0.05)

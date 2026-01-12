@@ -1,0 +1,554 @@
+MiniEDA Integrated Flow - Unified Configuration
+================================================
+
+=== Parsing Verilog Netlist ===
+Reading: benchmarks/ISCAS/Verilog/s1488.v
+
+=== Running Placement ===
+  Using Placement Algorithm: hybrid
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+
+>>> DESIGN INFO (UTILIZATION DIAGNOSIS) <<<
+Total Cell Area: 682.556 μm²
+Core Area: 1009.47 μm²
+Actual Utilization: 0.676153 (67.6153%)
+Target Utilization: 0.7 (70%)
+[GOOD] Reasonable utilization for standard placement.
+==========================================
+
+Exported placement to CSV: visualizations/s1488/00_random.csv
+Visualization saved as: s1488/00_random.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+
+=== Starting Global Placement ===
+Algorithm: hybrid
+Mode: Hybrid Cascade (Warmup + Nesterov)
+  Running Hybrid Cascade Algorithm...
+
+  === Phase 1: Warm-up (Basic Force-Directed) ===
+  Initial HPWL: 15525.2
+  Force-directed iteration 0 (moved 687 cells)
+  Warmup iteration 0: HPWL = 7302.5 (ratio: 0.470)
+Exported placement to CSV: visualizations/s1488/warmup_iter_0.csv
+Visualization saved as: s1488/warmup_iter_0.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Warm-up stopped early: HPWL ratio reached 0.300
+  Warm-up completed. Cells are initially spread.
+  HPWL after warm-up: 4650.187
+  [PlacerDB] Synced 688 cell positions to Netlist.
+  >> Synchronization: Warm-up results committed to Netlist.
+
+  === Phase 2: Refinement (Electrostatic Nesterov) ===
+Iter   0: Movement=42.474, HPWL=4704.9, Lambda=7.77e+00, MaxDensity=31.223
+Exported placement to CSV: visualizations/s1488/placement_iter_0.csv
+[GlobalPlacer] Placement exported to placement_iter_0.csv
+Visualization saved as: s1488/electro_iter_0.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 0 PNG exported
+Iter   1: Movement=80.598, HPWL=4809.4, Lambda=7.77e+00, MaxDensity=30.321
+Iter   2: Movement=114.808, HPWL=4960.9, Lambda=7.77e+00, MaxDensity=28.037
+Iter   3: Movement=145.373, HPWL=5156.4, Lambda=7.77e+00, MaxDensity=24.145
+Iter   4: Movement=172.875, HPWL=5390.9, Lambda=7.77e+00, MaxDensity=21.093
+Iter   5: Movement=197.810, HPWL=5661.3, Lambda=7.77e+00, MaxDensity=20.398
+Iter   6: Movement=220.414, HPWL=5964.4, Lambda=7.77e+00, MaxDensity=19.032
+Iter   7: Movement=240.342, HPWL=6297.7, Lambda=7.77e+00, MaxDensity=20.114
+Iter   8: Movement=257.913, HPWL=6658.2, Lambda=7.77e+00, MaxDensity=20.123
+Iter   9: Movement=273.317, HPWL=7044.1, Lambda=7.77e+00, MaxDensity=19.485
+Iter  10: Movement=286.796, HPWL=7454.5, Lambda=8.16e+00, MaxDensity=20.138
+Iter  20: Movement=366.446, HPWL=12490.9, Lambda=1.39e+01, MaxDensity=16.798
+Exported placement to CSV: visualizations/s1488/placement_iter_20.csv
+[GlobalPlacer] Placement exported to placement_iter_20.csv
+Visualization saved as: s1488/electro_iter_20.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 20 PNG exported
+Iter  30: Movement=396.071, HPWL=18461.0, Lambda=2.39e+01, MaxDensity=12.472
+Iter  40: Movement=402.581, HPWL=24691.5, Lambda=4.08e+01, MaxDensity=11.762
+Exported placement to CSV: visualizations/s1488/placement_iter_40.csv
+[GlobalPlacer] Placement exported to placement_iter_40.csv
+Visualization saved as: s1488/electro_iter_40.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 40 PNG exported
+
+========== [Decisive] 50th Iteration Gradient Balance Diagnosis ==========
+Average Wire Gradient Magnitude (Avg |∇_wire|):     29.156229
+Average Raw Density Gradient Magnitude (Avg |∇_dens_raw|): 0.357334
+Current Lambda (current_lambda):        6.330e+01
+Effective Density Gradient (Lambda * ∇_dens_raw):    22.620091
+Raw Gradient Ratio (∇_wire / ∇_dens_raw):      81.594
+Effective Gradient Ratio (∇_wire / Lambda*∇_dens):   1.289
+[IDEAL] Force balance is good (around 1:1), expect gentle diffusion.
+====================================================
+
+Iter  50: Movement=327.136, HPWL=29649.1, Lambda=6.98e+01, MaxDensity=28.877
+Iter  60: Movement=274.140, HPWL=30834.7, Lambda=1.19e+02, MaxDensity=38.807
+Exported placement to CSV: visualizations/s1488/placement_iter_60.csv
+[GlobalPlacer] Placement exported to placement_iter_60.csv
+Visualization saved as: s1488/electro_iter_60.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 60 PNG exported
+Iter  70: Movement=349.767, HPWL=29787.8, Lambda=2.04e+02, MaxDensity=20.879
+Iter  80: Movement=332.717, HPWL=28235.1, Lambda=3.49e+02, MaxDensity=18.456
+Exported placement to CSV: visualizations/s1488/placement_iter_80.csv
+[GlobalPlacer] Placement exported to placement_iter_80.csv
+Visualization saved as: s1488/electro_iter_80.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 80 PNG exported
+Iter  90: Movement=275.010, HPWL=27029.0, Lambda=5.97e+02, MaxDensity=11.043
+Iter 100: Movement=215.675, HPWL=25974.4, Lambda=1.01e+03, MaxDensity=10.880
+Exported placement to CSV: visualizations/s1488/placement_iter_100.csv
+[GlobalPlacer] Placement exported to placement_iter_100.csv
+Visualization saved as: s1488/electro_iter_100.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 100 PNG exported
+Iter 110: Movement=201.837, HPWL=25103.0, Lambda=1.59e+03, MaxDensity=9.000
+Iter 120: Movement=156.056, HPWL=24148.0, Lambda=2.63e+03, MaxDensity=6.655
+Exported placement to CSV: visualizations/s1488/placement_iter_120.csv
+[GlobalPlacer] Placement exported to placement_iter_120.csv
+Visualization saved as: s1488/electro_iter_120.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 120 PNG exported
+Iter 130: Movement=130.525, HPWL=23656.7, Lambda=4.41e+03, MaxDensity=5.000
+Iter 140: Movement=108.743, HPWL=23200.5, Lambda=6.64e+03, MaxDensity=5.000
+Exported placement to CSV: visualizations/s1488/placement_iter_140.csv
+[GlobalPlacer] Placement exported to placement_iter_140.csv
+Visualization saved as: s1488/electro_iter_140.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 140 PNG exported
+Iter 150: Movement=108.041, HPWL=23466.3, Lambda=9.74e+03, MaxDensity=5.000
+Iter 160: Movement=92.804, HPWL=23120.3, Lambda=1.16e+04, MaxDensity=5.000
+Exported placement to CSV: visualizations/s1488/placement_iter_160.csv
+[GlobalPlacer] Placement exported to placement_iter_160.csv
+Visualization saved as: s1488/electro_iter_160.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 160 PNG exported
+Iter 170: Movement=86.985, HPWL=23193.9, Lambda=1.36e+04, MaxDensity=3.655
+Iter 180: Movement=77.228, HPWL=23119.9, Lambda=1.58e+04, MaxDensity=3.000
+Exported placement to CSV: visualizations/s1488/placement_iter_180.csv
+[GlobalPlacer] Placement exported to placement_iter_180.csv
+Visualization saved as: s1488/electro_iter_180.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 180 PNG exported
+Iter 190: Movement=82.719, HPWL=23310.5, Lambda=1.72e+04, MaxDensity=3.000
+Exported placement to CSV: visualizations/s1488/placement_iter_200.csv
+[GlobalPlacer] Placement exported to placement_iter_200.csv
+Visualization saved as: s1488/electro_iter_200.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+  Global placement iteration 200 PNG exported
+
+=== Global Placement Final Statistics ===
+Final HPWL: 23408.4
+Final Max Density: 3.104
+Final Total Overflow: 830.249
+Final Lambda: 1.72e+04
+Total Iterations: 200
+HPWL Improvement: -397.5%
+
+=== Density Grid Statistics ===
+Grid size: 64x64 (4096 bins)
+Target density: 0.7
+Average density: 0.676
+Maximum density: 3.104
+Overcrowded bins: 2045 (49.927%)
+Total overflow: 830.249
+===============================
+
+=== Poisson Solver Statistics ===
+Solution status: SUCCESS
+Maximum potential: 0.059601
+Maximum force magnitude: 0.025368
+Average force magnitude: 0.004709
+=================================
+==========================================
+Density heatmap saved to visualizations/s1488/density_heatmap.png
+  Hybrid strategy completed. Final HPWL: 23408.414818
+Global Placement completed in 27356 ms
+Final HPWL: 23408.414818
+>>> Starting Legalization...
+Algorithm: Abacus (Optimization-based)
+Warning: Row 0 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 4 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 5 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 9 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 10 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 12 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 13 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 14 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 15 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 20 is OVER-UTILIZED! Cells cannot fit.
+  Snapping cells to site grid (width = 0.190000 um)
+  Site alignment completed
+  Final HPWL: 21860.385000
+  Overlap check: No overlaps
+  Final HPWL: 21860.385000
+  Overlap check: No overlaps
+Exported placement to CSV: visualizations/s1488/legalized.csv
+Visualization saved as: s1488/legalized.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+Legalization completed!
+Starting Detailed Placement Optimization...
+  Initial HPWL: 21860.385000
+  Running 3 iterations of detailed reordering...
+  Iteration 1/3
+  Swaps performed: 588
+  Iteration 2/3
+  Swaps performed: 488
+  Iteration 3/3
+  Swaps performed: 409
+  Final HPWL: 19535.165000
+  HPWL improvement: 10.64%
+  Site alignment: 688/688 (100.0%)
+  Final HPWL after detailed placement: 19535.2
+
+=== DETAILED PLACEMENT OVERLAP ANALYSIS ===
+Total cells analyzed: 688
+  Overlap Analysis Results:
+    Total overlapping pairs: 0
+    Boundary touching pairs: 1323
+    Total overlap area: 0.0000 μm²
+=== End DETAILED PLACEMENT OVERLAP ANALYSIS ===
+
+Exported placement to CSV: visualizations/s1488/detailed.csv
+Visualization saved as: s1488/detailed.png
+  Total cells: 688 (movable: 688, fixed: 0)
+  Cell labels: Enabled (cell count <= 1000)
+
+=== Running Routing ===
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+Placing I/O ports...
+  Placed 29 I/O ports
+[ROUTING] RoutingGrid initialized: 330x339 x5 layers
+[ROUTING] Core area: (0.000000,0.000000) to (31.350000,32.200000)
+[ROUTING] Pitch: X=0.095000um, Y=0.095000um
+[ROUTING] Precomputing neighbors for all grid points...
+[ROUTING] Precomputed 559350 grid points with 559350 neighbor lists
+Building pin locations map...
+  Built pin locations map with 2087 pins
+[ROUTING] Linear index arrays initialized: 559350 elements
+High Fanout Net: v6 with 8 pins (hash: 86662998)
+High Fanout Net: v3 with 10 pins (hash: -1113954438)
+High Fanout Net: v2 with 14 pins (hash: -157026242)
+High Fanout Net: v0 with 10 pins (hash: -1720094861)
+Skipping HFN (Clock/Reset): Net v12 with 28 pins
+Skipping HFN (Clock/Reset): Net v11 with 36 pins
+Skipping HFN (Clock/Reset): Net v10 with 36 pins
+Skipping HFN (Clock/Reset): Net v9 with 56 pins
+Skipping HFN (Clock/Reset): Net v8 with 49 pins
+Skipping HFN (Clock/Reset): Net v7 with 26 pins
+High Fanout Net: v2E with 12 pins (hash: -1991720359)
+High Fanout Net: v3E with 8 pins (hash: -1713837492)
+High Fanout Net: v6E with 10 pins (hash: -286382537)
+Skipping HFN (Clock/Reset): Net v7E with 36 pins
+Skipping HFN (Clock/Reset): Net v8E with 54 pins
+Skipping HFN (Clock/Reset): Net v9E with 37 pins
+Skipping HFN (Clock/Reset): Net v10E with 46 pins
+Skipping HFN (Clock/Reset): Net v11E with 43 pins
+Skipping HFN (Clock/Reset): Net v12E with 54 pins
+High Fanout Net: C129DE with 8 pins (hash: -321342109)
+High Fanout Net: C124DE with 13 pins (hash: 2039549434)
+High Fanout Net: C108DE with 8 pins (hash: 671852175)
+Skipping HFN (Clock/Reset): Net C83DE with 18 pins
+High Fanout Net: C165DE with 10 pins (hash: 1116762943)
+High Fanout Net: C220DE with 8 pins (hash: 1710440127)
+High Fanout Net: C30DE with 10 pins (hash: -1675845928)
+Skipping HFN (Clock/Reset): Net C144DE with 20 pins
+Skipping HFN (Clock/Reset): Net C138DE with 19 pins
+High Fanout Net: C90DE with 13 pins (hash: -1665596852)
+High Fanout Net: C49DE with 8 pins (hash: -893884990)
+[ROUTING] >>> PathFinder Iteration 0 <<<
+[ROUTING] Improvement: 2147483647 -> 784 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 784 (Saving at iteration 0) <<<
+[ROUTING] Updating History Costs with increment: 1.000000
+[ROUTING] Applied decay to 0 congested points
+[ROUTING] Applied penalties to 3484 congested points
+[ROUTING] Iteration 0 completed in 39769 ms
+[ROUTING] >>> PathFinder Iteration 1 <<<
+[ROUTING] Improvement: 784 -> 464 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 464 (Saving at iteration 1) <<<
+[ROUTING] Updating History Costs with increment: 1.000000
+[ROUTING] Applied decay to 793 congested points
+[ROUTING] Applied penalties to 68770 congested points
+[ROUTING] Iteration 1 completed in 24484 ms
+[ROUTING] >>> PathFinder Iteration 2 <<<
+[ROUTING] Improvement: 464 -> 344 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 344 (Saving at iteration 2) <<<
+[ROUTING] Updating History Costs with increment: 1.050000
+[ROUTING] Applied decay to 16117 congested points
+[ROUTING] Applied penalties to 45537 congested points
+[ROUTING] Iteration 2 completed in 21135 ms
+[ROUTING] >>> PathFinder Iteration 3 <<<
+[ROUTING] Improvement: 344 -> 179 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 179 (Saving at iteration 3) <<<
+[ROUTING] Updating History Costs with increment: 1.100000
+[ROUTING] Applied decay to 21213 congested points
+[ROUTING] Applied penalties to 39572 congested points
+[ROUTING] Iteration 3 completed in 11894 ms
+[ROUTING] >>> PathFinder Iteration 4 <<<
+[ROUTING] Improvement: 179 -> 77 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 77 (Saving at iteration 4) <<<
+[ROUTING] Updating History Costs with increment: 1.150000
+[ROUTING] Applied decay to 16107 congested points
+[ROUTING] Applied penalties to 24429 congested points
+[ROUTING] Iteration 4 completed in 7622 ms
+[ROUTING] >>> PathFinder Iteration 5 <<<
+[ROUTING] Improvement: 77 -> 31 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 31 (Saving at iteration 5) <<<
+[ROUTING] Updating History Costs with increment: 1.200000
+[ROUTING] Applied decay to 9853 congested points
+[ROUTING] Applied penalties to 15239 congested points
+[ROUTING] Iteration 5 completed in 4663 ms
+[ROUTING] >>> PathFinder Iteration 6 <<<
+[ROUTING] Improvement: 31 -> 18 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 18 (Saving at iteration 6) <<<
+[ROUTING] Updating History Costs with increment: 1.250000
+[ROUTING] Applied decay to 8389 congested points
+[ROUTING] Applied penalties to 11843 congested points
+[ROUTING] Iteration 6 completed in 4016 ms
+[ROUTING] >>> PathFinder Iteration 7 <<<
+[ROUTING] Improvement: 18 -> 9 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 9 (Saving at iteration 7) <<<
+[ROUTING] Updating History Costs with increment: 1.300000
+[ROUTING] Applied decay to 5013 congested points
+[ROUTING] Applied penalties to 8044 congested points
+[ROUTING] Iteration 7 completed in 2743 ms
+[ROUTING] >>> PathFinder Iteration 8 <<<
+[ROUTING] Improvement: 9 -> 3 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 3 (Saving at iteration 8) <<<
+[ROUTING] Updating History Costs with increment: 1.350000
+[ROUTING] Applied decay to 2955 congested points
+[ROUTING] Applied penalties to 4496 congested points
+[ROUTING] Iteration 8 completed in 1593 ms
+[ROUTING] >>> PathFinder Iteration 9 <<<
+[ROUTING] Improvement: 3 -> 1 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 1 (Saving at iteration 9) <<<
+[ROUTING] Updating History Costs with increment: 1.400000
+[ROUTING] Applied decay to 2262 congested points
+[ROUTING] Applied penalties to 2745 congested points
+[ROUTING] Iteration 9 completed in 902 ms
+[ROUTING] >>> PathFinder Iteration 10 <<<
+[ROUTING] Updating History Costs with increment: 1.450000
+[ROUTING] Applied decay to 581 congested points
+[ROUTING] Applied penalties to 817 congested points
+[ROUTING] Iteration 10 completed in 206 ms
+[ROUTING] >>> PathFinder Iteration 11 <<<
+[ROUTING] Improvement: 1 -> 0 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 0 (Saving at iteration 11) <<<
+[ROUTING] *** PERFECT SOLUTION FOUND! Early termination. ***
+[ROUTING] === RESTORING BEST SOLUTION ===
+[ROUTING] Restoring best solution from iteration 11 with 0 conflicts...
+[ROUTING] Best solution restored successfully! Grid now has 0 conflicts
+Exported 638 nets, 218806 segments to visualizations/s1488/post_routing.txt
+[ROUTING] === CONFLICT EVOLUTION ANALYSIS ===
+[ROUTING] Total iterations: 12
+[ROUTING] Initial conflicts: 784
+[ROUTING] Final conflicts: 0
+[ROUTING] Minimum conflicts: 0 (at iteration 11)
+[ROUTING] Total conflict reduction: 784 (100.000000%)
+[ROUTING] Conflict trend at key iterations:
+[ROUTING]   Iter 0: 784 conflicts
+[ROUTING]   Iter 2: 344 conflicts
+[ROUTING]   Iter 4: 77 conflicts
+[ROUTING]   Iter 6: 18 conflicts
+[ROUTING]   Iter 8: 3 conflicts
+[ROUTING]   Iter 10: 1 conflicts
+=====================================
+[ROUTING] **PATHFINDER FINAL RESULTS:**
+[ROUTING]   Networks routed: 1 (current iteration) / 638 (total in registry)
+[ROUTING]   Note: 637 networks were 'frozen' after finding conflict-free routes
+[ROUTING]   Conflicts evolution: 784 → 0 → 0
+[ROUTING]   Conflict trend: Iter0:784 → Iter2:344 → Iter4:77 → Iter6:18 → Iter8:3 → Iter10:1
+[ROUTING]   Segments attempted: 2505
+[ROUTING]   Segments succeeded: 2505
+[ROUTING]   Real success rate: 100.000000%
+[ROUTING]   Traditional Statistics:
+[ROUTING]     Total wirelength: 898.000000
+[ROUTING]     Total vias: 108
+Reading data file: s1488/post_routing.txt
+  Processed 100000 lines...
+  Processed 200000 lines...
+Loaded 688 cells, 218806 segments from 638 networks
+Creating visualization...
+Drawing 688 cells...
+Drawing 218806 segments...
+Drawing 6882 vias...
+Saving visualization to: s1488/post_routing.png
+Visualization saved successfully!
+File size: s1488/post_routing.png
+
+  Routing completed:
+    Successfully routed: 1 nets
+    Failed to route: 0 nets
+    Total wirelength: 898.0000
+    Total vias: 108
+
+=== Back-annotating placement coordinates ===
+  Synced coordinates for 688 cells
+
+=== Running Post-Routing STA ===
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+  Pre-allocated space for 2087 nodes.
+Step 1: Creating timing nodes for all pins...
+  Created 2087 timing nodes.
+Step 2: Building cell arcs...
+  Created 103 cell arcs.
+    Liberty-based arcs: 103
+  Created 103 timing arcs (including net arcs).
+Step 3: Building net arcs...
+  Created 1187 net arcs.
+  Total arcs: 1290
+  Created clock: main_clk (period: 10.0000 ns, source: CK)
+
+==========================================
+STA Engine: Running Analysis
+==========================================
+
+[Step 0] Resetting timing data...
+  Reset 2087 nodes.
+
+[Step 1] Updating arc delays...
+  Net arcs: 1187
+  Cell arcs: 103
+  Updated 1290 arcs.
+
+[Step 2] Propagating Arrival Times (Forward)...
+  Topological order length: 2087
+  Start points: 16
+    Set AT of VDD/Y = 0.0
+    Set AT of CK/Y = 0.0
+    Set AT of CLR/Y = 0.0
+    Set AT of v6/Y = 0.0
+    Set AT of v5/Y = 0.0
+    Set AT of v4/Y = 0.0
+    Set AT of v3/Y = 0.0
+    Set AT of v2/Y = 0.0
+    Set AT of v1/Y = 0.0
+    Set AT of v0/Y = 0.0
+    Set AT of DFF_0/Q = 0.0
+    Set AT of DFF_1/Q = 0.0
+    Set AT of DFF_2/Q = 0.0
+    Set AT of DFF_3/Q = 0.0
+    Set AT of DFF_4/Q = 0.0
+    Set AT of DFF_5/Q = 0.0
+    Propagated AT of OR2_21/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0500ps, SlewMin=0.0500ps]
+    Propagated AT of OR2_17/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0500ps, SlewMin=0.0500ps]
+    Propagated AT of OR2_4/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0500ps, SlewMin=0.0500ps]
+    Propagated AT of AND3_49/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0500ps, SlewMin=0.0500ps]
+    Propagated AT of AND4_14/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0500ps, SlewMin=0.0500ps]
+  Updated AT (Setup) for 116 nodes.
+  Updated AT (Hold) for 116 nodes.
+
+[Step 3] Propagating Required Times (Backward)...
+  End points: 31
+    Set RAT of v13_D_20/A = 10.0000 ns
+    Set RAT of v13_D_21/A = 10.0000 ns
+    Set RAT of v13_D_16/A = 10.0000 ns
+    Set RAT of v13_D_22/A = 10.0000 ns
+    Set RAT of v13_D_19/A = 10.0000 ns
+    Set RAT of v13_D_18/A = 10.0000 ns
+    Set RAT of v13_D_11/A = 10.0000 ns
+    Set RAT of v13_D_23/A = 10.0000 ns
+    Set RAT of v13_D_6/A = 10.0000 ns
+    Set RAT of v13_D_15/A = 10.0000 ns
+    Set RAT of v13_D_9/A = 10.0000 ns
+    Set RAT of v13_D_10/A = 10.0000 ns
+    Set RAT of v13_D_8/A = 10.0000 ns
+    Set RAT of v13_D_24/A = 10.0000 ns
+    Set RAT of v13_D_14/A = 10.0000 ns
+    Set RAT of v13_D_7/A = 10.0000 ns
+    Set RAT of v13_D_17/A = 10.0000 ns
+    Set RAT of v13_D_12/A = 10.0000 ns
+    Set RAT of v13_D_13/A = 10.0000 ns
+    Set RAT of DFF_0/CK = 10.0000 ns
+    Set RAT of DFF_0/D = 10.0000 ns
+    Set RAT of DFF_1/CK = 10.0000 ns
+    Set RAT of DFF_1/D = 10.0000 ns
+    Set RAT of DFF_2/CK = 10.0000 ns
+    Set RAT of DFF_2/D = 10.0000 ns
+    Set RAT of DFF_3/CK = 10.0000 ns
+    Set RAT of DFF_3/D = 10.0000 ns
+    Set RAT of DFF_4/CK = 10.0000 ns
+    Set RAT of DFF_4/D = 10.0000 ns
+    Set RAT of DFF_5/CK = 10.0000 ns
+    Set RAT of DFF_5/D = 10.0000 ns
+
+[Step 3.5] Checking Setup/Hold Constraints with Liberty Lookup Tables...
+  Skipping DFF DFF_5: Clock or data arrival time not initialized
+  Skipping DFF DFF_4: Clock or data arrival time not initialized
+  Skipping DFF DFF_3: Clock or data arrival time not initialized
+  Skipping DFF DFF_2: Clock or data arrival time not initialized
+  Skipping DFF DFF_1: Clock or data arrival time not initialized
+  Skipping DFF DFF_0: Clock or data arrival time not initialized
+  Checked 0 DFF constraints
+  Setup violations: 0
+  Hold violations: 0
+  Note: No DFF endpoints found for constraint checking
+    Propagated RAT of CK/Y = 10.0000 ns
+    Propagated RAT of NOT_53/Y = 10.0000 ns
+    Propagated RAT of NOT_53/A = 10.0000 ns
+    Propagated RAT of NOT_52/Y = 10.0000 ns
+    Propagated RAT of NOT_52/A = 10.0000 ns
+  Updated RAT for 96 nodes.
+
+[Step 4] Calculating Slacks...
+  Slack distribution:
+    Positive (> 0): 7 nodes
+    Zero (= 0):       0 nodes (critical path)
+    Negative (< 0):  0 nodes (timing violations)
+
+==========================================
+STA Analysis Complete!
+==========================================
+
+========== Timing Summary ==========
+Clock Period: 10.0000 ns
+
+Setup Analysis (Max Path - Signal Too Slow):
+  WNS (Worst Negative Slack): 0.0000 ns
+  TNS (Total Negative Slack): 0.0000 ns
+  Violation Count: 0 nodes
+
+Hold Analysis (Min Path - Signal Too Fast):
+  WNS (Worst Negative Slack): 0.0000 ns
+  TNS (Total Negative Slack): 0.0000 ns
+  Violation Count: 0 nodes
+=====================================
+
+=========================================
+
+Integrated Flow Completed!
+Total runtime: 155339 ms
+Output directory: visualizations
+Run ID: s1488
+=========================================
+

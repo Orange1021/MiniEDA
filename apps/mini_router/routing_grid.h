@@ -205,7 +205,7 @@ public:
     RoutingGrid();
 
     // Core Methods
-    void init(const Rect& core_area, double pitch_x, double pitch_y);
+    void init(const Rect& core_area, double pitch_x, double pitch_y, int num_layers = 3);
     GridPoint physToGrid(double x, double y, int layer) const;
     std::vector<GridPoint> getNeighbors(const GridPoint& current, int current_net_id = 0) const;
     void addObstacle(const Rect& phys_rect, int layer);
