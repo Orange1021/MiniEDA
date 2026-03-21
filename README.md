@@ -203,26 +203,24 @@ MiniEDA/
 │       ├── timing_graph.cpp/h    # Timing graph
 │       ├── timing_path.cpp/h     # Timing paths
 │       └── timing_report.cpp/h   # Timing report
-├── test/                          # Test programs
-│   ├── test_density_grid.cpp     # Density grid tests
-│   ├── test_global_placer.cpp   # Global placement tests
-│   ├── test_hybrid_placement.cpp # Hybrid placement tests
-│   ├── test_liberty.cpp         # Liberty library tests
-│   ├── test_liberty_parser.cpp   # Liberty parser tests
-│   ├── test_netlist_db.cpp       # Netlist database tests
-│   ├── test_poisson_solver.cpp   # Poisson solver tests
-│   ├── test_sta_debug.cpp       # STA debug tests
-│   ├── test_sta_full.cpp         # Complete STA tests
-│   ├── test_strict_mode.v       # Strict mode test
-│   ├── test_timing_graph_build.cpp # Timing graph tests
-│   ├── test_verilog_parser.cpp   # Verilog parser tests
-│   └── test_repaired_features.cpp # Feature tests
+├── tests/                         # GoogleTest unit/integration tests
+│   ├── netlist_db_test.cpp       # NetlistDB tests
+│   ├── verilog_parser_test.cpp   # Verilog parser tests
+│   ├── liberty_delay_model_test.cpp # Liberty + delay model tests
+│   ├── timing_graph_sta_test.cpp # Timing graph + STA tests
+│   ├── routing_test.cpp          # RoutingGrid + MazeRouter tests
+│   ├── placement_test.cpp        # Density/Poisson/Legalizer tests
+│   ├── lef_mapper_test.cpp       # LEF parser + mapper tests
+│   └── mini_flow_smoke_test.cpp  # End-to-end mini_flow smoke test (s27)
 ├── benchmarks/                    # Test benchmarks
 │   └── ISCAS/                     # ISCAS standard test suite
 │       └── Verilog/               # Verilog circuits
-├── build/                         # Build output
-│   ├── bin/                       # Executables
-│   └── lib/                       # Object files
+├── build/                         # Build output (CMake presets)
+│   └── cmake/
+│       ├── debug/                 # Debug preset output
+│       ├── release/               # Release preset output
+│       ├── asan/                  # ASan/UBSan preset output
+│       └── test/                  # GoogleTest preset output
 ├── visualizations/                # Generated visualizations
 │   ├── plot_placement.py         # Placement visualization
 │   ├── plot_routing.py          # Routing visualization
@@ -238,7 +236,8 @@ MiniEDA/
 │   └── s1494/                    # s1494 circuit results
 ├── log/                           # Log output directory
 ├── txt/                           # Text output directory
-├── Makefile                       # Build configuration
+├── CMakeLists.txt                 # Build configuration (CMake)
+├── CMakePresets.json              # Standard debug/release/asan/test presets
 ├── simple_circuits.sh            # Simple circuit tests (3-layer)
 ├── medium_circuits.sh            # Medium circuit tests (5-layer)
 ├── hard_circuits.sh              # Hard circuit tests (8-layer)
@@ -250,23 +249,47 @@ MiniEDA/
 ### Prerequisites
 
 - C++17 compatible compiler (g++ 7.0 or higher recommended)
-- GNU Make
+- CMake (3.16 or higher recommended)
 - Python 3 with matplotlib (for visualization)
+- Internet access for first-time GoogleTest fetch (only when `MINIEDA_ENABLE_TESTING=ON`)
 
 ### Build Steps
 
 ```bash
-# Build all components
-make
+# Release build
+cmake --preset release
+cmake --build --preset release -j$(nproc)
+
+# Debug build with sanitizer (ASan + UBSan)
+cmake --preset asan
+cmake --build --preset asan -j$(nproc)
+
+# Debug build with GoogleTest unit tests
+cmake --preset test
+cmake --build --preset test -j$(nproc)
+ctest --test-dir build/cmake/test --output-on-failure
 
 # Clean build files
-make clean
+rm -rf build/cmake
 
-# Run tests
-./run_tests.sh
+# Run regression by circuit scale
+./simple_circuits.sh   # small circuits, 3 routing layers
+./medium_circuits.sh   # medium circuits, 5 routing layers
+./hard_circuits.sh     # large circuits, 8 routing layers
+./extreme_circuits.sh  # very large circuits, 12 routing layers
 ```
 
-After successful compilation, executables will be in the `build/debug/bin/` or `build/release/bin/` directory.
+If LeakSanitizer reports ptrace-related errors in instrumented environments, run with `ASAN_OPTIONS=detect_leaks=0`.
+
+After successful compilation, executables will be in the `build/cmake/debug/bin/` or `build/cmake/release/bin/` directory.
+
+### CI
+
+GitHub Actions workflow is provided at `.github/workflows/ci.yml`.
+It runs:
+- GoogleTest unit tests (`cmake --preset test` + `ctest`)
+- Release build + smoke test (`benchmarks/s27.v`)
+- ASan/UBSan build + runtime check (`ASAN_OPTIONS=detect_leaks=0`)
 
 ## Usage Examples
 
@@ -274,17 +297,17 @@ After successful compilation, executables will be in the `build/debug/bin/` or `
 
 ```bash
 # Run complete flow (placement + routing + timing)
-./build/release/bin/mini_flow \
+./build/cmake/release/bin/mini_flow \
   -v benchmarks/ISCAS/Verilog/s27.v
 
 # Run with custom utilization
-./build/release/bin/mini_flow \
+./build/cmake/release/bin/mini_flow \
   -v benchmarks/ISCAS/Verilog/s344.v \
   -util 0.7 \
   -clk 8.0
 
 # Run with specific placement algorithm
-MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
+MINIEDA_PLACEMENT_ALGO=basic ./build/cmake/release/bin/mini_flow \
   -v benchmarks/ISCAS/Verilog/s27.v
 ```
 
@@ -292,6 +315,7 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 - `-v <file>`: Verilog netlist file (required)
 - `-lib <file>`: Liberty library file (default: NangateOpenCellLibrary_typical.lib)
 - `-lef <file>`: LEF physical library file (default: NangateOpenCellLibrary.macro.lef)
+- `-run_id <name>` / `--run_id <name>`: Run identifier (default: `default_run`)
 - `-clk <period>`: Clock period in ns (default: 10.0)
 - `-uncertainty <value>`: Clock uncertainty in ns (default: 0.05)
 - `-input_delay <value>`: Default input delay in ns (default: 0.0)
@@ -300,9 +324,20 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 - `-util <value>`: Target utilization (default: 0.7)
 - `-rowheight <val>`: Row height in micrometers (default: 1.4)
 - `-num_layers <count>`: Number of routing layers (default: 3, supports 3-12)
+- `-skip_routing`: Skip routing stage
 - `-help`: Show help message
 
 ## Testing
+
+### GoogleTest Unit/Integration Tests
+
+```bash
+cmake --preset test
+cmake --build --preset test -j$(nproc)
+ctest --test-dir build/cmake/test --output-on-failure
+```
+
+The legacy `test/` folder has been removed. Active automated tests are maintained in `tests/`.
 
 ### Run All Tests
 
@@ -320,19 +355,16 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 ./extreme_circuits.sh
 ```
 
-### Individual Tests
+### Test Script Overview
 
-```bash
-# Run specific tests
-./build/debug/bin/test_liberty_parser
-./build/debug/bin/test_verilog_parser
-./build/debug/bin/test_netlist_db
-./build/debug/bin/test_timing_graph_build
-./build/debug/bin/test_sta_full
-./build/debug/bin/test_global_placer
-./build/debug/bin/test_poisson_solver
-./build/debug/bin/test_hybrid_placement
-```
+| Script | Routing Layers | Target Scale | Circuits |
+|--------|----------------|--------------|----------|
+| `simple_circuits.sh` | 3 | Small | s27, s344, s349, s526 |
+| `medium_circuits.sh` | 5 | Medium | s1196, s1238, s1423, s1488, s1494 |
+| `hard_circuits.sh` | 8 | Large | s5378, s9234 |
+| `extreme_circuits.sh` | 12 | Very Large / Stress | s13207, s15850, s35932 |
+
+All four scripts compile `mini_flow` in release mode first, then run full flow (placement + routing + STA) and write logs to `log/<circuit>.log`.
 
 **Test Results:**
 
@@ -354,7 +386,7 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 ### Core Architecture
 
 - **Language**: C++17
-- **Build System**: GNU Make
+- **Build System**: CMake
 - **Code Standards**: Modern C++ (namespaces, RAII, smart pointers, const correctness)
 - **Data Structures**: Hash tables for O(1) lookup, efficient graph representations
 - **Design**: Modular architecture with clear separation of concerns
@@ -395,15 +427,15 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/release/bin/mini_flow \
 
 ## Project Statistics
 
-- **Total Code**: 18,330 lines (14,196 .cpp + 4,134 .h)
-- **Source Files**: 60 files
+- **Total Code (lib + apps, .cpp/.h)**: 22,087 lines (14,411 .cpp + 7,676 .h)
+- **Source Files (lib + apps, .cpp/.h)**: 77 files
 - **Module Distribution**:
   - Placement Module: 22 files, 5,673 lines
-  - STA Module: 16 files, 4,689 lines
-  - Routing Module: 6 files, 2,698 lines
-  - Core Library: 32 files, 8,340 lines
+  - STA Module: 16 files, 4,713 lines
+  - Routing Module: 6 files, 2,965 lines
+  - Core Library: 32 files, 8,398 lines
   - Main Application: 1 file, 338 lines
-- **Test Coverage**: ISCAS benchmark suite (100% pass rate)
+- **Automated Tests**: GoogleTest + `ctest` + CI smoke/ASan checks
 - **Libraries Supported**: Nangate 45nm (Liberty cells + LEF macros)
 - **Code Quality**: Professional English comments, maximum compatibility maintained
 - **Memory Management**: Smart pointers for automatic memory management

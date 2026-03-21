@@ -1,0 +1,20 @@
+# MiniEDA Python Dependencies
+# This file lists Python packages required for visualization and analysis
+
+# Core visualization library
+matplotlib>=3.3.0
+
+# Numerical computing for density heatmaps and data processing
+numpy>=1.19.0
+
+# Optional: For better image handling in visualizations
+Pillow>=8.0.0
+
+# Note: This project is primarily written in C++17 and requires:
+# - g++ (C++17 compatible, version 7.0 or higher recommended)
+# - GNU Make
+# - Standard C++ library (no external C++ dependencies)
+#
+# Optional tools for static analysis:
+# - clang-tidy (for C++ code analysis)
+# - cppcheck (for C++ code analysis)

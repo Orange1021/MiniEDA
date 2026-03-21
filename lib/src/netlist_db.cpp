@@ -495,10 +495,17 @@ void NetlistDB::printNetlist() const {
 // ============================================================================
 
 void NetlistDB::clear() {
-    // Clear all containers
-    // Note: unique_ptr will automatically delete objects
-    cells_.clear();
+    // Proactively disconnect all nets while cells/pins are still alive.
+    // This avoids dangling pin access during subsequent object destruction.
+    for (auto& net : nets_) {
+        if (net) {
+            net->disconnectAll();
+        }
+    }
+
+    // Clear containers (unique_ptr handles object lifetime).
     nets_.clear();
+    cells_.clear();
     cell_map_.clear();
     net_map_.clear();
 }

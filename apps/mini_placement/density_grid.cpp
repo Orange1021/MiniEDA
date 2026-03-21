@@ -9,6 +9,10 @@
 #include <iomanip>
 #include <numeric>
 
+#ifdef MINIEDA_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace mini {
 
 // ============================================================================
@@ -91,12 +95,61 @@ void DensityGrid::updateDensity(const std::vector<Cell*>& cells, PlacerDB* place
         return;
     }
 
+    double bin_area = bin_w_ * bin_h_;
+#ifdef MINIEDA_USE_OPENMP
+    const size_t total_bins = bins_.size();
+    const int num_threads = std::max(1, omp_get_max_threads());
+    std::vector<std::vector<double>> thread_local_density(
+        static_cast<size_t>(num_threads),
+        std::vector<double>(total_bins, 0.0));
+
+#pragma omp parallel
+    {
+        const int tid = omp_get_thread_num();
+        std::vector<double>& local_density = thread_local_density[static_cast<size_t>(tid)];
+
+#pragma omp for schedule(static)
+        for (long long i = 0; i < static_cast<long long>(cells.size()); ++i) {
+            const Cell* cell = cells[static_cast<size_t>(i)];
+            if (!cell) continue;
+
+            // Get cell physical dimensions from PlacerDB
+            double cell_x = cell->getX();
+            double cell_y = cell->getY();
+            const auto& cell_info = placer_db->getCellInfo(const_cast<Cell*>(cell));
+            double cell_w = cell_info.width;
+            double cell_h = cell_info.height;
+
+            // Calculate bin range that this cell overlaps with
+            int start_x = std::max(0, static_cast<int>((cell_x - core_x_min_) / bin_w_));
+            int end_x   = std::min(num_bins_x_ - 1, static_cast<int>((cell_x + cell_w - core_x_min_) / bin_w_));
+            int start_y = std::max(0, static_cast<int>((cell_y - core_y_min_) / bin_h_));
+            int end_y   = std::min(num_bins_y_ - 1, static_cast<int>((cell_y + cell_h - core_y_min_) / bin_h_));
+
+            // For each overlapped bin, calculate exact overlap area
+            for (int bin_x = start_x; bin_x <= end_x; ++bin_x) {
+                for (int bin_y = start_y; bin_y <= end_y; ++bin_y) {
+                    double overlap_area = calculateCellBinOverlap(cell, bin_x, bin_y, placer_db);
+                    int idx = bin_y * num_bins_x_ + bin_x;
+                    local_density[static_cast<size_t>(idx)] += overlap_area;
+                }
+            }
+        }
+    }
+
+    // Merge thread-local buffers and normalize
+    for (size_t idx = 0; idx < total_bins; ++idx) {
+        double area_sum = 0.0;
+        for (int t = 0; t < num_threads; ++t) {
+            area_sum += thread_local_density[static_cast<size_t>(t)][idx];
+        }
+        bins_[idx].density = area_sum / bin_area;
+    }
+#else
     // Step 1: Clear all bin densities
     for (auto& bin : bins_) {
         bin.density = 0.0;
     }
-
-    double bin_area = bin_w_ * bin_h_;
 
     // Step 2: Project each cell onto bins it overlaps with
     for (const Cell* cell : cells) {
@@ -131,6 +184,7 @@ void DensityGrid::updateDensity(const std::vector<Cell*>& cells, PlacerDB* place
     for (auto& bin : bins_) {
         bin.density /= bin_area;
     }
+#endif
 
     DEBUG_LOG("DensityGrid", "Density updated for " + std::to_string(cells.size()) + " cells");
 }

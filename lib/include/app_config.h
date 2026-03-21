@@ -30,7 +30,6 @@ struct AppConfig {
     std::string verilog_file;                                 ///< Verilog netlist file (required)
     std::string liberty_file = "benchmarks/NangateOpenCellLibrary_typical.lib";  ///< Liberty timing library
     std::string lef_file = "benchmarks/NangateOpenCellLibrary.macro.lef";  ///< LEF physical library
-    std::string output_dir = "visualizations";                ///< Output directory for results
     std::string run_id = "default_run";                       ///< Run identifier for output files
 
     // ========================================================================
@@ -103,8 +102,6 @@ struct AppConfig {
     // ========================================================================
     bool verbose = false;                                     ///< Enable verbose output
     bool skip_routing = false;                                ///< Skip routing stage (MiniFlow only)
-    bool skip_placement = false;                              ///< Skip placement stage (future extension)
-    bool enable_visualization = true;                         ///< Generate visualizations
     
     // ========================================================================
     // Advanced Parameters

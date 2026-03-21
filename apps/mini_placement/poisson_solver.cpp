@@ -10,6 +10,10 @@
 #include <algorithm>
 #include <stdexcept>
 
+#ifdef MINIEDA_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace mini {
 
 // ============================================================================
@@ -39,6 +43,9 @@ bool PoissonSolver::solve(std::vector<Bin>& bins, int grid_width, int grid_heigh
         
         // Step 1: Extract density from bins and prepare complex data
         std::vector<Complex> spectrum(total_bins);
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
         for (int i = 0; i < total_bins; ++i) {
             spectrum[i] = Complex(bins[i].density, 0.0);
         }
@@ -198,6 +205,9 @@ void PoissonSolver::fft1D(std::vector<Complex>& data, bool invert) {
 
 void PoissonSolver::fft2D(std::vector<Complex>& data, int width, int height, bool invert) {
     // Step 1: Apply 1D FFT to each row
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
     for (int y = 0; y < height; ++y) {
         // Extract row
         std::vector<Complex> row = extractRow(data, y, width);
@@ -210,6 +220,9 @@ void PoissonSolver::fft2D(std::vector<Complex>& data, int width, int height, boo
     }
     
     // Step 2: Apply 1D FFT to each column
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
     for (int x = 0; x < width; ++x) {
         // Extract column
         std::vector<Complex> column = extractColumn(data, x, width, height);
@@ -224,8 +237,11 @@ void PoissonSolver::fft2D(std::vector<Complex>& data, int width, int height, boo
     // Step 3: For inverse FFT, apply proper 2D scaling
     if (invert) {
         double scale = 1.0 / (width * height);
-        for (auto& val : data) {
-            val *= scale;
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for schedule(static)
+#endif
+        for (long long i = 0; i < static_cast<long long>(data.size()); ++i) {
+            data[static_cast<size_t>(i)] *= scale;
         }
     }
 }
@@ -279,6 +295,10 @@ void PoissonSolver::applyPoissonFilter(std::vector<Complex>& spectrum,
     
     
     
+    
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for collapse(2) schedule(static)
+#endif
     for (int v = 0; v < height; ++v) {
         for (int u = 0; u < width; ++u) {
             int idx = v * width + u;
@@ -336,6 +356,8 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
     max_gradient_magnitude_ = 0.0;
     double total_gradient_magnitude = 0.0;
     int count = 0;
+    double max_potential = 0.0;
+    double max_gradient_magnitude = 0.0;
     
     // Use provided bin dimensions or calculate from bins if not set
     
@@ -372,6 +394,9 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
     double dx = 2.0 * bin_width;   // Central difference: 2 * bin_width
     double dy = 2.0 * bin_height;  // Central difference: 2 * bin_height
     
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for collapse(2) schedule(static) reduction(+:total_gradient_magnitude,count) reduction(max:max_potential,max_gradient_magnitude)
+#endif
     for (int y = 0; y < height; ++y) {
         for (int x = 0; x < width; ++x) {
             int idx = y * width + x;
@@ -379,7 +404,7 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
             // Store potential for visualization
             double phi = potential[idx].real();
             bins[idx].electro_potential = phi;
-            max_potential_ = std::max(max_potential_, std::abs(phi));
+            max_potential = std::max(max_potential, std::abs(phi));
             
             
             
@@ -423,12 +448,14 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
             double force_mag = std::sqrt(grad_x * grad_x + grad_y * grad_y);
             
             
-            max_gradient_magnitude_ = std::max(max_gradient_magnitude_, force_mag);
+            max_gradient_magnitude = std::max(max_gradient_magnitude, force_mag);
             total_gradient_magnitude += force_mag;
             count++;
         }
     }
     
+    max_potential_ = max_potential;
+    max_gradient_magnitude_ = max_gradient_magnitude;
     avg_gradient_magnitude_ = (count > 0) ? (total_gradient_magnitude / count) : 0.0;
     
     DEBUG_LOG("PoissonSolver", "Gradient forces calculated with proper scaling");

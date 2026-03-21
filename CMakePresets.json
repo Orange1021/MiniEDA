@@ -1,0 +1,102 @@
+{
+  "version": 3,
+  "cmakeMinimumRequired": {
+    "major": 3,
+    "minor": 16,
+    "patch": 0
+  },
+  "configurePresets": [
+    {
+      "name": "debug",
+      "displayName": "Debug",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/cmake/debug",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "release",
+      "displayName": "Release",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/cmake/release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+      }
+    },
+    {
+      "name": "asan",
+      "displayName": "Debug + ASan/UBSan",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/cmake/asan",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MINIEDA_ENABLE_SANITIZERS": "ON",
+        "MINIEDA_SANITIZERS": "address;undefined"
+      }
+    },
+    {
+      "name": "test",
+      "displayName": "Debug + GoogleTest",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/cmake/test",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Debug",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MINIEDA_ENABLE_TESTING": "ON"
+      }
+    },
+    {
+      "name": "omp",
+      "displayName": "Release + OpenMP",
+      "generator": "Unix Makefiles",
+      "binaryDir": "${sourceDir}/build/cmake/omp",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+        "MINIEDA_ENABLE_OPENMP": "ON"
+      }
+    }
+  ],
+  "buildPresets": [
+    {
+      "name": "debug",
+      "configurePreset": "debug",
+      "targets": [
+        "mini_flow"
+      ]
+    },
+    {
+      "name": "release",
+      "configurePreset": "release",
+      "targets": [
+        "mini_flow"
+      ]
+    },
+    {
+      "name": "asan",
+      "configurePreset": "asan",
+      "targets": [
+        "mini_flow"
+      ]
+    },
+    {
+      "name": "test",
+      "configurePreset": "test",
+      "targets": [
+        "mini_flow",
+        "minieda_unit_tests"
+      ]
+    },
+    {
+      "name": "omp",
+      "configurePreset": "omp",
+      "targets": [
+        "mini_flow"
+      ]
+    }
+  ]
+}

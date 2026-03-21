@@ -10,6 +10,10 @@
 #include <chrono>
 #include <iomanip>
 
+#ifdef MINIEDA_USE_OPENMP
+#include <omp.h>
+#endif
+
 // Core libraries
 #include "../lib/include/netlist_db.h"
 #include "../lib/include/verilog_parser.h"
@@ -256,6 +260,15 @@ int main(int argc, char* argv[]) {
     if (!parseAndValidate(argc, argv, config)) {
         return 1;
     }
+
+#ifdef MINIEDA_USE_OPENMP
+    omp_set_dynamic(0);
+    omp_set_num_threads(config.max_threads);
+    if (config.verbose) {
+        std::cout << "OpenMP enabled: using up to "
+                  << omp_get_max_threads() << " threads" << std::endl;
+    }
+#endif
     
     // Ensure we're in flow mode
     if (!config.flow_mode) {
@@ -326,7 +339,6 @@ int main(int argc, char* argv[]) {
         std::cout << "\n=========================================\n" << std::endl;
         std::cout << "Integrated Flow Completed!" << std::endl;
         std::cout << "Total runtime: " << duration.count() << " ms" << std::endl;
-        std::cout << "Output directory: " << config.output_dir << std::endl;
         std::cout << "Run ID: " << config.run_id << std::endl;
         std::cout << "=========================================\n" << std::endl;
         

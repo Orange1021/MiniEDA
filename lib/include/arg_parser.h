@@ -52,11 +52,8 @@ public:
                     config.lef_file = argv[++i];
                 }
                 
-                // Output configuration
-                else if (arg == "-o" && i + 1 < argc) {
-                    config.output_dir = argv[++i];
-                }
-                else if (arg == "-run_id" && i + 1 < argc) {
+                // Run configuration
+                else if ((arg == "-run_id" || arg == "--run_id") && i + 1 < argc) {
                     config.run_id = argv[++i];
                 }
                 
@@ -113,12 +110,6 @@ public:
                 }
                 else if (arg == "-skip_routing") {
                     config.skip_routing = true;
-                }
-                else if (arg == "-skip_placement") {
-                    config.skip_placement = true;
-                }
-                else if (arg == "-no_viz") {
-                    config.enable_visualization = false;
                 }
                 
                 // Advanced parameters
@@ -205,9 +196,8 @@ Required Files:
   -lib <file>            Liberty timing library (default: NangateOpenCellLibrary_typical.lib)
   -lef <file>            LEF physical library (default: NangateOpenCellLibrary.macro.lef)
 
-Output Configuration:
-  -o <dir>               Output directory (default: visualizations)
-  -run_id <name>         Run identifier for output files (default: default_run)
+Run Configuration:
+  -run_id, --run_id <name>  Run identifier for output files (default: default_run)
 
 Physical Design Constraints:
   -util <value>          Target core utilization (0.1-1.0, default: 0.7)
@@ -231,8 +221,6 @@ Industrial-Grade Timing Constraints:
 Flow Control:
   -verbose               Enable verbose output
   -skip_routing          Skip routing stage (integrated flow only)
-  -skip_placement        Skip placement stage (future extension)
-  -no_viz                Disable visualization generation
 
 Advanced Parameters:
   -threads <count>       Maximum parallel threads (default: 1)

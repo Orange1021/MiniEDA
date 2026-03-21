@@ -1,0 +1,71 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  unit-tests:
+    name: Unit Tests (GoogleTest)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (test)
+        run: cmake --preset test
+
+      - name: Build (test)
+        run: cmake --build --preset test --parallel
+
+      - name: Run unit tests
+        run: ctest --test-dir build/cmake/test --output-on-failure
+
+  release-build:
+    name: Release Build + Smoke
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (release)
+        run: cmake --preset release
+
+      - name: Build (release)
+        run: cmake --build --preset release --parallel
+
+      - name: Smoke test s27
+        run: |
+          ./build/cmake/release/bin/mini_flow \
+            -v benchmarks/s27.v \
+            -lib benchmarks/NangateOpenCellLibrary_typical.lib \
+            -lef benchmarks/NangateOpenCellLibrary.macro.lef \
+            -run_id ci_release_s27
+
+  asan-build:
+    name: ASan/UBSan Build + Runtime Check
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure (asan)
+        run: cmake --preset asan
+
+      - name: Build (asan)
+        run: cmake --build --preset asan --parallel
+
+      - name: Runtime check (asan)
+        env:
+          ASAN_OPTIONS: detect_leaks=0:halt_on_error=1
+        run: |
+          ./build/cmake/asan/bin/mini_flow \
+            -v benchmarks/s27.v \
+            -lib benchmarks/NangateOpenCellLibrary_typical.lib \
+            -lef benchmarks/NangateOpenCellLibrary.macro.lef \
+            -run_id ci_asan_s27

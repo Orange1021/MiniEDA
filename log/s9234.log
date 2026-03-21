@@ -1,0 +1,1759 @@
+MiniEDA Integrated Flow - Unified Configuration
+================================================
+
+=== Parsing Verilog Netlist ===
+Reading: benchmarks/ISCAS/Verilog/s9234.v
+
+=== Running Placement ===
+  Using Placement Algorithm: hybrid
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+
+>>> DESIGN INFO (UTILIZATION DIAGNOSIS) <<<
+Total Cell Area: 4880.57 μm²
+Core Area: 7022.4 μm²
+Actual Utilization: 0.695 (69.5%)
+Target Utilization: 0.7 (70%)
+[GOOD] Reasonable utilization for standard placement.
+==========================================
+
+Exported placement to CSV: visualizations/s9234/00_random.csv
+Visualization saved as: s9234/00_random.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+
+=== Starting Global Placement ===
+Algorithm: hybrid
+Mode: Hybrid Cascade (Warmup + Nesterov)
+  Running Hybrid Cascade Algorithm...
+
+  === Phase 1: Warm-up (Basic Force-Directed) ===
+  Initial HPWL: 355142
+  Force-directed iteration 0 (moved 5884 cells)
+  Warmup iteration 0: HPWL = 198794 (ratio: 0.560)
+Exported placement to CSV: visualizations/s9234/warmup_iter_0.csv
+Visualization saved as: s9234/warmup_iter_0.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Warm-up stopped early: HPWL ratio reached 0.279
+  Warm-up completed. Cells are initially spread.
+  HPWL after warm-up: 99190.289
+  [PlacerDB] Synced 5885 cell positions to Netlist.
+  >> Synchronization: Warm-up results committed to Netlist.
+
+  === Phase 2: Refinement (Electrostatic Nesterov) ===
+Iter   0: Movement=966.992, HPWL=100371.7, Lambda=4.95e+01, MaxDensity=43.454
+Exported placement to CSV: visualizations/s9234/placement_iter_0.csv
+[GlobalPlacer] Placement exported to placement_iter_0.csv
+Visualization saved as: s9234/electro_iter_0.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 0 PNG exported
+Iter   1: Movement=1838.122, HPWL=102635.6, Lambda=4.95e+01, MaxDensity=40.505
+Iter   2: Movement=2621.833, HPWL=105896.5, Lambda=4.95e+01, MaxDensity=34.429
+Iter   3: Movement=3324.227, HPWL=110079.3, Lambda=4.95e+01, MaxDensity=28.443
+Iter   4: Movement=3952.501, HPWL=115123.4, Lambda=4.95e+01, MaxDensity=27.937
+Iter   5: Movement=4517.689, HPWL=120953.8, Lambda=4.95e+01, MaxDensity=26.944
+Iter   6: Movement=5025.862, HPWL=127500.4, Lambda=4.95e+01, MaxDensity=25.047
+Iter   7: Movement=5473.133, HPWL=134711.9, Lambda=4.95e+01, MaxDensity=27.397
+Iter   8: Movement=5869.855, HPWL=142539.2, Lambda=4.95e+01, MaxDensity=25.555
+Iter   9: Movement=6218.557, HPWL=150939.1, Lambda=4.95e+01, MaxDensity=24.404
+Iter  10: Movement=6526.689, HPWL=159870.0, Lambda=5.20e+01, MaxDensity=23.423
+Iter  20: Movement=8411.398, HPWL=270964.1, Lambda=8.90e+01, MaxDensity=14.089
+Exported placement to CSV: visualizations/s9234/placement_iter_20.csv
+[GlobalPlacer] Placement exported to placement_iter_20.csv
+Visualization saved as: s9234/electro_iter_20.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 20 PNG exported
+Iter  30: Movement=9117.131, HPWL=405184.6, Lambda=1.52e+02, MaxDensity=11.566
+Iter  40: Movement=9186.746, HPWL=545409.3, Lambda=2.60e+02, MaxDensity=12.163
+Exported placement to CSV: visualizations/s9234/placement_iter_40.csv
+[GlobalPlacer] Placement exported to placement_iter_40.csv
+Visualization saved as: s9234/electro_iter_40.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 40 PNG exported
+
+========== [Decisive] 50th Iteration Gradient Balance Diagnosis ==========
+Average Wire Gradient Magnitude (Avg |∇_wire|):     76.331514
+Average Raw Density Gradient Magnitude (Avg |∇_dens_raw|): 0.165838
+Current Lambda (current_lambda):        4.037e+02
+Effective Density Gradient (Lambda * ∇_dens_raw):    66.949122
+Raw Gradient Ratio (∇_wire / ∇_dens_raw):      460.279
+Effective Gradient Ratio (∇_wire / Lambda*∇_dens):   1.140
+[IDEAL] Force balance is good (around 1:1), expect gentle diffusion.
+====================================================
+
+Iter  50: Movement=7459.726, HPWL=667093.3, Lambda=4.45e+02, MaxDensity=67.080
+Iter  60: Movement=5647.203, HPWL=699857.0, Lambda=7.61e+02, MaxDensity=65.426
+Exported placement to CSV: visualizations/s9234/placement_iter_60.csv
+[GlobalPlacer] Placement exported to placement_iter_60.csv
+Visualization saved as: s9234/electro_iter_60.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 60 PNG exported
+Iter  70: Movement=7178.464, HPWL=673897.4, Lambda=1.30e+03, MaxDensity=34.672
+Iter  80: Movement=7127.952, HPWL=635238.4, Lambda=2.23e+03, MaxDensity=17.172
+Exported placement to CSV: visualizations/s9234/placement_iter_80.csv
+[GlobalPlacer] Placement exported to placement_iter_80.csv
+Visualization saved as: s9234/electro_iter_80.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 80 PNG exported
+Iter  90: Movement=5876.044, HPWL=595866.4, Lambda=3.81e+03, MaxDensity=14.670
+Iter 100: Movement=5270.064, HPWL=576117.7, Lambda=6.51e+03, MaxDensity=9.198
+Exported placement to CSV: visualizations/s9234/placement_iter_100.csv
+[GlobalPlacer] Placement exported to placement_iter_100.csv
+Visualization saved as: s9234/electro_iter_100.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 100 PNG exported
+Iter 110: Movement=4067.600, HPWL=565519.5, Lambda=1.11e+04, MaxDensity=6.836
+Iter 120: Movement=2919.224, HPWL=565170.2, Lambda=1.91e+04, MaxDensity=4.665
+Exported placement to CSV: visualizations/s9234/placement_iter_120.csv
+[GlobalPlacer] Placement exported to placement_iter_120.csv
+Visualization saved as: s9234/electro_iter_120.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 120 PNG exported
+Iter 130: Movement=2333.595, HPWL=564169.8, Lambda=3.26e+04, MaxDensity=3.267
+Iter 140: Movement=2087.085, HPWL=563747.9, Lambda=5.57e+04, MaxDensity=2.924
+Exported placement to CSV: visualizations/s9234/placement_iter_140.csv
+[GlobalPlacer] Placement exported to placement_iter_140.csv
+Visualization saved as: s9234/electro_iter_140.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 140 PNG exported
+Iter 150: Movement=1863.756, HPWL=565372.3, Lambda=9.18e+04, MaxDensity=2.689
+Iter 160: Movement=1970.512, HPWL=567915.6, Lambda=1.01e+05, MaxDensity=2.329
+Exported placement to CSV: visualizations/s9234/placement_iter_160.csv
+[GlobalPlacer] Placement exported to placement_iter_160.csv
+Visualization saved as: s9234/electro_iter_160.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 160 PNG exported
+Iter 170: Movement=1877.477, HPWL=566162.8, Lambda=1.17e+05, MaxDensity=2.215
+Iter 180: Movement=1908.824, HPWL=559587.9, Lambda=1.45e+05, MaxDensity=2.109
+Exported placement to CSV: visualizations/s9234/placement_iter_180.csv
+[GlobalPlacer] Placement exported to placement_iter_180.csv
+Visualization saved as: s9234/electro_iter_180.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 180 PNG exported
+Iter 190: Movement=1742.628, HPWL=560391.1, Lambda=1.65e+05, MaxDensity=2.394
+Exported placement to CSV: visualizations/s9234/placement_iter_200.csv
+[GlobalPlacer] Placement exported to placement_iter_200.csv
+Visualization saved as: s9234/electro_iter_200.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+  Global placement iteration 200 PNG exported
+
+=== Global Placement Final Statistics ===
+Final HPWL: 565580.0
+Final Max Density: 2.247
+Final Total Overflow: 630.897
+Final Lambda: 1.65e+05
+Total Iterations: 200
+HPWL Improvement: -463.5%
+
+=== Density Grid Statistics ===
+Grid size: 64x64 (4096 bins)
+Target density: 0.7
+Average density: 0.695
+Maximum density: 2.247
+Overcrowded bins: 2004 (48.926%)
+Total overflow: 630.897
+===============================
+
+=== Poisson Solver Statistics ===
+Solution status: SUCCESS
+Maximum potential: 0.026621
+Maximum force magnitude: 0.003552
+Average force magnitude: 0.000903
+=================================
+==========================================
+Density heatmap saved to visualizations/s9234/density_heatmap.png
+  Hybrid strategy completed. Final HPWL: 565579.973425
+Global Placement completed in 148083 ms
+Final HPWL: 565579.973425
+>>> Starting Legalization...
+Algorithm: Abacus (Optimization-based)
+Warning: Row 0 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 2 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 4 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 7 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 9 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 11 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 12 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 15 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 16 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 17 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 18 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 20 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 21 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 23 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 24 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 26 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 27 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 30 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 31 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 32 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 33 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 34 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 35 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 37 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 38 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 41 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 42 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 45 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 46 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 48 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 51 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 54 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 55 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 57 is OVER-UTILIZED! Cells cannot fit.
+Warning: Row 59 is OVER-UTILIZED! Cells cannot fit.
+  Snapping cells to site grid (width = 0.190000 um)
+  Site alignment completed
+  Final HPWL: 523535.925000
+  Overlap check: No overlaps
+  Final HPWL: 523535.925000
+  Overlap check: No overlaps
+Exported placement to CSV: visualizations/s9234/legalized.csv
+Visualization saved as: s9234/legalized.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+Legalization completed!
+Starting Detailed Placement Optimization...
+  Initial HPWL: 523535.925000
+  Running 3 iterations of detailed reordering...
+  Iteration 1/3
+  Swaps performed: 2403
+  Iteration 2/3
+  Swaps performed: 1724
+  Iteration 3/3
+  Swaps performed: 1296
+  Final HPWL: 518679.715000
+  HPWL improvement: 0.93%
+  Site alignment: 5885/5885 (100.0%)
+  Final HPWL after detailed placement: 518679.7
+
+=== DETAILED PLACEMENT OVERLAP ANALYSIS ===
+Total cells analyzed: 5885
+  Overlap Analysis Results:
+    Total overlapping pairs: 0
+    Boundary touching pairs: 12183
+    Total overlap area: 0.0000 μm²
+=== End DETAILED PLACEMENT OVERLAP ANALYSIS ===
+
+Exported placement to CSV: visualizations/s9234/detailed.csv
+Visualization saved as: s9234/detailed.png
+  Total cells: 5885 (movable: 5885, fixed: 0)
+  Cell labels: Disabled (cell count > 1000 to avoid overlap)
+
+=== Running Routing ===
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+Placing I/O ports...
+  Placed 77 I/O ports
+[ROUTING] RoutingGrid initialized: 880x885 x8 layers
+[ROUTING] Core area: (0.000000,0.000000) to (83.600000,84.000000)
+[ROUTING] Pitch: X=0.095000um, Y=0.095000um
+[ROUTING] Precomputing neighbors for all grid points...
+[ROUTING] Precomputed 6230400 grid points with 6230400 neighbor lists
+Building pin locations map...
+  Built pin locations map with 14278 pins
+[ROUTING] Linear index arrays initialized: 6230400 elements
+Skipping HFN (Clock/Reset): Net CK with 212 pins
+High Fanout Net: g471 with 9 pins (hash: 598492231)
+High Fanout Net: g478 with 9 pins (hash: -2073869561)
+High Fanout Net: g6855 with 9 pins (hash: 680997451)
+Skipping HFN (Clock/Reset): Net g5824 with 28 pins
+Skipping HFN (Clock/Reset): Net g5331 with 17 pins
+High Fanout Net: g971 with 9 pins (hash: -943806407)
+High Fanout Net: g985 with 11 pins (hash: -1122933951)
+High Fanout Net: g1209 with 10 pins (hash: 773204547)
+High Fanout Net: g1504 with 9 pins (hash: -449448704)
+Skipping HFN (Clock/Reset): Net g3388 with 33 pins
+High Fanout Net: g1861 with 14 pins (hash: -564206646)
+High Fanout Net: g2197 with 15 pins (hash: -887267664)
+High Fanout Net: g729 with 8 pins (hash: -953272893)
+High Fanout Net: g3575 with 14 pins (hash: 469405206)
+High Fanout Net: g6376 with 9 pins (hash: 1991104585)
+High Fanout Net: g4569 with 8 pins (hash: -2107575141)
+High Fanout Net: g4473 with 12 pins (hash: -140422612)
+High Fanout Net: g1076 with 8 pins (hash: -785551716)
+High Fanout Net: g1161 with 12 pins (hash: -1458586798)
+High Fanout Net: g2215 with 15 pins (hash: -1105348076)
+High Fanout Net: g2044 with 9 pins (hash: 1327727323)
+High Fanout Net: g1295 with 10 pins (hash: 744889755)
+High Fanout Net: g1143 with 13 pins (hash: -109947382)
+High Fanout Net: g5099 with 11 pins (hash: 281954769)
+High Fanout Net: g719 with 11 pins (hash: 1180775283)
+High Fanout Net: g6864 with 9 pins (hash: -156608929)
+High Fanout Net: g1595 with 8 pins (hash: -909746533)
+High Fanout Net: g1439 with 10 pins (hash: 10977236)
+High Fanout Net: g4022 with 10 pins (hash: -1797570215)
+High Fanout Net: g5281 with 10 pins (hash: 792197707)
+High Fanout Net: g1123 with 15 pins (hash: 1922705808)
+High Fanout Net: g952 with 12 pins (hash: -582371788)
+High Fanout Net: g774 with 11 pins (hash: -560360101)
+High Fanout Net: g1193 with 10 pins (hash: -1758777019)
+High Fanout Net: g4059 with 9 pins (hash: -289626558)
+High Fanout Net: g2555 with 10 pins (hash: 536519279)
+High Fanout Net: g878 with 11 pins (hash: 652696312)
+High Fanout Net: g5605 with 10 pins (hash: -772035581)
+High Fanout Net: g2525 with 10 pins (hash: -1802900126)
+High Fanout Net: g2145 with 9 pins (hash: -1981220386)
+Skipping HFN (Clock/Reset): Net g5753 with 17 pins
+High Fanout Net: g2473 with 9 pins (hash: -933782727)
+High Fanout Net: g1519 with 9 pins (hash: 2081235321)
+High Fanout Net: g1450 with 9 pins (hash: 955035024)
+High Fanout Net: g1236 with 10 pins (hash: -1183369670)
+High Fanout Net: g1461 with 9 pins (hash: 1530950068)
+Skipping HFN (Clock/Reset): Net g5997 with 17 pins
+High Fanout Net: g2296 with 10 pins (hash: 761032488)
+High Fanout Net: g1426 with 10 pins (hash: 1817522900)
+High Fanout Net: g3466 with 11 pins (hash: -858622546)
+High Fanout Net: g743 with 8 pins (hash: -1780127106)
+High Fanout Net: g736 with 8 pins (hash: 1511578727)
+High Fanout Net: g1305 with 10 pins (hash: 310911139)
+High Fanout Net: g1222 with 10 pins (hash: 1536930556)
+High Fanout Net: g5742 with 9 pins (hash: -1974404474)
+High Fanout Net: g2497 with 9 pins (hash: 2057530458)
+High Fanout Net: g2125 with 9 pins (hash: 179334886)
+High Fanout Net: g1177 with 12 pins (hash: 1276192387)
+High Fanout Net: g821 with 9 pins (hash: -1462933943)
+High Fanout Net: g2370 with 9 pins (hash: -770996226)
+High Fanout Net: g5124 with 11 pins (hash: 982988034)
+High Fanout Net: g766 with 9 pins (hash: -1460031300)
+High Fanout Net: g5731 with 9 pins (hash: 1269304816)
+High Fanout Net: g791 with 8 pins (hash: 2105443725)
+High Fanout Net: g3942 with 10 pins (hash: 831307211)
+Skipping HFN (Clock/Reset): Net g5025 with 17 pins
+High Fanout Net: g798 with 8 pins (hash: -2081547372)
+High Fanout Net: g5926 with 9 pins (hash: -330630362)
+High Fanout Net: g1017 with 10 pins (hash: -20969071)
+High Fanout Net: g784 with 8 pins (hash: 1118443708)
+High Fanout Net: g2179 with 15 pins (hash: -1819465435)
+High Fanout Net: g2986 with 9 pins (hash: 2044111526)
+High Fanout Net: g6385 with 9 pins (hash: -1927845765)
+High Fanout Net: g4915 with 13 pins (hash: 762260528)
+High Fanout Net: g2422 with 9 pins (hash: -1979877042)
+High Fanout Net: g1612 with 8 pins (hash: -1267327921)
+Skipping HFN (Clock/Reset): Net g6015 with 17 pins
+High Fanout Net: g2449 with 9 pins (hash: 312485107)
+High Fanout Net: g4980 with 13 pins (hash: -1489155005)
+High Fanout Net: g4550 with 9 pins (hash: 1178476530)
+Skipping HFN (Clock/Reset): Net g5958 with 17 pins
+High Fanout Net: g2381 with 9 pins (hash: -325820796)
+High Fanout Net: g2397 with 9 pins (hash: -1909750484)
+Skipping HFN (Clock/Reset): Net g5975 with 17 pins
+Skipping HFN (Clock/Reset): Net g6194 with 17 pins
+Skipping HFN (Clock/Reset): Net g6212 with 17 pins
+High Fanout Net: g5649 with 9 pins (hash: 1789598687)
+High Fanout Net: g4967 with 13 pins (hash: 1493950347)
+Skipping HFN (Clock/Reset): Net g4993 with 17 pins
+Skipping HFN (Clock/Reset): Net g4950 with 17 pins
+Skipping HFN (Clock/Reset): Net g4877 with 17 pins
+High Fanout Net: g3425 with 8 pins (hash: -801983304)
+High Fanout Net: g4253 with 8 pins (hash: -1577661196)
+[ROUTING] >>> PathFinder Iteration 0 <<<
+[ROUTING] Improvement: 2147483647 -> 795751 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 795751 (Saving at iteration 0) <<<
+[ROUTING] Updating History Costs with increment: 1.000000
+[ROUTING] Applied decay to 0 congested points
+[ROUTING] Applied penalties to 1347579 congested points
+[ROUTING] Iteration 0 completed in 7368226 ms
+[ROUTING] >>> PathFinder Iteration 1 <<<
+[ROUTING] Updating History Costs with increment: 1.000000
+[ROUTING] Applied decay to 1151792 congested points
+[ROUTING] Applied penalties to 4014522 congested points
+[ROUTING] Iteration 1 completed in 6741648 ms
+[ROUTING] >>> PathFinder Iteration 2 <<<
+[ROUTING] Improvement: 1033330 -> 888594 conflicts
+[ROUTING] Updating History Costs with increment: 1.050000
+[ROUTING] Applied decay to 3113884 congested points
+[ROUTING] Applied penalties to 3703874 congested points
+[ROUTING] Iteration 2 completed in 5494344 ms
+[ROUTING] >>> PathFinder Iteration 3 <<<
+[ROUTING] Improvement: 888594 -> 696708 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 696708 (Saving at iteration 3) <<<
+[ROUTING] Updating History Costs with increment: 1.100000
+[ROUTING] Applied decay to 3320559 congested points
+[ROUTING] Applied penalties to 3679091 congested points
+[ROUTING] Iteration 3 completed in 5052383 ms
+[ROUTING] >>> PathFinder Iteration 4 <<<
+[ROUTING] Improvement: 696708 -> 543881 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 543881 (Saving at iteration 4) <<<
+[ROUTING] Updating History Costs with increment: 1.150000
+[ROUTING] Applied decay to 3422746 congested points
+[ROUTING] Applied penalties to 3637474 congested points
+[ROUTING] Iteration 4 completed in 4868164 ms
+[ROUTING] >>> PathFinder Iteration 5 <<<
+[ROUTING] Improvement: 543881 -> 445167 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 445167 (Saving at iteration 5) <<<
+[ROUTING] Updating History Costs with increment: 1.200000
+[ROUTING] Applied decay to 3454372 congested points
+[ROUTING] Applied penalties to 3603992 congested points
+[ROUTING] Iteration 5 completed in 4694741 ms
+[ROUTING] >>> PathFinder Iteration 6 <<<
+[ROUTING] Improvement: 445167 -> 363949 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 363949 (Saving at iteration 6) <<<
+[ROUTING] Updating History Costs with increment: 1.250000
+[ROUTING] Applied decay to 3333170 congested points
+[ROUTING] Applied penalties to 3429909 congested points
+[ROUTING] Iteration 6 completed in 4576305 ms
+[ROUTING] >>> PathFinder Iteration 7 <<<
+[ROUTING] Improvement: 363949 -> 301515 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 301515 (Saving at iteration 7) <<<
+[ROUTING] Updating History Costs with increment: 1.300000
+[ROUTING] Applied decay to 3193568 congested points
+[ROUTING] Applied penalties to 3262118 congested points
+[ROUTING] Iteration 7 completed in 4589283 ms
+[ROUTING] >>> PathFinder Iteration 8 <<<
+[ROUTING] Improvement: 301515 -> 254395 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 254395 (Saving at iteration 8) <<<
+[ROUTING] Updating History Costs with increment: 1.350000
+[ROUTING] Applied decay to 3004010 congested points
+[ROUTING] Applied penalties to 3052548 congested points
+[ROUTING] Iteration 8 completed in 4022914 ms
+[ROUTING] >>> PathFinder Iteration 9 <<<
+[ROUTING] Improvement: 254395 -> 205060 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 205060 (Saving at iteration 9) <<<
+[ROUTING] Updating History Costs with increment: 1.400000
+[ROUTING] Applied decay to 2765226 congested points
+[ROUTING] Applied penalties to 2800561 congested points
+[ROUTING] Iteration 9 completed in 3767104 ms
+[ROUTING] >>> PathFinder Iteration 10 <<<
+[ROUTING] Improvement: 205060 -> 168550 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 168550 (Saving at iteration 10) <<<
+[ROUTING] Updating History Costs with increment: 1.450000
+[ROUTING] Applied decay to 2493840 congested points
+[ROUTING] Applied penalties to 2520511 congested points
+[ROUTING] Iteration 10 completed in 3538773 ms
+[ROUTING] >>> PathFinder Iteration 11 <<<
+[ROUTING] Improvement: 168550 -> 135273 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 135273 (Saving at iteration 11) <<<
+[ROUTING] Updating History Costs with increment: 1.500000
+[ROUTING] Applied decay to 2178559 congested points
+[ROUTING] Applied penalties to 2198348 congested points
+[ROUTING] Iteration 11 completed in 3103270 ms
+[ROUTING] >>> PathFinder Iteration 12 <<<
+[ROUTING] Improvement: 135273 -> 104074 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 104074 (Saving at iteration 12) <<<
+[ROUTING] Updating History Costs with increment: 1.550000
+[ROUTING] Applied decay to 1879629 congested points
+[ROUTING] Applied penalties to 1894233 congested points
+[ROUTING] Iteration 12 completed in 2649670 ms
+[ROUTING] >>> PathFinder Iteration 13 <<<
+[ROUTING] Improvement: 104074 -> 80256 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 80256 (Saving at iteration 13) <<<
+[ROUTING] Updating History Costs with increment: 1.600000
+[ROUTING] Applied decay to 1593342 congested points
+[ROUTING] Applied penalties to 1604759 congested points
+[ROUTING] Iteration 13 completed in 2219595 ms
+[ROUTING] >>> PathFinder Iteration 14 <<<
+[ROUTING] Improvement: 80256 -> 58899 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 58899 (Saving at iteration 14) <<<
+[ROUTING] Updating History Costs with increment: 1.650000
+[ROUTING] Applied decay to 1305871 congested points
+[ROUTING] Applied penalties to 1314590 congested points
+[ROUTING] Iteration 14 completed in 1850689 ms
+[ROUTING] >>> PathFinder Iteration 15 <<<
+[ROUTING] Improvement: 58899 -> 42299 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 42299 (Saving at iteration 15) <<<
+[ROUTING] Updating History Costs with increment: 1.700000
+[ROUTING] Applied decay to 1069991 congested points
+[ROUTING] Applied penalties to 1076574 congested points
+[ROUTING] Iteration 15 completed in 1536992 ms
+[ROUTING] >>> PathFinder Iteration 16 <<<
+[ROUTING] Improvement: 42299 -> 34669 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 34669 (Saving at iteration 16) <<<
+[ROUTING] Updating History Costs with increment: 1.750000
+[ROUTING] Applied decay to 862507 congested points
+[ROUTING] Applied penalties to 867041 congested points
+[ROUTING] Iteration 16 completed in 1267665 ms
+[ROUTING] >>> PathFinder Iteration 17 <<<
+[ROUTING] Improvement: 34669 -> 26028 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 26028 (Saving at iteration 17) <<<
+[ROUTING] Updating History Costs with increment: 1.800000
+[ROUTING] Applied decay to 709025 congested points
+[ROUTING] Applied penalties to 712357 congested points
+[ROUTING] Iteration 17 completed in 1022851 ms
+[ROUTING] >>> PathFinder Iteration 18 <<<
+[ROUTING] Improvement: 26028 -> 20834 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 20834 (Saving at iteration 18) <<<
+[ROUTING] Updating History Costs with increment: 1.850000
+[ROUTING] Applied decay to 596660 congested points
+[ROUTING] Applied penalties to 599337 congested points
+[ROUTING] Iteration 18 completed in 869280 ms
+[ROUTING] >>> PathFinder Iteration 19 <<<
+[ROUTING] Improvement: 20834 -> 17110 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 17110 (Saving at iteration 19) <<<
+[ROUTING] Updating History Costs with increment: 1.900000
+[ROUTING] Applied decay to 521526 congested points
+[ROUTING] Applied penalties to 523655 congested points
+[ROUTING] Iteration 19 completed in 762219 ms
+[ROUTING] >>> PathFinder Iteration 20 <<<
+[ROUTING] Improvement: 17110 -> 14484 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 14484 (Saving at iteration 20) <<<
+[ROUTING] Updating History Costs with increment: 1.950000
+[ROUTING] Applied decay to 447600 congested points
+[ROUTING] Applied penalties to 449269 congested points
+[ROUTING] Iteration 20 completed in 684167 ms
+[ROUTING] >>> PathFinder Iteration 21 <<<
+[ROUTING] Improvement: 14484 -> 11536 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 11536 (Saving at iteration 21) <<<
+[ROUTING] Updating History Costs with increment: 2.000000
+[ROUTING] Applied decay to 410100 congested points
+[ROUTING] Applied penalties to 411240 congested points
+[ROUTING] Iteration 21 completed in 607871 ms
+[ROUTING] >>> PathFinder Iteration 22 <<<
+[ROUTING] Improvement: 11536 -> 9810 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 9810 (Saving at iteration 22) <<<
+[ROUTING] Updating History Costs with increment: 2.050000
+[ROUTING] Applied decay to 387139 congested points
+[ROUTING] Applied penalties to 388466 congested points
+[ROUTING] Iteration 22 completed in 583234 ms
+[ROUTING] >>> PathFinder Iteration 23 <<<
+[ROUTING] Improvement: 9810 -> 9015 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 9015 (Saving at iteration 23) <<<
+[ROUTING] Updating History Costs with increment: 2.100000
+[ROUTING] Applied decay to 367179 congested points
+[ROUTING] Applied penalties to 368125 congested points
+[ROUTING] Iteration 23 completed in 556406 ms
+[ROUTING] >>> PathFinder Iteration 24 <<<
+[ROUTING] Improvement: 9015 -> 7441 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 7441 (Saving at iteration 24) <<<
+[ROUTING] Updating History Costs with increment: 2.150000
+[ROUTING] Applied decay to 350156 congested points
+[ROUTING] Applied penalties to 350985 congested points
+[ROUTING] Iteration 24 completed in 527102 ms
+[ROUTING] >>> PathFinder Iteration 25 <<<
+[ROUTING] Improvement: 7441 -> 6550 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 6550 (Saving at iteration 25) <<<
+[ROUTING] Updating History Costs with increment: 2.200000
+[ROUTING] Applied decay to 339522 congested points
+[ROUTING] Applied penalties to 340203 congested points
+[ROUTING] Iteration 25 completed in 513417 ms
+[ROUTING] >>> PathFinder Iteration 26 <<<
+[ROUTING] Updating History Costs with increment: 2.250000
+[ROUTING] Applied decay to 336392 congested points
+[ROUTING] Applied penalties to 337286 congested points
+[ROUTING] Iteration 26 completed in 509198 ms
+[ROUTING] >>> PathFinder Iteration 27 <<<
+[ROUTING] Improvement: 6840 -> 5827 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 5827 (Saving at iteration 27) <<<
+[ROUTING] Updating History Costs with increment: 2.300000
+[ROUTING] Applied decay to 330217 congested points
+[ROUTING] Applied penalties to 330809 congested points
+[ROUTING] Iteration 27 completed in 501449 ms
+[ROUTING] >>> PathFinder Iteration 28 <<<
+[ROUTING] Improvement: 5827 -> 5274 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 5274 (Saving at iteration 28) <<<
+[ROUTING] Updating History Costs with increment: 2.350000
+[ROUTING] Applied decay to 327069 congested points
+[ROUTING] Applied penalties to 327923 congested points
+[ROUTING] Iteration 28 completed in 498809 ms
+[ROUTING] >>> PathFinder Iteration 29 <<<
+[ROUTING] Updating History Costs with increment: 2.400000
+[ROUTING] Applied decay to 323671 congested points
+[ROUTING] Applied penalties to 324516 congested points
+[ROUTING] Iteration 29 completed in 492845 ms
+[ROUTING] >>> PathFinder Iteration 30 <<<
+[ROUTING] Improvement: 5301 -> 5155 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 5155 (Saving at iteration 30) <<<
+[ROUTING] Updating History Costs with increment: 2.450000
+[ROUTING] Applied decay to 322788 congested points
+[ROUTING] Applied penalties to 323638 congested points
+[ROUTING] Iteration 30 completed in 494695 ms
+[ROUTING] >>> PathFinder Iteration 31 <<<
+[ROUTING] Improvement: 5155 -> 4503 conflicts
+[ROUTING] >>> NEW RECORD! Conflicts: 4503 (Saving at iteration 31) <<<
+[ROUTING] Updating History Costs with increment: 2.500000
+[ROUTING] Applied decay to 325102 congested points
+[ROUTING] Applied penalties to 326065 congested points
+[ROUTING] Iteration 31 completed in 489604 ms
+[ROUTING] >>> PathFinder Iteration 32 <<<
+[ROUTING] Updating History Costs with increment: 2.550000
+[ROUTING] Applied decay to 317409 congested points
+[ROUTING] Applied penalties to 318310 congested points
+[ROUTING] Iteration 32 completed in 486594 ms
+[ROUTING] >>> PathFinder Iteration 33 <<<
+[ROUTING] Updating History Costs with increment: 2.600000
+[ROUTING] Applied decay to 315854 congested points
+[ROUTING] Applied penalties to 316480 congested points
+[ROUTING] Iteration 33 completed in 484078 ms
+[ROUTING] >>> PathFinder Iteration 34 <<<
+[ROUTING] Updating History Costs with increment: 2.650000
+[ROUTING] Applied decay to 318409 congested points
+[ROUTING] Applied penalties to 319322 congested points
+[ROUTING] Iteration 34 completed in 481822 ms
+[ROUTING] >>> PathFinder Iteration 35 <<<
+[ROUTING] Improvement: 5410 -> 5383 conflicts
+[ROUTING] Updating History Costs with increment: 2.700000
+[ROUTING] Applied decay to 319543 congested points
+[ROUTING] Applied penalties to 320537 congested points
+[ROUTING] Iteration 35 completed in 478876 ms
+[ROUTING] >>> PathFinder Iteration 36 <<<
+[ROUTING] Updating History Costs with increment: 2.750000
+[ROUTING] Applied decay to 317855 congested points
+[ROUTING] Applied penalties to 318803 congested points
+[ROUTING] Iteration 36 completed in 482617 ms
+[ROUTING] >>> PathFinder Iteration 37 <<<
+[ROUTING] Updating History Costs with increment: 2.800000
+[ROUTING] Applied decay to 318518 congested points
+[ROUTING] Applied penalties to 319557 congested points
+[ROUTING] Iteration 37 completed in 479898 ms
+[ROUTING] >>> PathFinder Iteration 38 <<<
+[ROUTING] Updating History Costs with increment: 2.850000
+[ROUTING] Applied decay to 313560 congested points
+[ROUTING] Applied penalties to 314562 congested points
+[ROUTING] Iteration 38 completed in 482253 ms
+[ROUTING] >>> PathFinder Iteration 39 <<<
+[ROUTING] Updating History Costs with increment: 2.900000
+[ROUTING] Applied decay to 320223 congested points
+[ROUTING] Applied penalties to 321356 congested points
+[ROUTING] Iteration 39 completed in 474617 ms
+[ROUTING] >>> PathFinder Iteration 40 <<<
+[ROUTING] >>> STAGNATION DETECTED: No improvement for 5 iterations. Stopping early. <<<
+[ROUTING] === RESTORING BEST SOLUTION ===
+[ROUTING] Restoring best solution from iteration 31 with 4503 conflicts...
+[ROUTING] Best solution restored successfully! Grid now has 4503 conflicts
+Exported 5372 nets, 6051703 segments to visualizations/s9234/post_routing.txt
+[ROUTING] === CONFLICT EVOLUTION ANALYSIS ===
+[ROUTING] Total iterations: 41
+[ROUTING] Initial conflicts: 795751
+[ROUTING] Final conflicts: 7791
+[ROUTING] Minimum conflicts: 4503 (at iteration 31)
+[ROUTING] Total conflict reduction: 787960 (99.000000%)
+[ROUTING] Conflict trend at key iterations:
+[ROUTING]   Iter 0: 795751 conflicts
+[ROUTING]   Iter 8: 254395 conflicts
+[ROUTING]   Iter 16: 34669 conflicts
+[ROUTING]   Iter 24: 7441 conflicts
+[ROUTING]   Iter 32: 5154 conflicts
+[ROUTING]   Iter 40: 7791 conflicts
+  Iter 40: 7791 conflicts
+=====================================
+[ROUTING] Total conflicts found: 1410583
+===============================
+
+>>> FOUNDATION CHECK (Layer 0 at 4,6) <<<
+State at (4,6,0): OBSTACLE
+Neighbors at Layer 0:
+  (3,7) is PIN (Net -50764734)
+=========================================
+[ROUTING] **PATHFINDER FINAL RESULTS:**
+[ROUTING]   Networks routed: 222 (current iteration) / 5372 (total in registry)
+[ROUTING]   Note: 5150 networks were 'frozen' after finding conflict-free routes
+[ROUTING]   Conflicts evolution: 795751 → 4503 → 7791
+[ROUTING]   Conflict trend: Iter0:795751 → Iter8:254395 → Iter16:34669 → Iter24:7441 → Iter32:5154 → Iter40:7791
+[ROUTING]   Segments attempted: 79920
+[ROUTING]   Segments succeeded: 79920
+[ROUTING]   Real success rate: 100.000000%
+[ROUTING]   Traditional Statistics:
+[ROUTING]     Total wirelength: 268947.000000
+[ROUTING]     Total vias: 47710
+Reading data file: s9234/post_routing.txt
+  Processed 100000 lines...
+  Processed 200000 lines...
+  Processed 300000 lines...
+  Processed 400000 lines...
+  Processed 500000 lines...
+  Processed 600000 lines...
+  Processed 700000 lines...
+  Processed 800000 lines...
+  Processed 900000 lines...
+  Processed 1000000 lines...
+  Processed 1100000 lines...
+  Processed 1200000 lines...
+  Processed 1300000 lines...
+  Processed 1400000 lines...
+  Processed 1500000 lines...
+  Processed 1600000 lines...
+  Processed 1700000 lines...
+  Processed 1800000 lines...
+  Processed 1900000 lines...
+  Processed 2000000 lines...
+  Processed 2100000 lines...
+  Processed 2200000 lines...
+  Processed 2300000 lines...
+  Processed 2400000 lines...
+  Processed 2500000 lines...
+  Processed 2600000 lines...
+  Processed 2700000 lines...
+  Processed 2800000 lines...
+  Processed 2900000 lines...
+  Processed 3000000 lines...
+  Processed 3100000 lines...
+  Processed 3200000 lines...
+  Processed 3300000 lines...
+  Processed 3400000 lines...
+  Processed 3500000 lines...
+  Processed 3600000 lines...
+  Processed 3700000 lines...
+  Processed 3800000 lines...
+  Processed 3900000 lines...
+  Processed 4000000 lines...
+  Processed 4100000 lines...
+  Processed 4200000 lines...
+  Processed 4300000 lines...
+  Processed 4400000 lines...
+  Processed 4500000 lines...
+  Processed 4600000 lines...
+  Processed 4700000 lines...
+  Processed 4800000 lines...
+  Processed 4900000 lines...
+  Processed 5000000 lines...
+  Processed 5100000 lines...
+  Processed 5200000 lines...
+  Processed 5300000 lines...
+  Processed 5400000 lines...
+  Processed 5500000 lines...
+  Processed 5600000 lines...
+  Processed 5700000 lines...
+  Processed 5800000 lines...
+  Processed 5900000 lines...
+  Processed 6000000 lines...
+Loaded 5885 cells, 6051703 segments from 5372 networks
+Creating visualization...
+Drawing 5885 cells...
+Drawing 6051703 segments...
+Drawing 429224 vias...
+Saving visualization to: s9234/post_routing.png
+Visualization saved successfully!
+File size: s9234/post_routing.png
+
+  Routing completed:
+    Successfully routed: 222 nets
+    Failed to route: 0 nets
+    Total wirelength: 268947.0000
+    Total vias: 47710
+
+=== Back-annotating placement coordinates ===
+  Synced coordinates for 5885 cells
+
+=== Running Post-Routing STA ===
+  Parsed time_unit: 1ns
+  Parsed power_unit: 1nW
+  Parsed voltage_unit: 1V
+  Parsed current_unit: 1mA
+  Parsed resistance_unit: 1kohm
+  Successfully parsed library: NangateOpenCellLibrary
+  Cell count: 135
+  Pre-allocated space for 14278 nodes.
+Step 1: Creating timing nodes for all pins...
+  Created 14278 timing nodes.
+Step 2: Building cell arcs...
+  Created 3570 cell arcs.
+    Liberty-based arcs: 3570
+  Created 3570 timing arcs (including net arcs).
+Step 3: Building net arcs...
+  Created 7643 net arcs.
+  Total arcs: 11213
+  Created clock: main_clk (period: 10.0000 ns, source: CK)
+
+==========================================
+STA Engine: Running Analysis
+==========================================
+
+[Step 0] Resetting timing data...
+  Reset 14278 nodes.
+
+[Step 1] Updating arc delays...
+  Net arcs: 7643
+  Cell arcs: 3570
+  Updated 11213 arcs.
+
+[Step 2] Propagating Arrival Times (Forward)...
+  Topological order length: 14278
+  Start points: 249
+    Set AT of VDD/Y = 0.0
+    Set AT of CK/Y = 0.0
+    Set AT of g89/Y = 0.0
+    Set AT of g94/Y = 0.0
+    Set AT of g98/Y = 0.0
+    Set AT of g102/Y = 0.0
+    Set AT of g107/Y = 0.0
+    Set AT of g301/Y = 0.0
+    Set AT of g306/Y = 0.0
+    Set AT of g310/Y = 0.0
+    Set AT of g314/Y = 0.0
+    Set AT of g319/Y = 0.0
+    Set AT of g557/Y = 0.0
+    Set AT of g558/Y = 0.0
+    Set AT of g559/Y = 0.0
+    Set AT of g560/Y = 0.0
+    Set AT of g561/Y = 0.0
+    Set AT of g562/Y = 0.0
+    Set AT of g563/Y = 0.0
+    Set AT of g564/Y = 0.0
+    Set AT of g705/Y = 0.0
+    Set AT of g639/Y = 0.0
+    Set AT of g567/Y = 0.0
+    Set AT of g45/Y = 0.0
+    Set AT of g42/Y = 0.0
+    Set AT of g39/Y = 0.0
+    Set AT of g702/Y = 0.0
+    Set AT of g32/Y = 0.0
+    Set AT of g38/Y = 0.0
+    Set AT of g46/Y = 0.0
+    Set AT of g36/Y = 0.0
+    Set AT of g47/Y = 0.0
+    Set AT of g40/Y = 0.0
+    Set AT of g37/Y = 0.0
+    Set AT of g41/Y = 0.0
+    Set AT of g22/Y = 0.0
+    Set AT of g44/Y = 0.0
+    Set AT of g23/Y = 0.0
+    Set AT of DFF_0/Q = 0.0
+    Set AT of DFF_1/Q = 0.0
+    Set AT of DFF_2/Q = 0.0
+    Set AT of DFF_3/Q = 0.0
+    Set AT of DFF_4/Q = 0.0
+    Set AT of DFF_5/Q = 0.0
+    Set AT of DFF_6/Q = 0.0
+    Set AT of DFF_7/Q = 0.0
+    Set AT of DFF_8/Q = 0.0
+    Set AT of DFF_9/Q = 0.0
+    Set AT of DFF_10/Q = 0.0
+    Set AT of DFF_11/Q = 0.0
+    Set AT of DFF_12/Q = 0.0
+    Set AT of DFF_13/Q = 0.0
+    Set AT of DFF_14/Q = 0.0
+    Set AT of DFF_15/Q = 0.0
+    Set AT of DFF_16/Q = 0.0
+    Set AT of DFF_17/Q = 0.0
+    Set AT of DFF_18/Q = 0.0
+    Set AT of DFF_19/Q = 0.0
+    Set AT of DFF_20/Q = 0.0
+    Set AT of DFF_21/Q = 0.0
+    Set AT of DFF_22/Q = 0.0
+    Set AT of DFF_23/Q = 0.0
+    Set AT of DFF_24/Q = 0.0
+    Set AT of DFF_25/Q = 0.0
+    Set AT of DFF_26/Q = 0.0
+    Set AT of DFF_27/Q = 0.0
+    Set AT of DFF_28/Q = 0.0
+    Set AT of DFF_29/Q = 0.0
+    Set AT of DFF_30/Q = 0.0
+    Set AT of DFF_31/Q = 0.0
+    Set AT of DFF_32/Q = 0.0
+    Set AT of DFF_33/Q = 0.0
+    Set AT of DFF_34/Q = 0.0
+    Set AT of DFF_35/Q = 0.0
+    Set AT of DFF_36/Q = 0.0
+    Set AT of DFF_37/Q = 0.0
+    Set AT of DFF_38/Q = 0.0
+    Set AT of DFF_39/Q = 0.0
+    Set AT of DFF_40/Q = 0.0
+    Set AT of DFF_41/Q = 0.0
+    Set AT of DFF_42/Q = 0.0
+    Set AT of DFF_43/Q = 0.0
+    Set AT of DFF_44/Q = 0.0
+    Set AT of DFF_45/Q = 0.0
+    Set AT of DFF_46/Q = 0.0
+    Set AT of DFF_47/Q = 0.0
+    Set AT of DFF_48/Q = 0.0
+    Set AT of DFF_49/Q = 0.0
+    Set AT of DFF_50/Q = 0.0
+    Set AT of DFF_51/Q = 0.0
+    Set AT of DFF_52/Q = 0.0
+    Set AT of DFF_53/Q = 0.0
+    Set AT of DFF_54/Q = 0.0
+    Set AT of DFF_55/Q = 0.0
+    Set AT of DFF_56/Q = 0.0
+    Set AT of DFF_57/Q = 0.0
+    Set AT of DFF_58/Q = 0.0
+    Set AT of DFF_59/Q = 0.0
+    Set AT of DFF_60/Q = 0.0
+    Set AT of DFF_61/Q = 0.0
+    Set AT of DFF_62/Q = 0.0
+    Set AT of DFF_63/Q = 0.0
+    Set AT of DFF_64/Q = 0.0
+    Set AT of DFF_65/Q = 0.0
+    Set AT of DFF_66/Q = 0.0
+    Set AT of DFF_67/Q = 0.0
+    Set AT of DFF_68/Q = 0.0
+    Set AT of DFF_69/Q = 0.0
+    Set AT of DFF_70/Q = 0.0
+    Set AT of DFF_71/Q = 0.0
+    Set AT of DFF_72/Q = 0.0
+    Set AT of DFF_73/Q = 0.0
+    Set AT of DFF_74/Q = 0.0
+    Set AT of DFF_75/Q = 0.0
+    Set AT of DFF_76/Q = 0.0
+    Set AT of DFF_77/Q = 0.0
+    Set AT of DFF_78/Q = 0.0
+    Set AT of DFF_79/Q = 0.0
+    Set AT of DFF_80/Q = 0.0
+    Set AT of DFF_81/Q = 0.0
+    Set AT of DFF_82/Q = 0.0
+    Set AT of DFF_83/Q = 0.0
+    Set AT of DFF_84/Q = 0.0
+    Set AT of DFF_85/Q = 0.0
+    Set AT of DFF_86/Q = 0.0
+    Set AT of DFF_87/Q = 0.0
+    Set AT of DFF_88/Q = 0.0
+    Set AT of DFF_89/Q = 0.0
+    Set AT of DFF_90/Q = 0.0
+    Set AT of DFF_91/Q = 0.0
+    Set AT of DFF_92/Q = 0.0
+    Set AT of DFF_93/Q = 0.0
+    Set AT of DFF_94/Q = 0.0
+    Set AT of DFF_95/Q = 0.0
+    Set AT of DFF_96/Q = 0.0
+    Set AT of DFF_97/Q = 0.0
+    Set AT of DFF_98/Q = 0.0
+    Set AT of DFF_99/Q = 0.0
+    Set AT of DFF_100/Q = 0.0
+    Set AT of DFF_101/Q = 0.0
+    Set AT of DFF_102/Q = 0.0
+    Set AT of DFF_103/Q = 0.0
+    Set AT of DFF_104/Q = 0.0
+    Set AT of DFF_105/Q = 0.0
+    Set AT of DFF_106/Q = 0.0
+    Set AT of DFF_107/Q = 0.0
+    Set AT of DFF_108/Q = 0.0
+    Set AT of DFF_109/Q = 0.0
+    Set AT of DFF_110/Q = 0.0
+    Set AT of DFF_111/Q = 0.0
+    Set AT of DFF_112/Q = 0.0
+    Set AT of DFF_113/Q = 0.0
+    Set AT of DFF_114/Q = 0.0
+    Set AT of DFF_115/Q = 0.0
+    Set AT of DFF_116/Q = 0.0
+    Set AT of DFF_117/Q = 0.0
+    Set AT of DFF_118/Q = 0.0
+    Set AT of DFF_119/Q = 0.0
+    Set AT of DFF_120/Q = 0.0
+    Set AT of DFF_121/Q = 0.0
+    Set AT of DFF_122/Q = 0.0
+    Set AT of DFF_123/Q = 0.0
+    Set AT of DFF_124/Q = 0.0
+    Set AT of DFF_125/Q = 0.0
+    Set AT of DFF_126/Q = 0.0
+    Set AT of DFF_127/Q = 0.0
+    Set AT of DFF_128/Q = 0.0
+    Set AT of DFF_129/Q = 0.0
+    Set AT of DFF_130/Q = 0.0
+    Set AT of DFF_131/Q = 0.0
+    Set AT of DFF_132/Q = 0.0
+    Set AT of DFF_133/Q = 0.0
+    Set AT of DFF_134/Q = 0.0
+    Set AT of DFF_135/Q = 0.0
+    Set AT of DFF_136/Q = 0.0
+    Set AT of DFF_137/Q = 0.0
+    Set AT of DFF_138/Q = 0.0
+    Set AT of DFF_139/Q = 0.0
+    Set AT of DFF_140/Q = 0.0
+    Set AT of DFF_141/Q = 0.0
+    Set AT of DFF_142/Q = 0.0
+    Set AT of DFF_143/Q = 0.0
+    Set AT of DFF_144/Q = 0.0
+    Set AT of DFF_145/Q = 0.0
+    Set AT of DFF_146/Q = 0.0
+    Set AT of DFF_147/Q = 0.0
+    Set AT of DFF_148/Q = 0.0
+    Set AT of DFF_149/Q = 0.0
+    Set AT of DFF_150/Q = 0.0
+    Set AT of DFF_151/Q = 0.0
+    Set AT of DFF_152/Q = 0.0
+    Set AT of DFF_153/Q = 0.0
+    Set AT of DFF_154/Q = 0.0
+    Set AT of DFF_155/Q = 0.0
+    Set AT of DFF_156/Q = 0.0
+    Set AT of DFF_157/Q = 0.0
+    Set AT of DFF_158/Q = 0.0
+    Set AT of DFF_159/Q = 0.0
+    Set AT of DFF_160/Q = 0.0
+    Set AT of DFF_161/Q = 0.0
+    Set AT of DFF_162/Q = 0.0
+    Set AT of DFF_163/Q = 0.0
+    Set AT of DFF_164/Q = 0.0
+    Set AT of DFF_165/Q = 0.0
+    Set AT of DFF_166/Q = 0.0
+    Set AT of DFF_167/Q = 0.0
+    Set AT of DFF_168/Q = 0.0
+    Set AT of DFF_169/Q = 0.0
+    Set AT of DFF_170/Q = 0.0
+    Set AT of DFF_171/Q = 0.0
+    Set AT of DFF_172/Q = 0.0
+    Set AT of DFF_173/Q = 0.0
+    Set AT of DFF_174/Q = 0.0
+    Set AT of DFF_175/Q = 0.0
+    Set AT of DFF_176/Q = 0.0
+    Set AT of DFF_177/Q = 0.0
+    Set AT of DFF_178/Q = 0.0
+    Set AT of DFF_179/Q = 0.0
+    Set AT of DFF_180/Q = 0.0
+    Set AT of DFF_181/Q = 0.0
+    Set AT of DFF_182/Q = 0.0
+    Set AT of DFF_183/Q = 0.0
+    Set AT of DFF_184/Q = 0.0
+    Set AT of DFF_185/Q = 0.0
+    Set AT of DFF_186/Q = 0.0
+    Set AT of DFF_187/Q = 0.0
+    Set AT of DFF_188/Q = 0.0
+    Set AT of DFF_189/Q = 0.0
+    Set AT of DFF_190/Q = 0.0
+    Set AT of DFF_191/Q = 0.0
+    Set AT of DFF_192/Q = 0.0
+    Set AT of DFF_193/Q = 0.0
+    Set AT of DFF_194/Q = 0.0
+    Set AT of DFF_195/Q = 0.0
+    Set AT of DFF_196/Q = 0.0
+    Set AT of DFF_197/Q = 0.0
+    Set AT of DFF_198/Q = 0.0
+    Set AT of DFF_199/Q = 0.0
+    Set AT of DFF_200/Q = 0.0
+    Set AT of DFF_201/Q = 0.0
+    Set AT of DFF_202/Q = 0.0
+    Set AT of DFF_203/Q = 0.0
+    Set AT of DFF_204/Q = 0.0
+    Set AT of DFF_205/Q = 0.0
+    Set AT of DFF_206/Q = 0.0
+    Set AT of DFF_207/Q = 0.0
+    Set AT of DFF_208/Q = 0.0
+    Set AT of DFF_209/Q = 0.0
+    Set AT of DFF_210/Q = 0.0
+    Propagated AT of NOT_1398/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=1.3304ps, SlewMin=1.3304ps]
+    Propagated AT of NOT_1398/Y [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0033ps, SlewMin=0.0033ps]
+    Propagated AT of NOT_1844/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=1.7568ps, SlewMin=1.7568ps]
+    Propagated AT of NOT_1844/Y [Setup=0.0000ns, Hold=0.0000ns, SlewMax=0.0033ps, SlewMin=0.0033ps]
+    Propagated AT of NOT_2896/A [Setup=0.0000ns, Hold=0.0000ns, SlewMax=1.1762ps, SlewMin=1.1762ps]
+  Updated AT (Setup) for 908 nodes.
+  Updated AT (Hold) for 908 nodes.
+
+[Step 3] Propagating Required Times (Backward)...
+  End points: 461
+    Set RAT of g2584/A = 10.0000 ns
+    Set RAT of g3222/A = 10.0000 ns
+    Set RAT of g3600/A = 10.0000 ns
+    Set RAT of g4307/A = 10.0000 ns
+    Set RAT of g4321/A = 10.0000 ns
+    Set RAT of g4422/A = 10.0000 ns
+    Set RAT of g4809/A = 10.0000 ns
+    Set RAT of g5137/A = 10.0000 ns
+    Set RAT of g5468/A = 10.0000 ns
+    Set RAT of g5469/A = 10.0000 ns
+    Set RAT of g5692/A = 10.0000 ns
+    Set RAT of g6282/A = 10.0000 ns
+    Set RAT of g6284/A = 10.0000 ns
+    Set RAT of g6360/A = 10.0000 ns
+    Set RAT of g6362/A = 10.0000 ns
+    Set RAT of g6364/A = 10.0000 ns
+    Set RAT of g6366/A = 10.0000 ns
+    Set RAT of g6368/A = 10.0000 ns
+    Set RAT of g6370/A = 10.0000 ns
+    Set RAT of g6372/A = 10.0000 ns
+    Set RAT of g6374/A = 10.0000 ns
+    Set RAT of g6728/A = 10.0000 ns
+    Set RAT of g1290/A = 10.0000 ns
+    Set RAT of g4121/A = 10.0000 ns
+    Set RAT of g4108/A = 10.0000 ns
+    Set RAT of g4106/A = 10.0000 ns
+    Set RAT of g4103/A = 10.0000 ns
+    Set RAT of g1293/A = 10.0000 ns
+    Set RAT of g4099/A = 10.0000 ns
+    Set RAT of g4102/A = 10.0000 ns
+    Set RAT of g4109/A = 10.0000 ns
+    Set RAT of g4100/A = 10.0000 ns
+    Set RAT of g4112/A = 10.0000 ns
+    Set RAT of g4105/A = 10.0000 ns
+    Set RAT of g4101/A = 10.0000 ns
+    Set RAT of g4110/A = 10.0000 ns
+    Set RAT of g4104/A = 10.0000 ns
+    Set RAT of g4107/A = 10.0000 ns
+    Set RAT of g4098/A = 10.0000 ns
+    Set RAT of DFF_0/CK = 10.0000 ns
+    Set RAT of DFF_0/D = 10.0000 ns
+    Set RAT of DFF_1/CK = 10.0000 ns
+    Set RAT of DFF_1/D = 10.0000 ns
+    Set RAT of DFF_2/CK = 10.0000 ns
+    Set RAT of DFF_2/D = 10.0000 ns
+    Set RAT of DFF_3/CK = 10.0000 ns
+    Set RAT of DFF_3/D = 10.0000 ns
+    Set RAT of DFF_4/CK = 10.0000 ns
+    Set RAT of DFF_4/D = 10.0000 ns
+    Set RAT of DFF_5/CK = 10.0000 ns
+    Set RAT of DFF_5/D = 10.0000 ns
+    Set RAT of DFF_6/CK = 10.0000 ns
+    Set RAT of DFF_6/D = 10.0000 ns
+    Set RAT of DFF_7/CK = 10.0000 ns
+    Set RAT of DFF_7/D = 10.0000 ns
+    Set RAT of DFF_8/CK = 10.0000 ns
+    Set RAT of DFF_8/D = 10.0000 ns
+    Set RAT of DFF_9/CK = 10.0000 ns
+    Set RAT of DFF_9/D = 10.0000 ns
+    Set RAT of DFF_10/CK = 10.0000 ns
+    Set RAT of DFF_10/D = 10.0000 ns
+    Set RAT of DFF_11/CK = 10.0000 ns
+    Set RAT of DFF_11/D = 10.0000 ns
+    Set RAT of DFF_12/CK = 10.0000 ns
+    Set RAT of DFF_12/D = 10.0000 ns
+    Set RAT of DFF_13/CK = 10.0000 ns
+    Set RAT of DFF_13/D = 10.0000 ns
+    Set RAT of DFF_14/CK = 10.0000 ns
+    Set RAT of DFF_14/D = 10.0000 ns
+    Set RAT of DFF_15/CK = 10.0000 ns
+    Set RAT of DFF_15/D = 10.0000 ns
+    Set RAT of DFF_16/CK = 10.0000 ns
+    Set RAT of DFF_16/D = 10.0000 ns
+    Set RAT of DFF_17/CK = 10.0000 ns
+    Set RAT of DFF_17/D = 10.0000 ns
+    Set RAT of DFF_18/CK = 10.0000 ns
+    Set RAT of DFF_18/D = 10.0000 ns
+    Set RAT of DFF_19/CK = 10.0000 ns
+    Set RAT of DFF_19/D = 10.0000 ns
+    Set RAT of DFF_20/CK = 10.0000 ns
+    Set RAT of DFF_20/D = 10.0000 ns
+    Set RAT of DFF_21/CK = 10.0000 ns
+    Set RAT of DFF_21/D = 10.0000 ns
+    Set RAT of DFF_22/CK = 10.0000 ns
+    Set RAT of DFF_22/D = 10.0000 ns
+    Set RAT of DFF_23/CK = 10.0000 ns
+    Set RAT of DFF_23/D = 10.0000 ns
+    Set RAT of DFF_24/CK = 10.0000 ns
+    Set RAT of DFF_24/D = 10.0000 ns
+    Set RAT of DFF_25/CK = 10.0000 ns
+    Set RAT of DFF_25/D = 10.0000 ns
+    Set RAT of DFF_26/CK = 10.0000 ns
+    Set RAT of DFF_26/D = 10.0000 ns
+    Set RAT of DFF_27/CK = 10.0000 ns
+    Set RAT of DFF_27/D = 10.0000 ns
+    Set RAT of DFF_28/CK = 10.0000 ns
+    Set RAT of DFF_28/D = 10.0000 ns
+    Set RAT of DFF_29/CK = 10.0000 ns
+    Set RAT of DFF_29/D = 10.0000 ns
+    Set RAT of DFF_30/CK = 10.0000 ns
+    Set RAT of DFF_30/D = 10.0000 ns
+    Set RAT of DFF_31/CK = 10.0000 ns
+    Set RAT of DFF_31/D = 10.0000 ns
+    Set RAT of DFF_32/CK = 10.0000 ns
+    Set RAT of DFF_32/D = 10.0000 ns
+    Set RAT of DFF_33/CK = 10.0000 ns
+    Set RAT of DFF_33/D = 10.0000 ns
+    Set RAT of DFF_34/CK = 10.0000 ns
+    Set RAT of DFF_34/D = 10.0000 ns
+    Set RAT of DFF_35/CK = 10.0000 ns
+    Set RAT of DFF_35/D = 10.0000 ns
+    Set RAT of DFF_36/CK = 10.0000 ns
+    Set RAT of DFF_36/D = 10.0000 ns
+    Set RAT of DFF_37/CK = 10.0000 ns
+    Set RAT of DFF_37/D = 10.0000 ns
+    Set RAT of DFF_38/CK = 10.0000 ns
+    Set RAT of DFF_38/D = 10.0000 ns
+    Set RAT of DFF_39/CK = 10.0000 ns
+    Set RAT of DFF_39/D = 10.0000 ns
+    Set RAT of DFF_40/CK = 10.0000 ns
+    Set RAT of DFF_40/D = 10.0000 ns
+    Set RAT of DFF_41/CK = 10.0000 ns
+    Set RAT of DFF_41/D = 10.0000 ns
+    Set RAT of DFF_42/CK = 10.0000 ns
+    Set RAT of DFF_42/D = 10.0000 ns
+    Set RAT of DFF_43/CK = 10.0000 ns
+    Set RAT of DFF_43/D = 10.0000 ns
+    Set RAT of DFF_44/CK = 10.0000 ns
+    Set RAT of DFF_44/D = 10.0000 ns
+    Set RAT of DFF_45/CK = 10.0000 ns
+    Set RAT of DFF_45/D = 10.0000 ns
+    Set RAT of DFF_46/CK = 10.0000 ns
+    Set RAT of DFF_46/D = 10.0000 ns
+    Set RAT of DFF_47/CK = 10.0000 ns
+    Set RAT of DFF_47/D = 10.0000 ns
+    Set RAT of DFF_48/CK = 10.0000 ns
+    Set RAT of DFF_48/D = 10.0000 ns
+    Set RAT of DFF_49/CK = 10.0000 ns
+    Set RAT of DFF_49/D = 10.0000 ns
+    Set RAT of DFF_50/CK = 10.0000 ns
+    Set RAT of DFF_50/D = 10.0000 ns
+    Set RAT of DFF_51/CK = 10.0000 ns
+    Set RAT of DFF_51/D = 10.0000 ns
+    Set RAT of DFF_52/CK = 10.0000 ns
+    Set RAT of DFF_52/D = 10.0000 ns
+    Set RAT of DFF_53/CK = 10.0000 ns
+    Set RAT of DFF_53/D = 10.0000 ns
+    Set RAT of DFF_54/CK = 10.0000 ns
+    Set RAT of DFF_54/D = 10.0000 ns
+    Set RAT of DFF_55/CK = 10.0000 ns
+    Set RAT of DFF_55/D = 10.0000 ns
+    Set RAT of DFF_56/CK = 10.0000 ns
+    Set RAT of DFF_56/D = 10.0000 ns
+    Set RAT of DFF_57/CK = 10.0000 ns
+    Set RAT of DFF_57/D = 10.0000 ns
+    Set RAT of DFF_58/CK = 10.0000 ns
+    Set RAT of DFF_58/D = 10.0000 ns
+    Set RAT of DFF_59/CK = 10.0000 ns
+    Set RAT of DFF_59/D = 10.0000 ns
+    Set RAT of DFF_60/CK = 10.0000 ns
+    Set RAT of DFF_60/D = 10.0000 ns
+    Set RAT of DFF_61/CK = 10.0000 ns
+    Set RAT of DFF_61/D = 10.0000 ns
+    Set RAT of DFF_62/CK = 10.0000 ns
+    Set RAT of DFF_62/D = 10.0000 ns
+    Set RAT of DFF_63/CK = 10.0000 ns
+    Set RAT of DFF_63/D = 10.0000 ns
+    Set RAT of DFF_64/CK = 10.0000 ns
+    Set RAT of DFF_64/D = 10.0000 ns
+    Set RAT of DFF_65/CK = 10.0000 ns
+    Set RAT of DFF_65/D = 10.0000 ns
+    Set RAT of DFF_66/CK = 10.0000 ns
+    Set RAT of DFF_66/D = 10.0000 ns
+    Set RAT of DFF_67/CK = 10.0000 ns
+    Set RAT of DFF_67/D = 10.0000 ns
+    Set RAT of DFF_68/CK = 10.0000 ns
+    Set RAT of DFF_68/D = 10.0000 ns
+    Set RAT of DFF_69/CK = 10.0000 ns
+    Set RAT of DFF_69/D = 10.0000 ns
+    Set RAT of DFF_70/CK = 10.0000 ns
+    Set RAT of DFF_70/D = 10.0000 ns
+    Set RAT of DFF_71/CK = 10.0000 ns
+    Set RAT of DFF_71/D = 10.0000 ns
+    Set RAT of DFF_72/CK = 10.0000 ns
+    Set RAT of DFF_72/D = 10.0000 ns
+    Set RAT of DFF_73/CK = 10.0000 ns
+    Set RAT of DFF_73/D = 10.0000 ns
+    Set RAT of DFF_74/CK = 10.0000 ns
+    Set RAT of DFF_74/D = 10.0000 ns
+    Set RAT of DFF_75/CK = 10.0000 ns
+    Set RAT of DFF_75/D = 10.0000 ns
+    Set RAT of DFF_76/CK = 10.0000 ns
+    Set RAT of DFF_76/D = 10.0000 ns
+    Set RAT of DFF_77/CK = 10.0000 ns
+    Set RAT of DFF_77/D = 10.0000 ns
+    Set RAT of DFF_78/CK = 10.0000 ns
+    Set RAT of DFF_78/D = 10.0000 ns
+    Set RAT of DFF_79/CK = 10.0000 ns
+    Set RAT of DFF_79/D = 10.0000 ns
+    Set RAT of DFF_80/CK = 10.0000 ns
+    Set RAT of DFF_80/D = 10.0000 ns
+    Set RAT of DFF_81/CK = 10.0000 ns
+    Set RAT of DFF_81/D = 10.0000 ns
+    Set RAT of DFF_82/CK = 10.0000 ns
+    Set RAT of DFF_82/D = 10.0000 ns
+    Set RAT of DFF_83/CK = 10.0000 ns
+    Set RAT of DFF_83/D = 10.0000 ns
+    Set RAT of DFF_84/CK = 10.0000 ns
+    Set RAT of DFF_84/D = 10.0000 ns
+    Set RAT of DFF_85/CK = 10.0000 ns
+    Set RAT of DFF_85/D = 10.0000 ns
+    Set RAT of DFF_86/CK = 10.0000 ns
+    Set RAT of DFF_86/D = 10.0000 ns
+    Set RAT of DFF_87/CK = 10.0000 ns
+    Set RAT of DFF_87/D = 10.0000 ns
+    Set RAT of DFF_88/CK = 10.0000 ns
+    Set RAT of DFF_88/D = 10.0000 ns
+    Set RAT of DFF_89/CK = 10.0000 ns
+    Set RAT of DFF_89/D = 10.0000 ns
+    Set RAT of DFF_90/CK = 10.0000 ns
+    Set RAT of DFF_90/D = 10.0000 ns
+    Set RAT of DFF_91/CK = 10.0000 ns
+    Set RAT of DFF_91/D = 10.0000 ns
+    Set RAT of DFF_92/CK = 10.0000 ns
+    Set RAT of DFF_92/D = 10.0000 ns
+    Set RAT of DFF_93/CK = 10.0000 ns
+    Set RAT of DFF_93/D = 10.0000 ns
+    Set RAT of DFF_94/CK = 10.0000 ns
+    Set RAT of DFF_94/D = 10.0000 ns
+    Set RAT of DFF_95/CK = 10.0000 ns
+    Set RAT of DFF_95/D = 10.0000 ns
+    Set RAT of DFF_96/CK = 10.0000 ns
+    Set RAT of DFF_96/D = 10.0000 ns
+    Set RAT of DFF_97/CK = 10.0000 ns
+    Set RAT of DFF_97/D = 10.0000 ns
+    Set RAT of DFF_98/CK = 10.0000 ns
+    Set RAT of DFF_98/D = 10.0000 ns
+    Set RAT of DFF_99/CK = 10.0000 ns
+    Set RAT of DFF_99/D = 10.0000 ns
+    Set RAT of DFF_100/CK = 10.0000 ns
+    Set RAT of DFF_100/D = 10.0000 ns
+    Set RAT of DFF_101/CK = 10.0000 ns
+    Set RAT of DFF_101/D = 10.0000 ns
+    Set RAT of DFF_102/CK = 10.0000 ns
+    Set RAT of DFF_102/D = 10.0000 ns
+    Set RAT of DFF_103/CK = 10.0000 ns
+    Set RAT of DFF_103/D = 10.0000 ns
+    Set RAT of DFF_104/CK = 10.0000 ns
+    Set RAT of DFF_104/D = 10.0000 ns
+    Set RAT of DFF_105/CK = 10.0000 ns
+    Set RAT of DFF_105/D = 10.0000 ns
+    Set RAT of DFF_106/CK = 10.0000 ns
+    Set RAT of DFF_106/D = 10.0000 ns
+    Set RAT of DFF_107/CK = 10.0000 ns
+    Set RAT of DFF_107/D = 10.0000 ns
+    Set RAT of DFF_108/CK = 10.0000 ns
+    Set RAT of DFF_108/D = 10.0000 ns
+    Set RAT of DFF_109/CK = 10.0000 ns
+    Set RAT of DFF_109/D = 10.0000 ns
+    Set RAT of DFF_110/CK = 10.0000 ns
+    Set RAT of DFF_110/D = 10.0000 ns
+    Set RAT of DFF_111/CK = 10.0000 ns
+    Set RAT of DFF_111/D = 10.0000 ns
+    Set RAT of DFF_112/CK = 10.0000 ns
+    Set RAT of DFF_112/D = 10.0000 ns
+    Set RAT of DFF_113/CK = 10.0000 ns
+    Set RAT of DFF_113/D = 10.0000 ns
+    Set RAT of DFF_114/CK = 10.0000 ns
+    Set RAT of DFF_114/D = 10.0000 ns
+    Set RAT of DFF_115/CK = 10.0000 ns
+    Set RAT of DFF_115/D = 10.0000 ns
+    Set RAT of DFF_116/CK = 10.0000 ns
+    Set RAT of DFF_116/D = 10.0000 ns
+    Set RAT of DFF_117/CK = 10.0000 ns
+    Set RAT of DFF_117/D = 10.0000 ns
+    Set RAT of DFF_118/CK = 10.0000 ns
+    Set RAT of DFF_118/D = 10.0000 ns
+    Set RAT of DFF_119/CK = 10.0000 ns
+    Set RAT of DFF_119/D = 10.0000 ns
+    Set RAT of DFF_120/CK = 10.0000 ns
+    Set RAT of DFF_120/D = 10.0000 ns
+    Set RAT of DFF_121/CK = 10.0000 ns
+    Set RAT of DFF_121/D = 10.0000 ns
+    Set RAT of DFF_122/CK = 10.0000 ns
+    Set RAT of DFF_122/D = 10.0000 ns
+    Set RAT of DFF_123/CK = 10.0000 ns
+    Set RAT of DFF_123/D = 10.0000 ns
+    Set RAT of DFF_124/CK = 10.0000 ns
+    Set RAT of DFF_124/D = 10.0000 ns
+    Set RAT of DFF_125/CK = 10.0000 ns
+    Set RAT of DFF_125/D = 10.0000 ns
+    Set RAT of DFF_126/CK = 10.0000 ns
+    Set RAT of DFF_126/D = 10.0000 ns
+    Set RAT of DFF_127/CK = 10.0000 ns
+    Set RAT of DFF_127/D = 10.0000 ns
+    Set RAT of DFF_128/CK = 10.0000 ns
+    Set RAT of DFF_128/D = 10.0000 ns
+    Set RAT of DFF_129/CK = 10.0000 ns
+    Set RAT of DFF_129/D = 10.0000 ns
+    Set RAT of DFF_130/CK = 10.0000 ns
+    Set RAT of DFF_130/D = 10.0000 ns
+    Set RAT of DFF_131/CK = 10.0000 ns
+    Set RAT of DFF_131/D = 10.0000 ns
+    Set RAT of DFF_132/CK = 10.0000 ns
+    Set RAT of DFF_132/D = 10.0000 ns
+    Set RAT of DFF_133/CK = 10.0000 ns
+    Set RAT of DFF_133/D = 10.0000 ns
+    Set RAT of DFF_134/CK = 10.0000 ns
+    Set RAT of DFF_134/D = 10.0000 ns
+    Set RAT of DFF_135/CK = 10.0000 ns
+    Set RAT of DFF_135/D = 10.0000 ns
+    Set RAT of DFF_136/CK = 10.0000 ns
+    Set RAT of DFF_136/D = 10.0000 ns
+    Set RAT of DFF_137/CK = 10.0000 ns
+    Set RAT of DFF_137/D = 10.0000 ns
+    Set RAT of DFF_138/CK = 10.0000 ns
+    Set RAT of DFF_138/D = 10.0000 ns
+    Set RAT of DFF_139/CK = 10.0000 ns
+    Set RAT of DFF_139/D = 10.0000 ns
+    Set RAT of DFF_140/CK = 10.0000 ns
+    Set RAT of DFF_140/D = 10.0000 ns
+    Set RAT of DFF_141/CK = 10.0000 ns
+    Set RAT of DFF_141/D = 10.0000 ns
+    Set RAT of DFF_142/CK = 10.0000 ns
+    Set RAT of DFF_142/D = 10.0000 ns
+    Set RAT of DFF_143/CK = 10.0000 ns
+    Set RAT of DFF_143/D = 10.0000 ns
+    Set RAT of DFF_144/CK = 10.0000 ns
+    Set RAT of DFF_144/D = 10.0000 ns
+    Set RAT of DFF_145/CK = 10.0000 ns
+    Set RAT of DFF_145/D = 10.0000 ns
+    Set RAT of DFF_146/CK = 10.0000 ns
+    Set RAT of DFF_146/D = 10.0000 ns
+    Set RAT of DFF_147/CK = 10.0000 ns
+    Set RAT of DFF_147/D = 10.0000 ns
+    Set RAT of DFF_148/CK = 10.0000 ns
+    Set RAT of DFF_148/D = 10.0000 ns
+    Set RAT of DFF_149/CK = 10.0000 ns
+    Set RAT of DFF_149/D = 10.0000 ns
+    Set RAT of DFF_150/CK = 10.0000 ns
+    Set RAT of DFF_150/D = 10.0000 ns
+    Set RAT of DFF_151/CK = 10.0000 ns
+    Set RAT of DFF_151/D = 10.0000 ns
+    Set RAT of DFF_152/CK = 10.0000 ns
+    Set RAT of DFF_152/D = 10.0000 ns
+    Set RAT of DFF_153/CK = 10.0000 ns
+    Set RAT of DFF_153/D = 10.0000 ns
+    Set RAT of DFF_154/CK = 10.0000 ns
+    Set RAT of DFF_154/D = 10.0000 ns
+    Set RAT of DFF_155/CK = 10.0000 ns
+    Set RAT of DFF_155/D = 10.0000 ns
+    Set RAT of DFF_156/CK = 10.0000 ns
+    Set RAT of DFF_156/D = 10.0000 ns
+    Set RAT of DFF_157/CK = 10.0000 ns
+    Set RAT of DFF_157/D = 10.0000 ns
+    Set RAT of DFF_158/CK = 10.0000 ns
+    Set RAT of DFF_158/D = 10.0000 ns
+    Set RAT of DFF_159/CK = 10.0000 ns
+    Set RAT of DFF_159/D = 10.0000 ns
+    Set RAT of DFF_160/CK = 10.0000 ns
+    Set RAT of DFF_160/D = 10.0000 ns
+    Set RAT of DFF_161/CK = 10.0000 ns
+    Set RAT of DFF_161/D = 10.0000 ns
+    Set RAT of DFF_162/CK = 10.0000 ns
+    Set RAT of DFF_162/D = 10.0000 ns
+    Set RAT of DFF_163/CK = 10.0000 ns
+    Set RAT of DFF_163/D = 10.0000 ns
+    Set RAT of DFF_164/CK = 10.0000 ns
+    Set RAT of DFF_164/D = 10.0000 ns
+    Set RAT of DFF_165/CK = 10.0000 ns
+    Set RAT of DFF_165/D = 10.0000 ns
+    Set RAT of DFF_166/CK = 10.0000 ns
+    Set RAT of DFF_166/D = 10.0000 ns
+    Set RAT of DFF_167/CK = 10.0000 ns
+    Set RAT of DFF_167/D = 10.0000 ns
+    Set RAT of DFF_168/CK = 10.0000 ns
+    Set RAT of DFF_168/D = 10.0000 ns
+    Set RAT of DFF_169/CK = 10.0000 ns
+    Set RAT of DFF_169/D = 10.0000 ns
+    Set RAT of DFF_170/CK = 10.0000 ns
+    Set RAT of DFF_170/D = 10.0000 ns
+    Set RAT of DFF_171/CK = 10.0000 ns
+    Set RAT of DFF_171/D = 10.0000 ns
+    Set RAT of DFF_172/CK = 10.0000 ns
+    Set RAT of DFF_172/D = 10.0000 ns
+    Set RAT of DFF_173/CK = 10.0000 ns
+    Set RAT of DFF_173/D = 10.0000 ns
+    Set RAT of DFF_174/CK = 10.0000 ns
+    Set RAT of DFF_174/D = 10.0000 ns
+    Set RAT of DFF_175/CK = 10.0000 ns
+    Set RAT of DFF_175/D = 10.0000 ns
+    Set RAT of DFF_176/CK = 10.0000 ns
+    Set RAT of DFF_176/D = 10.0000 ns
+    Set RAT of DFF_177/CK = 10.0000 ns
+    Set RAT of DFF_177/D = 10.0000 ns
+    Set RAT of DFF_178/CK = 10.0000 ns
+    Set RAT of DFF_178/D = 10.0000 ns
+    Set RAT of DFF_179/CK = 10.0000 ns
+    Set RAT of DFF_179/D = 10.0000 ns
+    Set RAT of DFF_180/CK = 10.0000 ns
+    Set RAT of DFF_180/D = 10.0000 ns
+    Set RAT of DFF_181/CK = 10.0000 ns
+    Set RAT of DFF_181/D = 10.0000 ns
+    Set RAT of DFF_182/CK = 10.0000 ns
+    Set RAT of DFF_182/D = 10.0000 ns
+    Set RAT of DFF_183/CK = 10.0000 ns
+    Set RAT of DFF_183/D = 10.0000 ns
+    Set RAT of DFF_184/CK = 10.0000 ns
+    Set RAT of DFF_184/D = 10.0000 ns
+    Set RAT of DFF_185/CK = 10.0000 ns
+    Set RAT of DFF_185/D = 10.0000 ns
+    Set RAT of DFF_186/CK = 10.0000 ns
+    Set RAT of DFF_186/D = 10.0000 ns
+    Set RAT of DFF_187/CK = 10.0000 ns
+    Set RAT of DFF_187/D = 10.0000 ns
+    Set RAT of DFF_188/CK = 10.0000 ns
+    Set RAT of DFF_188/D = 10.0000 ns
+    Set RAT of DFF_189/CK = 10.0000 ns
+    Set RAT of DFF_189/D = 10.0000 ns
+    Set RAT of DFF_190/CK = 10.0000 ns
+    Set RAT of DFF_190/D = 10.0000 ns
+    Set RAT of DFF_191/CK = 10.0000 ns
+    Set RAT of DFF_191/D = 10.0000 ns
+    Set RAT of DFF_192/CK = 10.0000 ns
+    Set RAT of DFF_192/D = 10.0000 ns
+    Set RAT of DFF_193/CK = 10.0000 ns
+    Set RAT of DFF_193/D = 10.0000 ns
+    Set RAT of DFF_194/CK = 10.0000 ns
+    Set RAT of DFF_194/D = 10.0000 ns
+    Set RAT of DFF_195/CK = 10.0000 ns
+    Set RAT of DFF_195/D = 10.0000 ns
+    Set RAT of DFF_196/CK = 10.0000 ns
+    Set RAT of DFF_196/D = 10.0000 ns
+    Set RAT of DFF_197/CK = 10.0000 ns
+    Set RAT of DFF_197/D = 10.0000 ns
+    Set RAT of DFF_198/CK = 10.0000 ns
+    Set RAT of DFF_198/D = 10.0000 ns
+    Set RAT of DFF_199/CK = 10.0000 ns
+    Set RAT of DFF_199/D = 10.0000 ns
+    Set RAT of DFF_200/CK = 10.0000 ns
+    Set RAT of DFF_200/D = 10.0000 ns
+    Set RAT of DFF_201/CK = 10.0000 ns
+    Set RAT of DFF_201/D = 10.0000 ns
+    Set RAT of DFF_202/CK = 10.0000 ns
+    Set RAT of DFF_202/D = 10.0000 ns
+    Set RAT of DFF_203/CK = 10.0000 ns
+    Set RAT of DFF_203/D = 10.0000 ns
+    Set RAT of DFF_204/CK = 10.0000 ns
+    Set RAT of DFF_204/D = 10.0000 ns
+    Set RAT of DFF_205/CK = 10.0000 ns
+    Set RAT of DFF_205/D = 10.0000 ns
+    Set RAT of DFF_206/CK = 10.0000 ns
+    Set RAT of DFF_206/D = 10.0000 ns
+    Set RAT of DFF_207/CK = 10.0000 ns
+    Set RAT of DFF_207/D = 10.0000 ns
+    Set RAT of DFF_208/CK = 10.0000 ns
+    Set RAT of DFF_208/D = 10.0000 ns
+    Set RAT of DFF_209/CK = 10.0000 ns
+    Set RAT of DFF_209/D = 10.0000 ns
+    Set RAT of DFF_210/CK = 10.0000 ns
+    Set RAT of DFF_210/D = 10.0000 ns
+
+[Step 3.5] Checking Setup/Hold Constraints with Liberty Lookup Tables...
+  Skipping DFF DFF_210: Clock or data arrival time not initialized
+  Skipping DFF DFF_209: Clock or data arrival time not initialized
+  Skipping DFF DFF_208: Clock or data arrival time not initialized
+  Skipping DFF DFF_207: Clock or data arrival time not initialized
+  Skipping DFF DFF_206: Clock or data arrival time not initialized
+  Skipping DFF DFF_205: Clock or data arrival time not initialized
+  Skipping DFF DFF_204: Clock or data arrival time not initialized
+  Skipping DFF DFF_203: Clock or data arrival time not initialized
+  Skipping DFF DFF_202: Clock or data arrival time not initialized
+  Skipping DFF DFF_201: Clock or data arrival time not initialized
+  Skipping DFF DFF_200: Clock or data arrival time not initialized
+  Skipping DFF DFF_199: Clock or data arrival time not initialized
+  Skipping DFF DFF_198: Clock or data arrival time not initialized
+  Skipping DFF DFF_197: Clock or data arrival time not initialized
+  Skipping DFF DFF_196: Clock or data arrival time not initialized
+  Skipping DFF DFF_195: Clock or data arrival time not initialized
+  Skipping DFF DFF_194: Clock or data arrival time not initialized
+  Skipping DFF DFF_193: Clock or data arrival time not initialized
+  Skipping DFF DFF_192: Clock or data arrival time not initialized
+  Skipping DFF DFF_191: Clock or data arrival time not initialized
+  Skipping DFF DFF_190: Clock or data arrival time not initialized
+  Skipping DFF DFF_189: Clock or data arrival time not initialized
+  Skipping DFF DFF_188: Clock or data arrival time not initialized
+  Skipping DFF DFF_187: Clock or data arrival time not initialized
+  Skipping DFF DFF_186: Clock or data arrival time not initialized
+  Skipping DFF DFF_185: Clock or data arrival time not initialized
+  Skipping DFF DFF_184: Clock or data arrival time not initialized
+  Skipping DFF DFF_183: Clock or data arrival time not initialized
+  Skipping DFF DFF_182: Clock or data arrival time not initialized
+  Skipping DFF DFF_181: Clock or data arrival time not initialized
+  Skipping DFF DFF_180: Clock or data arrival time not initialized
+  Skipping DFF DFF_179: Clock or data arrival time not initialized
+  Skipping DFF DFF_178: Clock or data arrival time not initialized
+  Skipping DFF DFF_177: Clock or data arrival time not initialized
+  Skipping DFF DFF_176: Clock or data arrival time not initialized
+  Skipping DFF DFF_175: Clock or data arrival time not initialized
+  Skipping DFF DFF_174: Clock or data arrival time not initialized
+  Skipping DFF DFF_173: Clock or data arrival time not initialized
+  Skipping DFF DFF_172: Clock or data arrival time not initialized
+  Skipping DFF DFF_171: Clock or data arrival time not initialized
+  Skipping DFF DFF_170: Clock or data arrival time not initialized
+  Skipping DFF DFF_169: Clock or data arrival time not initialized
+  Skipping DFF DFF_168: Clock or data arrival time not initialized
+  Skipping DFF DFF_167: Clock or data arrival time not initialized
+  Skipping DFF DFF_166: Clock or data arrival time not initialized
+  Skipping DFF DFF_165: Clock or data arrival time not initialized
+  Skipping DFF DFF_164: Clock or data arrival time not initialized
+  Skipping DFF DFF_163: Clock or data arrival time not initialized
+  Skipping DFF DFF_162: Clock or data arrival time not initialized
+  Skipping DFF DFF_161: Clock or data arrival time not initialized
+  Skipping DFF DFF_160: Clock or data arrival time not initialized
+  Skipping DFF DFF_159: Clock or data arrival time not initialized
+  Skipping DFF DFF_158: Clock or data arrival time not initialized
+  Skipping DFF DFF_157: Clock or data arrival time not initialized
+  Skipping DFF DFF_156: Clock or data arrival time not initialized
+  Skipping DFF DFF_155: Clock or data arrival time not initialized
+  Skipping DFF DFF_154: Clock or data arrival time not initialized
+  Skipping DFF DFF_153: Clock or data arrival time not initialized
+  Skipping DFF DFF_152: Clock or data arrival time not initialized
+  Skipping DFF DFF_151: Clock or data arrival time not initialized
+  Skipping DFF DFF_150: Clock or data arrival time not initialized
+  Skipping DFF DFF_149: Clock or data arrival time not initialized
+  Skipping DFF DFF_148: Clock or data arrival time not initialized
+  Skipping DFF DFF_147: Clock or data arrival time not initialized
+  Skipping DFF DFF_146: Clock or data arrival time not initialized
+  Skipping DFF DFF_145: Clock or data arrival time not initialized
+  Skipping DFF DFF_144: Clock or data arrival time not initialized
+  Skipping DFF DFF_143: Clock or data arrival time not initialized
+  Skipping DFF DFF_142: Clock or data arrival time not initialized
+  Skipping DFF DFF_141: Clock or data arrival time not initialized
+  Skipping DFF DFF_140: Clock or data arrival time not initialized
+  Skipping DFF DFF_139: Clock or data arrival time not initialized
+  Skipping DFF DFF_138: Clock or data arrival time not initialized
+  Skipping DFF DFF_137: Clock or data arrival time not initialized
+  Skipping DFF DFF_136: Clock or data arrival time not initialized
+  Skipping DFF DFF_135: Clock or data arrival time not initialized
+  Skipping DFF DFF_134: Clock or data arrival time not initialized
+  Skipping DFF DFF_133: Clock or data arrival time not initialized
+  Skipping DFF DFF_132: Clock or data arrival time not initialized
+  Skipping DFF DFF_131: Clock or data arrival time not initialized
+  Skipping DFF DFF_130: Clock or data arrival time not initialized
+  Skipping DFF DFF_129: Clock or data arrival time not initialized
+  Skipping DFF DFF_128: Clock or data arrival time not initialized
+  Skipping DFF DFF_127: Clock or data arrival time not initialized
+  Skipping DFF DFF_126: Clock or data arrival time not initialized
+  Skipping DFF DFF_125: Clock or data arrival time not initialized
+  Skipping DFF DFF_124: Clock or data arrival time not initialized
+  Skipping DFF DFF_123: Clock or data arrival time not initialized
+  Skipping DFF DFF_122: Clock or data arrival time not initialized
+  Skipping DFF DFF_121: Clock or data arrival time not initialized
+  Skipping DFF DFF_120: Clock or data arrival time not initialized
+  Skipping DFF DFF_119: Clock or data arrival time not initialized
+  Skipping DFF DFF_118: Clock or data arrival time not initialized
+  Skipping DFF DFF_117: Clock or data arrival time not initialized
+  Skipping DFF DFF_116: Clock or data arrival time not initialized
+  Skipping DFF DFF_115: Clock or data arrival time not initialized
+  Skipping DFF DFF_114: Clock or data arrival time not initialized
+  Skipping DFF DFF_113: Clock or data arrival time not initialized
+  Skipping DFF DFF_112: Clock or data arrival time not initialized
+  Skipping DFF DFF_111: Clock or data arrival time not initialized
+  Skipping DFF DFF_110: Clock or data arrival time not initialized
+  Skipping DFF DFF_109: Clock or data arrival time not initialized
+  Skipping DFF DFF_108: Clock or data arrival time not initialized
+  Skipping DFF DFF_107: Clock or data arrival time not initialized
+  Skipping DFF DFF_106: Clock or data arrival time not initialized
+  Skipping DFF DFF_105: Clock or data arrival time not initialized
+  Skipping DFF DFF_104: Clock or data arrival time not initialized
+  Skipping DFF DFF_103: Clock or data arrival time not initialized
+  Skipping DFF DFF_102: Clock or data arrival time not initialized
+  Skipping DFF DFF_101: Clock or data arrival time not initialized
+  Skipping DFF DFF_100: Clock or data arrival time not initialized
+  Skipping DFF DFF_99: Clock or data arrival time not initialized
+  Skipping DFF DFF_98: Clock or data arrival time not initialized
+  Skipping DFF DFF_97: Clock or data arrival time not initialized
+  Skipping DFF DFF_96: Clock or data arrival time not initialized
+  Skipping DFF DFF_95: Clock or data arrival time not initialized
+  Skipping DFF DFF_94: Clock or data arrival time not initialized
+  Skipping DFF DFF_93: Clock or data arrival time not initialized
+  Skipping DFF DFF_92: Clock or data arrival time not initialized
+  Skipping DFF DFF_91: Clock or data arrival time not initialized
+  Skipping DFF DFF_90: Clock or data arrival time not initialized
+  Skipping DFF DFF_89: Clock or data arrival time not initialized
+  Skipping DFF DFF_88: Clock or data arrival time not initialized
+  Skipping DFF DFF_87: Clock or data arrival time not initialized
+  Skipping DFF DFF_86: Clock or data arrival time not initialized
+  Skipping DFF DFF_85: Clock or data arrival time not initialized
+  Skipping DFF DFF_84: Clock or data arrival time not initialized
+  Skipping DFF DFF_83: Clock or data arrival time not initialized
+  Skipping DFF DFF_82: Clock or data arrival time not initialized
+  Skipping DFF DFF_81: Clock or data arrival time not initialized
+  Skipping DFF DFF_80: Clock or data arrival time not initialized
+  Skipping DFF DFF_79: Clock or data arrival time not initialized
+  Skipping DFF DFF_78: Clock or data arrival time not initialized
+  Skipping DFF DFF_77: Clock or data arrival time not initialized
+  Skipping DFF DFF_76: Clock or data arrival time not initialized
+  Skipping DFF DFF_75: Clock or data arrival time not initialized
+  Skipping DFF DFF_74: Clock or data arrival time not initialized
+  Skipping DFF DFF_73: Clock or data arrival time not initialized
+  Skipping DFF DFF_72: Clock or data arrival time not initialized
+  Skipping DFF DFF_71: Clock or data arrival time not initialized
+  Skipping DFF DFF_70: Clock or data arrival time not initialized
+  Skipping DFF DFF_69: Clock or data arrival time not initialized
+  Skipping DFF DFF_68: Clock or data arrival time not initialized
+  Skipping DFF DFF_67: Clock or data arrival time not initialized
+  Skipping DFF DFF_66: Clock or data arrival time not initialized
+  Skipping DFF DFF_65: Clock or data arrival time not initialized
+  Skipping DFF DFF_64: Clock or data arrival time not initialized
+  Skipping DFF DFF_63: Clock or data arrival time not initialized
+  Skipping DFF DFF_62: Clock or data arrival time not initialized
+  Skipping DFF DFF_61: Clock or data arrival time not initialized
+  Skipping DFF DFF_60: Clock or data arrival time not initialized
+  Skipping DFF DFF_59: Clock or data arrival time not initialized
+  Skipping DFF DFF_58: Clock or data arrival time not initialized
+  Skipping DFF DFF_57: Clock or data arrival time not initialized
+  Skipping DFF DFF_56: Clock or data arrival time not initialized
+  Skipping DFF DFF_55: Clock or data arrival time not initialized
+  Skipping DFF DFF_54: Clock or data arrival time not initialized
+  Skipping DFF DFF_53: Clock or data arrival time not initialized
+  Skipping DFF DFF_52: Clock or data arrival time not initialized
+  Skipping DFF DFF_51: Clock or data arrival time not initialized
+  Skipping DFF DFF_50: Clock or data arrival time not initialized
+  Skipping DFF DFF_49: Clock or data arrival time not initialized
+  Skipping DFF DFF_48: Clock or data arrival time not initialized
+  Skipping DFF DFF_47: Clock or data arrival time not initialized
+  Skipping DFF DFF_46: Clock or data arrival time not initialized
+  Skipping DFF DFF_45: Clock or data arrival time not initialized
+  Skipping DFF DFF_44: Clock or data arrival time not initialized
+  Skipping DFF DFF_43: Clock or data arrival time not initialized
+  Skipping DFF DFF_42: Clock or data arrival time not initialized
+  Skipping DFF DFF_41: Clock or data arrival time not initialized
+  Skipping DFF DFF_40: Clock or data arrival time not initialized
+  Skipping DFF DFF_39: Clock or data arrival time not initialized
+  Skipping DFF DFF_38: Clock or data arrival time not initialized
+  Skipping DFF DFF_37: Clock or data arrival time not initialized
+  Skipping DFF DFF_36: Clock or data arrival time not initialized
+  Skipping DFF DFF_35: Clock or data arrival time not initialized
+  Skipping DFF DFF_34: Clock or data arrival time not initialized
+  Skipping DFF DFF_33: Clock or data arrival time not initialized
+  Skipping DFF DFF_32: Clock or data arrival time not initialized
+  Skipping DFF DFF_31: Clock or data arrival time not initialized
+  Skipping DFF DFF_30: Clock or data arrival time not initialized
+  Skipping DFF DFF_29: Clock or data arrival time not initialized
+  Skipping DFF DFF_28: Clock or data arrival time not initialized
+  Skipping DFF DFF_27: Clock or data arrival time not initialized
+  Skipping DFF DFF_26: Clock or data arrival time not initialized
+  Skipping DFF DFF_25: Clock or data arrival time not initialized
+  Skipping DFF DFF_24: Clock or data arrival time not initialized
+  Skipping DFF DFF_23: Clock or data arrival time not initialized
+  Skipping DFF DFF_22: Clock or data arrival time not initialized
+  Skipping DFF DFF_21: Clock or data arrival time not initialized
+  Skipping DFF DFF_20: Clock or data arrival time not initialized
+  Skipping DFF DFF_19: Clock or data arrival time not initialized
+  Skipping DFF DFF_18: Clock or data arrival time not initialized
+  Skipping DFF DFF_17: Clock or data arrival time not initialized
+  Skipping DFF DFF_16: Clock or data arrival time not initialized
+  Skipping DFF DFF_15: Clock or data arrival time not initialized
+  Skipping DFF DFF_14: Clock or data arrival time not initialized
+  Skipping DFF DFF_13: Clock or data arrival time not initialized
+  Skipping DFF DFF_12: Clock or data arrival time not initialized
+  Skipping DFF DFF_11: Clock or data arrival time not initialized
+  Skipping DFF DFF_10: Clock or data arrival time not initialized
+  Skipping DFF DFF_9: Clock or data arrival time not initialized
+  Skipping DFF DFF_8: Clock or data arrival time not initialized
+  Skipping DFF DFF_7: Clock or data arrival time not initialized
+  Skipping DFF DFF_6: Clock or data arrival time not initialized
+  Skipping DFF DFF_5: Clock or data arrival time not initialized
+  Skipping DFF DFF_4: Clock or data arrival time not initialized
+  Skipping DFF DFF_3: Clock or data arrival time not initialized
+  Skipping DFF DFF_2: Clock or data arrival time not initialized
+  Skipping DFF DFF_1: Clock or data arrival time not initialized
+  Skipping DFF DFF_0: Clock or data arrival time not initialized
+  Checked 0 DFF constraints
+  Setup violations: 0
+  Hold violations: 0
+  Note: No DFF endpoints found for constraint checking
+    Propagated RAT of CK/Y = 10.0000 ns
+    Propagated RAT of NOT_624/Y = 10.0000 ns
+    Propagated RAT of NOT_624/A = 10.0000 ns
+    Propagated RAT of NOT_3473/Y = 10.0000 ns
+    Propagated RAT of NOT_3473/A = 10.0000 ns
+  Updated RAT for 672 nodes.
+
+[Step 4] Calculating Slacks...
+  Slack distribution:
+    Positive (> 0): 620 nodes
+    Zero (= 0):       0 nodes (critical path)
+    Negative (< 0):  0 nodes (timing violations)
+
+==========================================
+STA Analysis Complete!
+==========================================
+
+========== Timing Summary ==========
+Clock Period: 10.0000 ns
+
+Setup Analysis (Max Path - Signal Too Slow):
+  WNS (Worst Negative Slack): 0.0000 ns
+  TNS (Total Negative Slack): 0.0000 ns
+  Violation Count: 0 nodes
+
+Hold Analysis (Min Path - Signal Too Fast):
+  WNS (Worst Negative Slack): 0.0000 ns
+  TNS (Total Negative Slack): 0.0000 ns
+  Violation Count: 0 nodes
+=====================================
+
+=========================================
+
+Integrated Flow Completed!
+Total runtime: 81011907 ms
+Output directory: visualizations
+Run ID: s9234
+=========================================
+

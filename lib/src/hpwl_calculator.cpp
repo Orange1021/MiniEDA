@@ -6,16 +6,27 @@
 #include "hpwl_calculator.h"
 #include <algorithm>
 
+#ifdef MINIEDA_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace mini {
 
 double HPWLCalculator::calculateHPWL(NetlistDB* netlist_db, PlacerDB* placer_db) {
     if (!netlist_db || !placer_db) return 0.0;
 
     double total_hpwl = 0.0;
+    const auto& nets = netlist_db->getNets();
     
     // Calculate HPWL for each net
-    for (const auto& net_ptr : netlist_db->getNets()) {
-        const Net* net = net_ptr.get();
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for schedule(static) reduction(+:total_hpwl)
+    for (long long i = 0; i < static_cast<long long>(nets.size()); ++i) {
+        const Net* net = nets[static_cast<size_t>(i)].get();
+#else
+    for (size_t i = 0; i < nets.size(); ++i) {
+        const Net* net = nets[i].get();
+#endif
         if (!net) continue;
         
         total_hpwl += calculateNetHPWL(net, placer_db);

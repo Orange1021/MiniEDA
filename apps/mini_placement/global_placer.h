@@ -11,6 +11,7 @@
 #include <vector>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <cmath>
 #include <iostream>
 #include "../../lib/include/placer_db.h"
@@ -146,6 +147,7 @@ private:
 
     // Optimization state
     std::vector<Cell*> cells_;               ///< All movable cells
+    std::unordered_map<const Cell*, size_t> cell_to_index_; ///< Fast cell index lookup
     std::vector<Point> velocities_;          ///< Cell velocities for Nesterov
     std::vector<Point> wire_gradients_;      ///< Wirelength gradients
     std::vector<OptimizationStats> stats_;   ///< Optimization statistics

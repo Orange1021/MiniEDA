@@ -15,12 +15,26 @@ echo -e "${GREEN}=== MiniEDA 简单电路测试 ===${NC}"
 
 # 编译项目
 echo -e "${YELLOW}编译项目...${NC}"
-make BUILD_MODE=release -j$(nproc)
+cmake --preset release
 if [ $? -ne 0 ]; then
-    echo -e "${RED}编译失败！${NC}"
+    echo -e "${RED}CMake 配置失败！${NC}"
+    exit 1
+fi
+
+cmake --build --preset release -j$(nproc)
+if [ $? -ne 0 ]; then
+    echo -e "${RED}CMake 编译失败！${NC}"
     exit 1
 fi
 echo -e "${GREEN}编译成功！${NC}"
+
+MINI_FLOW_BIN="./build/cmake/release/bin/mini_flow"
+if [ ! -x "$MINI_FLOW_BIN" ]; then
+    echo -e "${RED}找不到可执行文件: $MINI_FLOW_BIN${NC}"
+    exit 1
+fi
+
+mkdir -p log
 
 # 测试电路列表
 circuits=("s27" "s344" "s349" "s526")
@@ -32,7 +46,7 @@ for circuit in "${circuits[@]}"; do
     echo -e "${YELLOW}========================================${NC}"
     
     # 运行完整流程（包含布局和布线），输出保存到日志文件
-    ./build/release/bin/mini_flow \
+    "$MINI_FLOW_BIN" \
         -v benchmarks/ISCAS/Verilog/${circuit}.v \
         -lib benchmarks/NangateOpenCellLibrary_typical.lib \
         -lef benchmarks/NangateOpenCellLibrary.macro.lef \

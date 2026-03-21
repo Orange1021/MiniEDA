@@ -17,6 +17,10 @@
 #include <limits>
 #include <algorithm>
 
+#ifdef MINIEDA_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace mini {
 
 // ============================================================================
@@ -113,8 +117,16 @@ void STAEngine::run() {
 void STAEngine::updateArcDelays() {
     size_t net_arc_count = 0;
     size_t cell_arc_count = 0;
+    const auto& arcs = graph_->getArcs();
 
-    for (const auto& arc : graph_->getArcs()) {
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp parallel for schedule(static) reduction(+:net_arc_count,cell_arc_count)
+    for (long long i = 0; i < static_cast<long long>(arcs.size()); ++i) {
+        TimingArc* arc = arcs[static_cast<size_t>(i)].get();
+#else
+    for (size_t i = 0; i < arcs.size(); ++i) {
+        TimingArc* arc = arcs[i].get();
+#endif
         double delay = 0.0;
 
         if (arc->getType() == TimingArcType::NET_ARC) {
@@ -212,8 +224,13 @@ void STAEngine::updateArcDelays() {
                             }
                         } else {
                             // Fallback for NET_ARC or missing Liberty data
+#ifdef MINIEDA_USE_OPENMP
+#pragma omp critical(minieda_sta_delay_fallback)
+#endif
+                            {
                             delay = delay_model_->calculateCellDelay(cell, input_slew, load_cap);
                             output_slew = delay_model_->calculateOutputSlew(cell, input_slew, load_cap);
+                            }
                         }
                         
                         // Store the output slew in the arc for later use

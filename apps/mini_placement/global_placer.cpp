@@ -13,6 +13,10 @@
 #include "../../lib/include/hpwl_calculator.h"
 #include "../../lib/include/csv_exporter.h"
 
+#ifdef MINIEDA_USE_OPENMP
+#include <omp.h>
+#endif
+
 namespace mini {
 
 // ============================================================================
@@ -98,6 +102,12 @@ bool GlobalPlacer::initialize(int grid_size, double target_density, double initi
 }
 
 void GlobalPlacer::initializeOptimizationState() {
+    cell_to_index_.clear();
+    cell_to_index_.reserve(cells_.size());
+    for (size_t i = 0; i < cells_.size(); ++i) {
+        cell_to_index_.emplace(cells_[i], i);
+    }
+
     // Initialize velocities to zero
     velocities_.resize(cells_.size(), {0.0, 0.0});
     
@@ -414,19 +424,94 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
     
     DEBUG_LOG("GlobalPlacer", "IO Weight Schedule: progress=" + std::to_string(progress_ratio) + 
               ", io_weight=" + std::to_string(io_weight));
-    
+
+    const auto& nets = netlist_db_->getNets();
+
+    auto accumulate_pin_gradient =
+        [this](Cell* pin_cell, const Point& net_cog, double final_weight, std::vector<Point>& gradients) {
+            if (!pin_cell || placer_db_->isCellFixed(pin_cell)) {
+                return;
+            }
+            auto idx_it = cell_to_index_.find(pin_cell);
+            if (idx_it == cell_to_index_.end()) {
+                return;
+            }
+
+            const size_t idx = idx_it->second;
+            Point dist_from_cog{net_cog.x - pin_cell->getX(), net_cog.y - pin_cell->getY()};
+            gradients[idx].x += dist_from_cog.x * final_weight;
+            gradients[idx].y += dist_from_cog.y * final_weight;
+        };
+
+#ifdef MINIEDA_USE_OPENMP
+    const int num_threads = std::max(1, omp_get_max_threads());
+    std::vector<std::vector<Point>> thread_local_gradients(
+        static_cast<size_t>(num_threads),
+        std::vector<Point>(cells_.size(), Point{0.0, 0.0}));
+
+#pragma omp parallel
+    {
+        const int tid = omp_get_thread_num();
+        std::vector<Point>& local_gradients = thread_local_gradients[static_cast<size_t>(tid)];
+
+#pragma omp for schedule(static)
+        for (long long net_idx = 0; net_idx < static_cast<long long>(nets.size()); ++net_idx) {
+            const Net* net = nets[static_cast<size_t>(net_idx)].get();
+            if (!net) continue;
+
+            const auto& loads = net->getLoads();
+            Pin* driver = net->getDriver();
+            if (loads.empty() && !driver) continue;
+
+            bool has_fixed_pin = false;
+            if (driver && placer_db_->isCellFixed(driver->getOwner())) {
+                has_fixed_pin = true;
+            }
+            for (Pin* load : loads) {
+                if (load && placer_db_->isCellFixed(load->getOwner())) {
+                    has_fixed_pin = true;
+                    break;
+                }
+            }
+
+            Point net_cog = getNetCenterOfGravity(net);
+            double base_weight = getNetWeight(net);
+            double final_weight = has_fixed_pin ? (base_weight * io_weight) : base_weight;
+
+            if (driver) {
+                accumulate_pin_gradient(driver->getOwner(), net_cog, final_weight, local_gradients);
+            }
+            for (Pin* load : loads) {
+                if (!load) continue;
+                accumulate_pin_gradient(load->getOwner(), net_cog, final_weight, local_gradients);
+            }
+        }
+    }
+
+    for (size_t i = 0; i < wire_gradients_.size(); ++i) {
+        double grad_x = 0.0;
+        double grad_y = 0.0;
+        for (int t = 0; t < num_threads; ++t) {
+            const Point& local = thread_local_gradients[static_cast<size_t>(t)][i];
+            grad_x += local.x;
+            grad_y += local.y;
+        }
+        wire_gradients_[i].x = grad_x;
+        wire_gradients_[i].y = grad_y;
+    }
+#else
     // Real wirelength model: Star Model HPWL gradient with IO weighting
     // Each net creates gradients pointing away from the net's center of gravity
     // (Gradient points toward increasing wirelength direction)
-    for (const auto& net_ptr : netlist_db_->getNets()) {
+    for (const auto& net_ptr : nets) {
         const Net* net = net_ptr.get();
         if (!net) continue;
-        
+
         // Skip single-pin nets (no wirelength contribution)
         const auto& loads = net->getLoads();
         Pin* driver = net->getDriver();
         if (loads.empty() && !driver) continue;
-        
+
         // 1. Check if this Net connects to Fixed Pin (IO Pin)
         bool has_fixed_pin = false;
         if (driver && placer_db_->isCellFixed(driver->getOwner())) {
@@ -438,50 +523,26 @@ void GlobalPlacer::calculateWirelengthGradients(double progress_ratio) {
                 break;
             }
         }
-        
+
         // Calculate net center of gravity
         Point net_cog = getNetCenterOfGravity(net);
-        
+
         // 2. Calculate base weight
         double base_weight = getNetWeight(net);
-        
+
         // 3. Apply IO down-weighting
         // If connected to IO, multiply by io_weight; if pure internal connection, weight remains 1.0
         double final_weight = has_fixed_pin ? (base_weight * io_weight) : base_weight;
-        
-        // Apply gradient to driver pin
+
         if (driver) {
-            Cell* driver_cell = driver->getOwner();
-            if (driver_cell && !placer_db_->isCellFixed(driver_cell)) {
-                // Find cell index
-                auto it = std::find(cells_.begin(), cells_.end(), driver_cell);
-                if (it != cells_.end()) {
-                    size_t idx = it - cells_.begin();
-                    Point driver_pos{driver_cell->getX(), driver_cell->getY()};
-                    Point dist_from_cog = net_cog - driver_pos;  // Gradient points toward increasing wirelength
-                    wire_gradients_[idx].x += dist_from_cog.x * final_weight;
-                    wire_gradients_[idx].y += dist_from_cog.y * final_weight;
-                }
-            }
+            accumulate_pin_gradient(driver->getOwner(), net_cog, final_weight, wire_gradients_);
         }
-        
-        // Apply gradient to load pins
         for (Pin* load : loads) {
             if (!load) continue;
-            Cell* load_cell = load->getOwner();
-            if (load_cell && !placer_db_->isCellFixed(load_cell)) {
-                // Find cell index
-                auto it = std::find(cells_.begin(), cells_.end(), load_cell);
-                if (it != cells_.end()) {
-                    size_t idx = it - cells_.begin();
-                    Point load_pos{load_cell->getX(), load_cell->getY()};
-                    Point dist_from_cog = net_cog - load_pos;  // Gradient points toward increasing wirelength
-                    wire_gradients_[idx].x += dist_from_cog.x * final_weight;
-                    wire_gradients_[idx].y += dist_from_cog.y * final_weight;
-                }
-            }
+            accumulate_pin_gradient(load->getOwner(), net_cog, final_weight, wire_gradients_);
         }
     }
+#endif
 }
 
 Point GlobalPlacer::getNetCenterOfGravity(const Net* net) const {
