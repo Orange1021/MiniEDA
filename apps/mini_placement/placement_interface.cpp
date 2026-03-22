@@ -27,6 +27,7 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     const AppConfig& config,
     std::shared_ptr<NetlistDB> netlist_db,
     Visualizer* visualizer) {
+    (void)visualizer;
     
     if (config.verbose) {
         std::cout << "\n=== Running Placement Flow ===" << std::endl;
@@ -35,7 +36,6 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
     // Parse LEF physical library (if provided)
     std::unique_ptr<LefLibrary> lef_library;
     std::unique_ptr<MacroMapper> macro_mapper;
-    bool use_lef = false;
     
     if (!config.lef_file.empty()) {
         if (config.verbose) {
@@ -44,8 +44,6 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
         try {
             LefParser lef_parser(config.lef_file, false);
             lef_library = std::make_unique<LefLibrary>(lef_parser.parse());
-            use_lef = true;
-            
             if (config.verbose) {
                 std::cout << "  Loaded LEF library with " << lef_library->getMacroCount() << " macros" << std::endl;
             }
@@ -227,7 +225,10 @@ std::unique_ptr<PlacerDB> PlacementInterface::runPlacementWithVisualization(
                               config.run_id + "/00_random.csv " +
                               config.run_id + "/00_random.png " +
                               "--title \"Random Placement\"";
-        std::system(plot_cmd.c_str());
+        int plot_result = std::system(plot_cmd.c_str());
+        if (plot_result != 0 && config.verbose) {
+            std::cerr << "Warning: Failed to generate random placement visualization" << std::endl;
+        }
     }
     
     if (config.verbose) {

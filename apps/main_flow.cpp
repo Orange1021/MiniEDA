@@ -270,15 +270,6 @@ int main(int argc, char* argv[]) {
     }
 #endif
     
-    // Ensure we're in flow mode
-    if (!config.flow_mode) {
-        std::cout << "Note: Auto-switching to integrated flow mode" << std::endl;
-        config.flow_mode = true;
-        config.sta_mode = false;
-        config.placement_mode = false;
-        config.routing_mode = false;
-    }
-    
     // Auto-generate run_id from circuit name
     config.generateRunId();
     

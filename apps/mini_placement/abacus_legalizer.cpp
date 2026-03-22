@@ -217,7 +217,8 @@ void AbacusLegalizer::printRowStatistics() const {
 void AbacusLegalizer::exportResult(const std::string& filename) const {
     // Create visualization directory
     std::string mkdir_cmd = "mkdir -p visualizations/abacus_projection";
-    std::system(mkdir_cmd.c_str());
+    int mkdir_result = std::system(mkdir_cmd.c_str());
+    (void)mkdir_result;
     
     // Full path for CSV file
     std::string full_path = "visualizations/abacus_projection/" + filename;
@@ -367,6 +368,8 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
 }
 
 void AbacusLegalizer::collapseClusters(AbacusRow& row, int cluster_idx) {
+    (void)row;
+    (void)cluster_idx;
     // TODO: Implement cluster merging with optimal position calculation
     DEBUG_LOG("AbacusLegalizer", " collapseClusters() - to be implemented in next phase");
 }

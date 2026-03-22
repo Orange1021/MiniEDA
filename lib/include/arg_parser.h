@@ -126,23 +126,6 @@ public:
                     config.routing_grid_expansion = std::stod(argv[++i]);
                 }
                 
-                // Application mode selection
-                else if (arg == "-sta") {
-                    config.sta_mode = true;
-                    config.flow_mode = false;
-                }
-                else if (arg == "-placement") {
-                    config.placement_mode = true;
-                    config.flow_mode = false;
-                }
-                else if (arg == "-routing") {
-                    config.routing_mode = true;
-                    config.flow_mode = false;
-                }
-                else if (arg == "-flow") {
-                    config.flow_mode = true;
-                }
-                
                 // Positional argument (verilog file without -v flag)
                 else if (arg[0] != '-') {
                     if (config.verilog_file.empty()) {
@@ -159,12 +142,6 @@ public:
                     printUsage();
                     return false;
                 }
-            }
-            
-            // Auto-detect mode if not explicitly set
-            if (!config.sta_mode && !config.placement_mode && 
-                !config.routing_mode && !config.flow_mode) {
-                config.flow_mode = true;  // Default to integrated flow
             }
             
             // Validate configuration
@@ -228,24 +205,12 @@ Advanced Parameters:
   -max_iter <count>      Maximum placement iterations (default: 100)
   -grid_expand <factor>  Routing grid expansion factor (default: 1.2)
 
-Application Modes:
-  -sta                   Run Static Timing Analysis only
-  -placement             Run Placement only
-  -routing               Run Routing only
-  -flow                  Run Integrated Flow (default)
-
 Help:
   -h, -help, --help      Show this help message
 
 Examples:
   # Run integrated flow with default settings
   MiniEDA design.v -lib nangate.lib -lef nangate.lef
-
-  # Run placement only with custom utilization
-  MiniEDA -placement design.v -lib nangate.lib -lef nangate.lef -util 0.8
-
-  # Run STA with custom clock period
-  MiniEDA -sta design.v -lib nangate.lib -clk 8.0
 
   # Run integrated flow with custom parameters
   MiniEDA design.v -lib nangate.lib -lef nangate.lef -util 0.7 -clk 10.0 -via_cost 5.0 -verbose

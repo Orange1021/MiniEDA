@@ -465,6 +465,7 @@ void MazeRouter::updateHistoryCosts(double history_increment) {
 
 
 void MazeRouter::saveBestSolution(const std::vector<RoutingResult>& results, int iteration, int conflicts) {
+    (void)results;
     
     if (conflicts < min_conflicts_) {
         ROUTING_LOG("MazeRouter", ">>> NEW RECORD! Conflicts: " + std::to_string(conflicts) + 
@@ -571,7 +572,6 @@ bool MazeRouter::findBestAccessPoint(int pin_gx, int pin_gy, int net_id, GridPoi
 
     // Search around pin location for best access point
     //扩大搜索范围：5x5区域，可以跳过整个拥塞团块
-    int search_radius = 2;
     // Priority: direct access (0,0), then adjacent cells
     std::vector<std::pair<int, int>> search_offsets = {
         {0, 0},   // Direct access - highest priority
@@ -647,7 +647,8 @@ void MazeRouter::exportVisualization(const std::string& filename, PlacerDB* plac
     if (last_slash != std::string::npos) {
         std::string directory = filename.substr(0, last_slash);
         std::string mkdir_cmd = "mkdir -p " + directory;
-        std::system(mkdir_cmd.c_str());
+        int mkdir_result = std::system(mkdir_cmd.c_str());
+        (void)mkdir_result;
     }
     
     std::ofstream out(filename);

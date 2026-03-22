@@ -298,17 +298,17 @@ It runs:
 ```bash
 # Run complete flow (placement + routing + timing)
 ./build/cmake/release/bin/mini_flow \
-  -v benchmarks/ISCAS/Verilog/s27.v
+  -v benchmarks/s27.v
 
 # Run with custom utilization
 ./build/cmake/release/bin/mini_flow \
-  -v benchmarks/ISCAS/Verilog/s344.v \
+  -v benchmarks/s344.v \
   -util 0.7 \
   -clk 8.0
 
 # Run with specific placement algorithm
 MINIEDA_PLACEMENT_ALGO=basic ./build/cmake/release/bin/mini_flow \
-  -v benchmarks/ISCAS/Verilog/s27.v
+  -v benchmarks/s27.v
 ```
 
 **Command Line Options:**
@@ -316,16 +316,26 @@ MINIEDA_PLACEMENT_ALGO=basic ./build/cmake/release/bin/mini_flow \
 - `-lib <file>`: Liberty library file (default: NangateOpenCellLibrary_typical.lib)
 - `-lef <file>`: LEF physical library file (default: NangateOpenCellLibrary.macro.lef)
 - `-run_id <name>` / `--run_id <name>`: Run identifier (default: `default_run`)
+- `-pitch <value>`: Routing grid pitch in micrometers (default: 0.19)
 - `-clk <period>`: Clock period in ns (default: 10.0)
+- `-via_cost <value>`: Via penalty cost multiplier (default: 5.0)
+- `-wire_cost <value>`: Wire cost per unit length (default: 1.0)
 - `-uncertainty <value>`: Clock uncertainty in ns (default: 0.05)
 - `-input_delay <value>`: Default input delay in ns (default: 0.0)
 - `-output_delay <value>`: Default output delay in ns (default: 0.0)
 - `-max_transition <value>`: Maximum transition time constraint (default: 0.5)
+- `-input_delay_port <port> <value>`: Set input delay for a specific port
+- `-output_delay_port <port> <value>`: Set output delay for a specific port
 - `-util <value>`: Target utilization (default: 0.7)
 - `-rowheight <val>`: Row height in micrometers (default: 1.4)
 - `-num_layers <count>`: Number of routing layers (default: 3, supports 3-12)
+- `-verbose`: Enable verbose output
 - `-skip_routing`: Skip routing stage
-- `-help`: Show help message
+- `-threads <count>`: Maximum parallel threads (default: 1)
+- `-conv_thresh <value>`: Placement convergence threshold (default: 1e-6)
+- `-max_iter <count>`: Maximum placement iterations (default: 100)
+- `-grid_expand <factor>`: Routing grid expansion factor (default: 1.2)
+- `-h` / `-help` / `--help`: Show help message
 
 ## Testing
 
@@ -427,14 +437,14 @@ All four scripts compile `mini_flow` in release mode first, then run full flow (
 
 ## Project Statistics
 
-- **Total Code (lib + apps, .cpp/.h)**: 22,087 lines (14,411 .cpp + 7,676 .h)
+- **Total Code (lib + apps, .cpp/.h)**: 22,186 lines (14,609 .cpp + 7,577 .h)
 - **Source Files (lib + apps, .cpp/.h)**: 77 files
 - **Module Distribution**:
-  - Placement Module: 22 files, 5,673 lines
-  - STA Module: 16 files, 4,713 lines
-  - Routing Module: 6 files, 2,965 lines
-  - Core Library: 32 files, 8,398 lines
-  - Main Application: 1 file, 338 lines
+  - Placement Module: 22 files, 5,833 lines
+  - STA Module: 16 files, 4,731 lines
+  - Routing Module: 6 files, 2,972 lines
+  - Core Library: 32 files, 8,308 lines
+  - Main Application: 1 file, 342 lines
 - **Automated Tests**: GoogleTest + `ctest` + CI smoke/ASan checks
 - **Libraries Supported**: Nangate 45nm (Liberty cells + LEF macros)
 - **Code Quality**: Professional English comments, maximum compatibility maintained

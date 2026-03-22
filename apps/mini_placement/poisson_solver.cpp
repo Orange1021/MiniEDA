@@ -381,7 +381,7 @@ void PoissonSolver::calculateGradientForces(std::vector<Bin>& bins,
     
         
     
-        if (bin_height_ < 1e-9 && bins.size() > width) {
+        if (bin_height_ < 1e-9 && width > 0 && bins.size() > static_cast<size_t>(width)) {
     
             // Calculate bin_height from first bin of next row
     
@@ -479,6 +479,7 @@ double PoissonSolver::centralDifference(const std::vector<Complex>& data,
 
 void PoissonSolver::updateStatistics(const std::vector<Bin>& bins) {
     // Statistics are already calculated in calculateGradientForces
+    (void)bins;
     DEBUG_LOG("PoissonSolver", "Statistics updated");
 }
 

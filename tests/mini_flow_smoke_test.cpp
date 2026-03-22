@@ -80,7 +80,7 @@ TEST(MiniFlowSmokeTest, RunsS27EndToEndAndProducesRoutingOutput) {
         "\"" + mini_flow.string() + "\" \"" + verilog.string() +
         "\" -lib \"" + liberty.string() +
         "\" -lef \"" + lef.string() +
-        "\" -flow -run_id " + run_id +
+        "\" -run_id " + run_id +
         " > \"" + log_path.string() + "\" 2>&1";
 
     const int rc = std::system(cmd.c_str());

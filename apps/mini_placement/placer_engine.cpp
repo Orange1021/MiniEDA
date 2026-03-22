@@ -449,7 +449,10 @@ void PlacerEngine::exportAndVisualize(const std::string& filename) const {
                               run_id_ + "/" + filename + ".csv " +
                               run_id_ + "/" + filename + ".png " +
                               "--title \"Placement - " + filename + "\"";
-        std::system(plot_cmd.c_str());
+        int plot_result = std::system(plot_cmd.c_str());
+        if (plot_result != 0) {
+            std::cerr << "Warning: Failed to generate placement visualization for " << filename << std::endl;
+        }
     }
 }
 

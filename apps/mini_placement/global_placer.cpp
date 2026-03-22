@@ -176,7 +176,7 @@ void GlobalPlacer::runPlacement() {
     double sum_dens_gradient = 0.0;
     int active_cells = 0;
     
-    for (int i = 0; i < cells_.size(); ++i) {
+    for (size_t i = 0; i < cells_.size(); ++i) {
         if (placer_db_->isCellFixed(cells_[i])) continue;
         
         // Wire Force
@@ -192,7 +192,7 @@ void GlobalPlacer::runPlacement() {
     // [Dynamic Lambda Strategy] Auto-calculate initial value based on force balance
     if (sum_dens_gradient > 1e-6 && active_cells > 0) {
         // 1. Calculate reasonable initial Lambda based on force balance
-        double ratio = (sum_wire_gradient / sum_dens_gradient);
+        [[maybe_unused]] double ratio = (sum_wire_gradient / sum_dens_gradient);
         // Make density force and wire force on the same scale
         current_lambda_ = sum_wire_gradient / sum_dens_gradient;
         
@@ -902,7 +902,8 @@ void GlobalPlacer::exportDensityVisualization() const {
     // Create output directory
     std::string run_dir = "visualizations/" + run_id_;
     std::string mkdir_cmd = "mkdir -p " + run_dir;
-    std::system(mkdir_cmd.c_str());
+    int mkdir_result = std::system(mkdir_cmd.c_str());
+    (void)mkdir_result;
     
     // Export density map to CSV
     std::string csv_filename = run_dir + "/density_map.csv";

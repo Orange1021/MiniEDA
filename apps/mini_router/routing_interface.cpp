@@ -518,7 +518,6 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
                             
                             int segments_attempted = router.getTotalSegmentsAttempted();
                             int segments_succeeded = router.getTotalSegmentsSucceeded();
-                            int segments_failed = router.getTotalSegmentsFailed();
                             double segment_success_rate = router.getSegmentSuccessRate();
                             
                             ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingInterface", "Success: " + std::to_string(routed_count) + "/" + 
@@ -753,7 +752,6 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
             
             int segments_attempted = router.getTotalSegmentsAttempted();
             int segments_succeeded = router.getTotalSegmentsSucceeded();
-            int segments_failed = router.getTotalSegmentsFailed();
             double segment_success_rate = router.getSegmentSuccessRate();
             
             ROUTING_LOG("RoutingInterface", "**PATHFINDER FINAL RESULTS:**");
@@ -801,6 +799,7 @@ std::vector<RoutingResult> RoutingInterface::runRoutingWithVisualization(
     std::shared_ptr<NetlistDB> netlist_db,
     std::unique_ptr<PlacerDB>& placer_db,
     Visualizer* visualizer) {
+    (void)visualizer;
     
     // Run routing first
     auto results = runRouting(config, netlist_db, placer_db);

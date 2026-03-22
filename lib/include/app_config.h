@@ -18,9 +18,6 @@ namespace mini {
  * @struct AppConfig
  * @brief Unified configuration structure for all MiniEDA applications
  * @details This is the superset of all parameters used across:
- * - MiniSTA (Static Timing Analysis)
- * - MiniPlacement (Chip Placement)
- * - MiniRouter (A* Maze Routing)
  * - MiniFlow (Integrated Flow)
  */
 struct AppConfig {
@@ -120,14 +117,6 @@ struct AppConfig {
     double min_transition_time = 0.001 * 1e-9;               ///< 1ps minimum transition
     
     // ========================================================================
-    // Application-Specific Flags
-    // ========================================================================
-    bool sta_mode = false;                                    ///< Run STA only
-    bool placement_mode = false;                              ///< Run placement only
-    bool routing_mode = false;                                ///< Run routing only
-    bool flow_mode = false;                                   ///< Run integrated flow (default if no specific mode)
-    
-    // ========================================================================
     // Validation Methods
     // ========================================================================
     
@@ -194,11 +183,7 @@ struct AppConfig {
      * @return String describing the active mode
      */
     std::string getMode() const {
-        if (sta_mode) return "STA";
-        if (placement_mode) return "Placement";
-        if (routing_mode) return "Routing";
-        if (flow_mode) return "Integrated Flow";
-        return "Auto-detect";
+        return "Integrated Flow";
     }
     
     /**
@@ -222,45 +207,6 @@ struct AppConfig {
         std::cout << "=============================" << std::endl;
     }
 };
-
-/**
- * @brief Create configuration for STA mode
- */
-inline AppConfig createSTAConfig() {
-    AppConfig config;
-    config.sta_mode = true;
-    config.flow_mode = false;
-    return config;
-}
-
-/**
- * @brief Create configuration for Placement mode
- */
-inline AppConfig createPlacementConfig() {
-    AppConfig config;
-    config.placement_mode = true;
-    config.flow_mode = false;
-    return config;
-}
-
-/**
- * @brief Create configuration for Routing mode
- */
-inline AppConfig createRoutingConfig() {
-    AppConfig config;
-    config.routing_mode = true;
-    config.flow_mode = false;
-    return config;
-}
-
-/**
- * @brief Create configuration for Integrated Flow mode
- */
-inline AppConfig createFlowConfig() {
-    AppConfig config;
-    config.flow_mode = true;
-    return config;
-}
 
 } // namespace mini
 

@@ -123,6 +123,7 @@ void RoutingGrid::ripUpNet(int net_id) {
 }
 
 int RoutingGrid::countConflicts(bool verbose) const {
+    (void)verbose;
     int conflicts = 0;
 
     // Count actual conflicts: grid points used by multiple different nets
@@ -152,6 +153,7 @@ std::unordered_set<int> RoutingGrid::getConflictedNetIDs() const {
 }
 
 void RoutingGrid::printConflictLocations(int current_net_id, bool verbose) const {
+    (void)current_net_id;
     int conflict_count = 0;
 
     for (int i = 0; i < total_grid_size_; ++i) {
@@ -226,6 +228,7 @@ void RoutingGrid::printConflictLocations(int current_net_id, bool verbose) const
                                 case GridState::OBSTACLE: state_str = "OBSTACLE"; break;
                                 case GridState::ROUTED: state_str = "ROUTED"; break;
                                 case GridState::PIN: state_str = "PIN"; break;
+                                case GridState::VIA: state_str = "VIA"; break;
                             }
                             ROUTING_LOG_IF(ROUTING_LOG_LEVEL >= 2, "RoutingGrid", 
                                           "    (" + std::to_string(nx) + "," + std::to_string(ny) + "," + std::to_string(nz) + "): " + state_str);
@@ -243,6 +246,7 @@ void RoutingGrid::printConflictLocations(int current_net_id, bool verbose) const
 
 double RoutingGrid::calculateMovementCost(const GridPoint& from, const GridPoint& to,
                                            int current_net_id, double collision_penalty) const {
+    (void)from;
     // Base movement cost
     double base_cost = 1.0;
 
@@ -474,6 +478,7 @@ void RoutingGrid::setState(const GridPoint& gp, GridState state, int net_id) {
 }
 
 bool RoutingGrid::isFree(const GridPoint& gp, int current_net_id) const {
+    (void)current_net_id;
     if (!isValid(gp)) {
         return false;  // Out of bounds is not free
     }
