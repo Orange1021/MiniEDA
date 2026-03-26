@@ -117,6 +117,9 @@ private:
     // **GLOBAL REGISTRY**: Persistent storage for all successfully routed networks
     // Maps Net ID -> List of path segments (for complete visualization)
     std::map<int, std::vector<std::vector<GridPoint>>> final_routes_;
+
+    // Net pointer registry for final wirelength back-annotation
+    std::unordered_map<int, Net*> net_registry_;
     
     // **BEST SOLUTION**: Store segments with their net IDs for proper restoration
     std::vector<std::pair<std::vector<GridPoint>, int>> best_solution_segments_with_ids_;
@@ -250,6 +253,13 @@ public:
      * @brief Restore the best solution found to the routing grid
      */
     void restoreBestSolution();
+
+    /**
+     * @brief Back-annotate per-net wirelength from restored best solution
+     * @details Clears stale wirelengths first, then writes final routed
+     *          wirelength (um) into Net objects.
+     */
+    void backAnnotateNetWireLengths();
     
     /**
      * @brief Get the minimum conflicts encountered so far

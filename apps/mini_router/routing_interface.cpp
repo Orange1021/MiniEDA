@@ -585,6 +585,7 @@ std::vector<RoutingResult> RoutingInterface::runRouting(
         // **RESTORE BEST SOLUTION**: Restore the best solution found during iterations
         ROUTING_LOG("RoutingInterface", "=== RESTORING BEST SOLUTION ===");
         router.restoreBestSolution();
+        router.backAnnotateNetWireLengths();
         
         // **INTEGRATED VISUALIZATION**: Export data immediately after restoration
         // This ensures we export the complete solution (all 154 nets)

@@ -117,6 +117,8 @@ void STAEngine::run() {
 void STAEngine::updateArcDelays() {
     size_t net_arc_count = 0;
     size_t cell_arc_count = 0;
+    size_t net_arc_routed_length_count = 0;
+    size_t net_arc_fallback_count = 0;
     const auto& arcs = graph_->getArcs();
 
 #ifdef MINIEDA_USE_OPENMP
@@ -139,6 +141,9 @@ void STAEngine::updateArcDelays() {
                 Pin* load_pin = to_node->getPin();
                 
                 if (driver_pin && load_pin) {
+                    Net* net = driver_pin->getNet();
+                    const bool using_routed_wirelength = (net && net->hasWireLength());
+
                     // Get input slew from driver (both min and max)
                     double input_slew_max = getValidInputSlew(from_node->getSlewMax(), true);
                     double input_slew_min = getValidInputSlew(from_node->getSlewMin(), false);
@@ -164,6 +169,11 @@ void STAEngine::updateArcDelays() {
                     arc->setOutputSlew(output_slew_max);  // Legacy: store max slew
                     // TODO: Add setOutputSlewMin() to TimingArc
                     net_arc_count++;
+                    if (using_routed_wirelength) {
+                        net_arc_routed_length_count++;
+                    } else {
+                        net_arc_fallback_count++;
+                    }
                 }
             }
         } else if (arc->getType() == TimingArcType::CELL_ARC) {
@@ -246,6 +256,8 @@ void STAEngine::updateArcDelays() {
     }
 
     std::cout << "  Net arcs: " << net_arc_count << std::endl;
+    std::cout << "    using routed wirelength: " << net_arc_routed_length_count << std::endl;
+    std::cout << "    using fallback estimate: " << net_arc_fallback_count << std::endl;
     std::cout << "  Cell arcs: " << cell_arc_count << std::endl;
 }
 

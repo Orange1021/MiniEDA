@@ -47,17 +47,21 @@ RoutingResult MazeRouter::routeNet(Net* net,
                                  const std::unordered_map<std::string, Point>& pin_locations) {
     RoutingResult result;
 
-    // Set current net ID
-    current_net_id_ = net->getHashId();
-    
-    // Calculate segment count
-    current_net_segments_ = net->getAllPins().size() - 1;
-    
     // 1. Safety check
     if (!net) {
         result.error_message = "Invalid net";
         return result;
     }
+
+    // Register net pointer for final wirelength back-annotation.
+    const int net_id = net->getHashId();
+    net_registry_[net_id] = net;
+
+    // Set current net ID
+    current_net_id_ = net_id;
+    
+    // Calculate segment count
+    current_net_segments_ = net->getAllPins().size() - 1;
     
     if (!net->getDriver()) {
         if (net->getAllPins().empty()) {
@@ -86,8 +90,6 @@ RoutingResult MazeRouter::routeNet(Net* net,
     
     // 3. Build MST topology (with caching)
     std::vector<Segment> mst_segments;
-    
-    int net_id = net->getHashId();
     
     // Check cache first
     if (enable_mst_cache_) {
@@ -239,11 +241,7 @@ RoutingResult MazeRouter::routeNet(Net* net,
         total_vias_ += result.total_vias;
 
         // Global Registry Update
-        int net_id = net->getHashId();
         final_routes_[net_id] = result.segments;
-
-        double wire_length_um = result.total_wirelength * grid_->getPitchX();
-        net->setWireLength(wire_length_um);
     } else {
         failed_nets_++;
     }
@@ -510,6 +508,40 @@ void MazeRouter::restoreBestSolution() {
     }
     
     ROUTING_LOG("MazeRouter", "Best solution restored successfully! Grid now has " + std::to_string(min_conflicts_) + " conflicts");
+}
+
+void MazeRouter::backAnnotateNetWireLengths() {
+    // Clear stale values first (nets that are not present in the final best solution
+    // should explicitly fall back to estimation in STA).
+    for (const auto& [net_id, net] : net_registry_) {
+        (void)net_id;
+        if (net) {
+            net->setWireLength(0.0);
+        }
+    }
+
+    std::unordered_map<int, int> net_wirelength_grid_units;
+    for (const auto& [segment, net_id] : best_solution_segments_with_ids_) {
+        if (!segment.empty()) {
+            net_wirelength_grid_units[net_id] += calculateWirelength(segment);
+        }
+    }
+
+    size_t annotated_nets = 0;
+    for (const auto& [net_id, wirelength_grid] : net_wirelength_grid_units) {
+        auto it = net_registry_.find(net_id);
+        if (it == net_registry_.end() || !it->second) {
+            continue;
+        }
+        const double wire_length_um = static_cast<double>(wirelength_grid) * grid_->getPitchX();
+        it->second->setWireLength(wire_length_um);
+        annotated_nets++;
+    }
+
+    const size_t fallback_nets = net_registry_.size() - annotated_nets;
+    std::cout << "Back-annotated routed wirelength for " << annotated_nets
+              << " nets; " << fallback_nets
+              << " nets will use STA fallback estimation." << std::endl;
 }
 
 
