@@ -64,10 +64,9 @@ void STAEngine::setConstraints(TimingConstraints* constraints) {
  * @brief Run complete STA flow
  * @details Execution sequence:
  * 1. Reset timing data
- * 2. Update Arc Delays
- * 3. Update Arrival Times (forward propagation)
- * 4. Update Required Times (backward propagation)
- * 5. Update Slacks
+ * 2. Update Arrival Times + Arc Delays (forward propagation, on-the-fly)
+ * 3. Update Required Times (backward propagation)
+ * 4. Update Slacks
  */
 void STAEngine::run() {
     std::cout << "\n==========================================" << std::endl;
@@ -84,21 +83,16 @@ void STAEngine::run() {
     graph_->resetTimingData();
     std::cout << "  Reset " << graph_->getNumNodes() << " nodes." << std::endl;
 
-    // Step 1: Update arc delays
-    std::cout << "\n[Step 1] Updating arc delays..." << std::endl;
-    updateArcDelays();
-    std::cout << "  Updated " << graph_->getNumArcs() << " arcs." << std::endl;
-
-    // Step 2: Forward propagation - Calculate Arrival Times
-    std::cout << "\n[Step 2] Propagating Arrival Times (Forward)..." << std::endl;
+    // Step 1: Forward propagation - Calculate Arrival Times and arc delays on-the-fly
+    std::cout << "\n[Step 1] Propagating Arrival Times + evaluating arc delays (Forward)..." << std::endl;
     updateArrivalTimes();
 
-    // Step 3: Backward propagation - Calculate Required Times
-    std::cout << "\n[Step 3] Propagating Required Times (Backward)..." << std::endl;
+    // Step 2: Backward propagation - Calculate Required Times
+    std::cout << "\n[Step 2] Propagating Required Times (Backward)..." << std::endl;
     updateRequiredTimes();
 
-    // Step 4: Calculate Slacks
-    std::cout << "\n[Step 4] Calculating Slacks..." << std::endl;
+    // Step 3: Calculate Slacks
+    std::cout << "\n[Step 3] Calculating Slacks..." << std::endl;
     updateSlacks();
 
     std::cout << "\n==========================================" << std::endl;
@@ -285,7 +279,7 @@ void STAEngine::updateArrivalTimes() {
     std::vector<TimingNode*> start_points = graph_->getStartPoints();
     std::cout << "  Start points: " << start_points.size() << std::endl;
 
-    // Set start points AT (use input delays from constraints if available)
+    // Set start points AT and initialize boundary slews
     for (TimingNode* start : start_points) {
         double at_value = 0.0;
 
@@ -315,12 +309,18 @@ void STAEngine::updateArrivalTimes() {
         start->setArrivalTime(at_value);
         start->setArrivalTimeMax(at_value);  // Setup analysis (max path)
         start->setArrivalTimeMin(at_value);  // Hold analysis (min path)
-        start->setSlew(0.0);  // Ideal waveform
+        start->setSlewMax(default_input_slew_max_);
+        start->setSlewMin(default_input_slew_min_);
 
         if (at_value == 0.0) {
             std::cout << "    Set AT of " << start->getName() << " = 0.0" << std::endl;
         }
     }
+
+    size_t net_arc_count = 0;
+    size_t cell_arc_count = 0;
+    size_t net_arc_routed_length_count = 0;
+    size_t net_arc_fallback_count = 0;
 
     // Propagate AT forward in topological order
     size_t updated_count = 0;
@@ -339,12 +339,12 @@ void STAEngine::updateArrivalTimes() {
         }
 
         // ==================== Setup Analysis (Max Path) ====================
-        // Initialize to negative infinity (looking for maximum)
         double max_arrival = -std::numeric_limits<double>::infinity();
+        double best_slew_max = default_input_slew_max_;
 
         // ==================== Hold Analysis (Min Path) ====================
-        // Initialize to positive infinity (looking for minimum)
         double min_arrival = std::numeric_limits<double>::infinity();
+        double best_slew_min = default_input_slew_min_;
 
         // Check all incoming arcs
         for (TimingArc* arc : incoming_arcs) {
@@ -354,55 +354,133 @@ void STAEngine::updateArrivalTimes() {
                 continue;
             }
 
-            // ==================== Max Path (Setup) ====================
             double prev_at_max = prev_node->getArrivalTimeMax();
-
-            // Skip if predecessor AT_max is uninitialized (negative infinity)
-            if (prev_at_max > -TimingNode::UNINITIALIZED / 2) {
-                double path_delay_max = prev_at_max + arc->getDelay();
-                max_arrival = std::max(max_arrival, path_delay_max);
+            double prev_at_min = prev_node->getArrivalTimeMin();
+            const bool has_max_path = (prev_at_max > -TimingNode::UNINITIALIZED / 2);
+            const bool has_min_path = (prev_at_min < TimingNode::UNINITIALIZED / 2);
+            if (!has_max_path && !has_min_path) {
+                continue;
             }
 
-            // ==================== Min Path (Hold) ====================
-            double prev_at_min = prev_node->getArrivalTimeMin();
+            const double input_slew_max = getValidInputSlew(prev_node->getSlewMax(), true);
+            const double input_slew_min = getValidInputSlew(prev_node->getSlewMin(), false);
 
-            // Skip if predecessor AT_min is uninitialized (positive infinity)
-            if (prev_at_min < TimingNode::UNINITIALIZED / 2) {
-                double path_delay_min = prev_at_min + arc->getDelay();
-                min_arrival = std::min(min_arrival, path_delay_min);
+            double arc_delay_max = 0.0;
+            double arc_delay_min = 0.0;
+            double arc_output_slew_max = input_slew_max;
+            double arc_output_slew_min = input_slew_min;
+
+            if (arc->getType() == TimingArcType::NET_ARC) {
+                Pin* driver_pin = prev_node->getPin();
+                Pin* load_pin = current_node->getPin();
+                if (!driver_pin || !load_pin) {
+                    continue;
+                }
+                Net* net = driver_pin->getNet();
+                const bool using_routed_wirelength = (net && net->hasWireLength());
+
+                auto [delay_max, out_slew_max] = delay_model_->calculateInterconnectDelay(
+                    driver_pin, load_pin, input_slew_max,
+                    wire_resistance_per_unit_, wire_cap_per_unit_);
+                auto [delay_min, out_slew_min] = delay_model_->calculateInterconnectDelay(
+                    driver_pin, load_pin, input_slew_min,
+                    wire_resistance_per_unit_, wire_cap_per_unit_);
+
+                arc_delay_max = delay_max;
+                arc_delay_min = delay_min;
+                arc_output_slew_max = out_slew_max;
+                arc_output_slew_min = out_slew_min;
+
+                net_arc_count++;
+                if (using_routed_wirelength) {
+                    net_arc_routed_length_count++;
+                } else {
+                    net_arc_fallback_count++;
+                }
+            } else {
+                Pin* to_pin = current_node->getPin();
+                if (!to_pin) {
+                    continue;
+                }
+                Cell* cell = to_pin->getOwner();
+                if (!cell) {
+                    continue;
+                }
+
+                double load_cap = calculateNetLoadCapacitance(current_node, wire_cap_per_unit_);
+
+                if (arc->getLibTiming()) {
+                    TableDelayModel* table_model = dynamic_cast<TableDelayModel*>(delay_model_.get());
+                    if (table_model) {
+                        const LibTiming* lib_timing = arc->getLibTiming();
+                        SignalEdge input_edge = SignalEdge::RISE;
+                        SignalEdge output_edge = table_model->determineOutputEdge(
+                            lib_timing->timing_sense, input_edge);
+
+                        const LookupTable* delay_table = &lib_timing->cell_delay;
+                        if (delay_table && delay_table->isValid()) {
+                            arc_delay_max = delay_table->lookup(input_slew_max, load_cap) * 1e-9;
+                            arc_delay_min = delay_table->lookup(input_slew_min, load_cap) * 1e-9;
+                        } else {
+                            arc_delay_max = delay_model_->calculateCellDelay(cell, input_slew_max, load_cap);
+                            arc_delay_min = delay_model_->calculateCellDelay(cell, input_slew_min, load_cap);
+                        }
+
+                        arc_output_slew_max = table_model->calculateOutputSlewWithEdge(
+                            lib_timing, input_slew_max, load_cap, output_edge);
+                        arc_output_slew_min = table_model->calculateOutputSlewWithEdge(
+                            lib_timing, input_slew_min, load_cap, output_edge);
+                    } else {
+                        arc_delay_max = delay_model_->calculateCellDelay(cell, input_slew_max, load_cap);
+                        arc_delay_min = delay_model_->calculateCellDelay(cell, input_slew_min, load_cap);
+                        arc_output_slew_max = delay_model_->calculateOutputSlew(cell, input_slew_max, load_cap);
+                        arc_output_slew_min = delay_model_->calculateOutputSlew(cell, input_slew_min, load_cap);
+                    }
+                } else {
+                    arc_delay_max = delay_model_->calculateCellDelay(cell, input_slew_max, load_cap);
+                    arc_delay_min = delay_model_->calculateCellDelay(cell, input_slew_min, load_cap);
+                    arc_output_slew_max = delay_model_->calculateOutputSlew(cell, input_slew_max, load_cap);
+                    arc_output_slew_min = delay_model_->calculateOutputSlew(cell, input_slew_min, load_cap);
+                }
+
+                cell_arc_count++;
+            }
+
+            // Keep per-arc delay for RAT backward pass (Setup-oriented: max delay).
+            arc->setDelay(arc_delay_max);
+            arc->setOutputSlew(arc_output_slew_max);
+
+            if (has_max_path) {
+                double candidate_max = prev_at_max + arc_delay_max;
+                if (candidate_max > max_arrival) {
+                    max_arrival = candidate_max;
+                    best_slew_max = arc_output_slew_max;
+                }
+            }
+            if (has_min_path) {
+                double candidate_min = prev_at_min + arc_delay_min;
+                if (candidate_min < min_arrival) {
+                    min_arrival = candidate_min;
+                    best_slew_min = arc_output_slew_min;
+                }
             }
         }
 
-        // Set AT if we found valid paths
         bool updated = false;
-        double best_slew_max = 0.0;  // Slew from critical (slowest) path
-        double best_slew_min = 0.0;  // Slew from fastest path
-
-        // ==================== Setup (Max) ====================
         if (max_arrival > -std::numeric_limits<double>::infinity() / 2) {
             current_node->setArrivalTimeMax(max_arrival);
             updated = true;
-
-            // Get best slew from the critical path
-            best_slew_max = getBestSlewFromCriticalPath(incoming_arcs, max_arrival, true);
         }
-
-        // ==================== Hold (Min) ====================
         if (min_arrival < std::numeric_limits<double>::infinity() / 2) {
             current_node->setArrivalTimeMin(min_arrival);
             updated = true;
-
-            // Get best slew from the fastest path
-            best_slew_min = getBestSlewFromCriticalPath(incoming_arcs, min_arrival, false);
         }
 
-        // Propagate slew if we found valid paths
         if (updated) {
-            current_node->setSlewMax(best_slew_max);
-            current_node->setSlewMin(best_slew_min);
-            updated_count++;
-
+            current_node->setSlewMax(getValidInputSlew(best_slew_max, true));
+            current_node->setSlewMin(getValidInputSlew(best_slew_min, false));
             // Debug print first few nodes
+            updated_count++;
             if (updated_count <= 5) {
                 std::cout << "    Propagated AT of " << current_node->getName()
                          << " [Setup=" << max_arrival << "ns, Hold=" << min_arrival << "ns"
@@ -412,6 +490,11 @@ void STAEngine::updateArrivalTimes() {
         }
     }
 
+    std::cout << "  Arc evaluation summary:" << std::endl;
+    std::cout << "    Net arcs: " << net_arc_count << std::endl;
+    std::cout << "      using routed wirelength: " << net_arc_routed_length_count << std::endl;
+    std::cout << "      using fallback estimate: " << net_arc_fallback_count << std::endl;
+    std::cout << "    Cell arcs: " << cell_arc_count << std::endl;
     std::cout << "  Updated AT (Setup) for " << updated_count << " nodes." << std::endl;
     std::cout << "  Updated AT (Hold) for " << updated_count << " nodes." << std::endl;
 }
