@@ -75,8 +75,7 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - **Constraint Lookup Tables**: State machine parser for rise_constraint/fall_constraint
 - **Post-Placement Analysis**: HPWL-based wire delay calculation with coordinate back-annotation
 - **Complete Timing Flow**: Setup + Hold + Clock Uncertainty + Boundary Delays
-- **Path Analysis**: Timing path extraction and critical path identification
-- **Timing Reporting**: Comprehensive timing reports with slack analysis
+- **Timing Reporting**: Setup/Hold summary reporting with WNS/TNS and violation counts
 
 ### MiniPlacement - Chip Placement Optimization
 
@@ -121,7 +120,7 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - **Exponential Penalty Growth**: History cost decay for conflict resolution
 - **Randomized Net Ordering**: Breaks persistent deadlocks
 - **Complete Conflict Tracking**: Best solution preservation
-- **Zero-conflict Routing**: Achieved on ISCAS benchmarks
+- **Conflict-aware Routing**: PathFinder iterations with best-solution preservation and restoration
 - **Via-aware Routing**: Configurable cost models
 - **Cell Obstacles**: On Layer 0 to prevent routing through cells
 - **Star Topology Decomposition**: For multi-pin nets
@@ -134,7 +133,7 @@ MiniEDA is an educational and experimental EDA toolchain project implementing ke
 - Coordinate back-annotation for accurate timing analysis
 - HPWL-based wire delay calculation using actual placement
 - Automated visualization with smart label filtering
-- Supports ISCAS benchmark circuits (s27, s344, s349, s526, s1196, s1238, s1423, s1488, s1494, s5378)
+- Supports ISCAS benchmark circuits (s27, s344, s349, s526, s1196, s1238, s1423, s1488, s1494, s5378, s9234)
 - Configurable routing layers (3-12 layers) for different circuit scales
 
 ## Project Structure
@@ -161,8 +160,6 @@ MiniEDA/
 │   │   ├── steiner_tree.h         # Steiner tree builder
 │   │   └── verilog_parser.h       # Verilog parser
 │   └── src/                       # Implementation files
-│       ├── app_config.cpp         # Configuration management
-│       ├── arg_parser.cpp         # Argument parsing
 │       ├── cell.cpp               # Cell implementation
 │       ├── csv_exporter.cpp       # CSV export
 │       ├── hpwl_calculator.cpp    # HPWL calculation
@@ -198,11 +195,9 @@ MiniEDA/
 │       ├── cell_mapper.cpp/h     # Cell mapping
 │       ├── delay_model.cpp/h     # Delay models
 │       ├── sta_engine.cpp/h     # STA core engine
-│       ├── timing_checks.cpp/h   # Timing checks
 │       ├── timing_constraints.cpp/h # Timing constraints
 │       ├── timing_graph.cpp/h    # Timing graph
-│       ├── timing_path.cpp/h     # Timing paths
-│       └── timing_report.cpp/h   # Timing report
+│       └── timing_path.cpp/h     # Timing paths
 ├── tests/                         # GoogleTest unit/integration tests
 │   ├── netlist_db_test.cpp       # NetlistDB tests
 │   ├── verilog_parser_test.cpp   # Verilog parser tests
@@ -412,7 +407,7 @@ All four scripts compile `mini_flow` in release mode first, then run full flow (
 - **State machine parser**: Handles rise_constraint/fall_constraint from Liberty libraries
 - **Complete timing flow**: AAT/RAT/slack with boundary constraints and uncertainty
 - **Topological analysis**: Robust sorting for complex timing graphs
-- **Path analysis**: Critical path extraction and slack reporting
+- **Summary reporting**: Setup/Hold slack reporting with WNS/TNS and violation counts
 
 #### MiniPlacement
 - **Force-directed global placement**: Quadratic wirelength optimization
@@ -437,13 +432,13 @@ All four scripts compile `mini_flow` in release mode first, then run full flow (
 
 ## Project Statistics
 
-- **Total Code (lib + apps, .cpp/.h)**: 22,186 lines (14,609 .cpp + 7,577 .h)
-- **Source Files (lib + apps, .cpp/.h)**: 77 files
+- **Total Code (lib + apps, .cpp/.h)**: 21,425 lines (14,091 .cpp + 7,334 .h)
+- **Source Files (lib + apps, .cpp/.h)**: 71 files
 - **Module Distribution**:
-  - Placement Module: 22 files, 5,833 lines
-  - STA Module: 16 files, 4,731 lines
-  - Routing Module: 6 files, 2,972 lines
-  - Core Library: 32 files, 8,308 lines
+  - Placement Module: 22 files, 5,693 lines
+  - STA Module: 12 files, 4,136 lines
+  - Routing Module: 6 files, 3,016 lines
+  - Core Library: 30 files, 8,238 lines
   - Main Application: 1 file, 342 lines
 - **Automated Tests**: GoogleTest + `ctest` + CI smoke/ASan checks
 - **Libraries Supported**: Nangate 45nm (Liberty cells + LEF macros)
@@ -477,4 +472,4 @@ For questions, suggestions, or bug reports, please use GitHub Issues.
 
 **Project Status**: MiniEDA Industrial Suite - Complete EDA Flow with Multi-Layer Routing
 
-**Note**: This is an educational project demonstrating core EDA algorithms. The implementation features zero-conflict routing through advanced PathFinder algorithms, smart access point optimization, and comprehensive conflict resolution. The detailed placement implementation features equal-width cell swapping with zero-overlap guarantee and comprehensive overlap analysis. The routing system supports 3-12 configurable layers with automatic layer assignment based on circuit scale. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.
+**Note**: This is an educational project demonstrating core EDA algorithms. The implementation includes conflict-aware routing through PathFinder iterations, smart access point optimization, and comprehensive conflict resolution with best-solution restoration. The detailed placement implementation features equal-width cell swapping with zero-overlap guarantee and comprehensive overlap analysis. The routing system supports 3-12 configurable layers with automatic layer assignment based on circuit scale. While physically accurate (LEF/Liberty integration, realistic constraints), some aspects like via count may differ from commercial tools due to simplified congestion modeling. The codebase uses modern C++17 standards with professional English documentation for maximum compatibility.

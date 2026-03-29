@@ -1011,30 +1011,6 @@ void LibertyParser::parseNumberList(std::vector<double>* numbers) {
 }
 
 /**
- * @brief Parse cell definition (backward compatibility)
- */
-void LibertyParser::parseCell(Library* /* lib */) {
-    // This method is no longer used in the new implementation
-    // parseLibraryBody handles cell parsing directly
-}
-
-/**
- * @brief Parse pin definition (backward compatibility)
- */
-void LibertyParser::parsePin(LibCell* /* cell */) {
-    // This method is no longer used in the new implementation
-    // parseCellBody handles pin parsing directly
-}
-
-/**
- * @brief Parse timing definition (backward compatibility)
- */
-void LibertyParser::parseTiming(LibPin* /* pin */) {
-    // This method is no longer used in the new implementation
-    // parsePinBody handles timing parsing directly
-}
-
-/**
  * @brief Get current character
  */
 char LibertyParser::peek() const {

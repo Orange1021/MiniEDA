@@ -21,8 +21,6 @@ set(MINIEDA_COMMON_INCLUDE_DIRS
 )
 
 set(MINIEDA_CORE_SOURCES
-    lib/src/app_config.cpp
-    lib/src/arg_parser.cpp
     lib/src/cell.cpp
     lib/src/csv_exporter.cpp
     lib/src/hpwl_calculator.cpp
@@ -39,11 +37,9 @@ set(MINIEDA_CORE_SOURCES
     apps/mini_sta/cell_mapper.cpp
     apps/mini_sta/delay_model.cpp
     apps/mini_sta/sta_engine.cpp
-    apps/mini_sta/timing_checks.cpp
     apps/mini_sta/timing_constraints.cpp
     apps/mini_sta/timing_graph.cpp
     apps/mini_sta/timing_path.cpp
-    apps/mini_sta/timing_report.cpp
     apps/mini_placement/placer_engine.cpp
     apps/mini_placement/macro_mapper.cpp
     apps/mini_placement/poisson_solver.cpp

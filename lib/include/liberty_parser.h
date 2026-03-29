@@ -85,9 +85,6 @@ private:
     void parseValues(LookupTable* table);
     void skipUntil(char ch);
     void parseNumberList(std::vector<double>* numbers);
-    void parseCell(Library* lib);
-    void parsePin(LibCell* cell);
-    void parseTiming(LibPin* pin);
     
     // [NEW] Unified timing parser
     void parseTimingBody(LibPin* pin);

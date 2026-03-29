@@ -22,17 +22,6 @@ void PlacerDB::setCoreArea(const Rect& core_area) {
     core_area_ = core_area;
 }
 
-void PlacerDB::addCell(Cell* cell, double area) {
-    if (!cell) return;
-
-    // Calculate width and height from area using row height
-    double width = area / row_height_;
-    double height = row_height_;
-
-    // Initialize at origin (0, 0)
-    cell_infos_[cell] = CellInfo(0.0, 0.0, width, height);
-}
-
 void PlacerDB::addCell(Cell* cell, double width, double height) {
     if (!cell) return;
 
@@ -193,4 +182,3 @@ bool PlacerDB::isSiteAligned(double value, double site_width, double epsilon) {
 }
 
 } // namespace mini
-

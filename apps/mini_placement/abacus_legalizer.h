@@ -102,11 +102,7 @@ public:
 
 private:
     std::vector<AbacusRow> rows_;        ///< All placement rows
-    
-    // ============================================================================
-    // Utility Functions for Floating-Point Comparison
-    // ============================================================================
-    
+
     // ============================================================================
     // Phase 1: Cell Distribution to Rows (Projection)
     // ============================================================================
@@ -139,22 +135,6 @@ private:
      */
     void legalizeRow(AbacusRow& row);
     
-    /**
-     * @brief Merge overlapping clusters
-     * @param row Reference to the row
-     * @param cluster_idx Index of the cluster to merge with previous
-     */
-    void collapseClusters(AbacusRow& row, int cluster_idx);
-    
-    /**
-     * @brief Check if a cluster fits at given position
-     * @param cluster Cluster to check
-     * @param x Position to check
-     * @param row Row boundaries
-     * @return True if cluster fits without violating boundaries
-     */
-    bool clusterFitsAt(const AbacusCluster& cluster, double x, const AbacusRow& row) const;
-    
     // ============================================================================
     // Phase 3: Site Alignment (Snap to Grid)
     // ============================================================================
@@ -164,23 +144,6 @@ private:
      * @details Aligns cell left edges to site boundaries while preventing overlaps
      */
     void snapToSiteGrid();
-    
-    // ============================================================================
-    // Utility Functions
-    // ============================================================================
-    
-    /**
-     * @brief Print row statistics for debugging
-     */
-    void printRowStatistics() const;
-    
-    /**
-     * @brief Export legalization result for visualization
-     * @param filename Output filename
-     */
-    void exportResult(const std::string& filename) const;
-    
-    
 };
 
 } // namespace mini

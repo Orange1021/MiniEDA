@@ -58,7 +58,6 @@ public:
     TimingNode* getToNode() const { return to_node_; }
     double getDelay() const { return delay_; }
     double getOutputSlew() const { return output_slew_; }
-    double getOutputSlewMin() const { return output_slew_min_; }
     const LibTiming* getLibTiming() const { return lib_timing_; }
 
     // ============ Modifiers ============
@@ -86,8 +85,7 @@ private:
     TimingNode* from_node_;     ///< Source node
     TimingNode* to_node_;       ///< Destination node
     double delay_;              ///< Calculated delay value
-    double output_slew_;        ///< Output slew from this arc (for CELL_ARC) - legacy (max)
-    double output_slew_min_;    ///< Output slew for Hold analysis (min path)
+    double output_slew_;        ///< Output slew from this arc (used for setup-side observability)
     const LibTiming* lib_timing_;  ///< Pointer to Liberty timing data (nullptr for NET_ARC)
 };
 
@@ -114,7 +112,7 @@ public:
 
     // ============ Basic Accessors ============
     Pin* getPin() const { return pin_; }
-    double getSlew() const { return slew_; }
+    double getSlew() const { return slew_max_; }
 
     // ============ Min/Max Timing Accessors (Setup/Hold) ============
     // Arrival Time (AT): when signal arrives
@@ -211,7 +209,6 @@ private:
     double slack_hold_;                     ///< Hold slack: at_min - rat_min (hold check)
     double slew_max_;                       ///< Signal transition slew rate (Max path)
     double slew_min_;                       ///< Signal transition slew rate (Min path)
-    double slew_;                           ///< Signal transition slew rate
     double pin_capacitance_;                ///< Pin capacitance from Liberty library
 
     std::vector<TimingArc*> incoming_arcs_; ///< Incoming edges (predecessors)

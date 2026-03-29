@@ -4,12 +4,9 @@
  */
 
 #include "abacus_legalizer.h"
-#include "../../lib/include/hpwl_calculator.h"
 #include "../../lib/include/debug_log.h"
 #include <algorithm>
 #include <cmath>
-#include <iomanip>
-#include <fstream>
 #include <iostream>
 
 namespace mini {
@@ -182,95 +179,6 @@ void AbacusLegalizer::snapCellToRow(Cell* cell, int row_idx) {
              " at Y=" + std::to_string(row_y));
 }
 
-void AbacusLegalizer::printRowStatistics() const {
-    std::cout << "\n=== Row Distribution Statistics ===" << std::endl;
-    
-    int total_cells = 0;
-    int max_cells_in_row = 0;
-    int row_with_max_cells = 0;
-    
-    for (size_t i = 0; i < rows_.size(); ++i) {
-        int cell_count = static_cast<int>(rows_[i].cells.size());
-        total_cells += cell_count;
-        
-        if (cell_count > max_cells_in_row) {
-            max_cells_in_row = cell_count;
-            row_with_max_cells = static_cast<int>(i);
-        }
-        
-        if (verbose_ || cell_count > 0) {
-            std::cout << "Row " << std::setw(3) << i 
-                      << ": " << std::setw(3) << cell_count << " cells" << std::endl;
-        }
-    }
-    
-    std::cout << "=====================================" << std::endl;
-    std::cout << "Total distributed cells: " << total_cells << std::endl;
-    std::cout << "Average cells per row: " 
-              << std::fixed << std::setprecision(2) 
-              << static_cast<double>(total_cells) / rows_.size() << std::endl;
-    std::cout << "Max cells in a row: " << max_cells_in_row 
-              << " (Row " << row_with_max_cells << ")" << std::endl;
-    std::cout << "=====================================" << std::endl;
-}
-
-void AbacusLegalizer::exportResult(const std::string& filename) const {
-    // Create visualization directory
-    std::string mkdir_cmd = "mkdir -p visualizations/abacus_projection";
-    int mkdir_result = std::system(mkdir_cmd.c_str());
-    (void)mkdir_result;
-    
-    // Full path for CSV file
-    std::string full_path = "visualizations/abacus_projection/" + filename;
-    std::ofstream file(full_path);
-    
-    if (!file.is_open()) {
-        std::cerr << "Error: Cannot open file " << full_path << " for writing" << std::endl;
-        return;
-    }
-    
-    // CSV header
-    file << "cell_name,x,y,width,height,fixed,row_index" << std::endl;
-    
-    // Export all cells (including fixed ones for complete visualization)
-    auto all_cells = db_->getAllCells();
-    for (Cell* cell : all_cells) {
-        const auto& cell_info = db_->getCellInfo(cell);
-        
-        // Find which row this cell belongs to (if any)
-        int row_index = -1;
-        for (size_t i = 0; i < rows_.size(); ++i) {
-            auto it = std::find(rows_[i].cells.begin(), rows_[i].cells.end(), cell);
-            if (it != rows_[i].cells.end()) {
-                row_index = static_cast<int>(i);
-                break;
-            }
-        }
-        
-        file << cell->getName() << ","
-             << cell->getX() << ","
-             << cell->getY() << ","
-             << cell_info.width << ","
-             << cell_info.height << ","
-             << (cell_info.fixed ? "1" : "0") << ","
-             << row_index << std::endl;
-    }
-    
-    file.close();
-    
-    if (verbose_) {
-        std::cout << "[AbacusLegalizer] Projection result exported to " << filename << std::endl;
-    }
-    
-    std::cout << "Abacus projection exported to: " << full_path << std::endl;
-}
-
-
-
-// ============================================================================
-// TODO: Core Abacus Algorithm (Phase 2) - To be implemented next
-// ============================================================================
-
 void AbacusLegalizer::legalizeRow(AbacusRow& row) {
     DEBUG_LOG("AbacusLegalizer", "Legalizing row " + std::to_string(row.index) + " with " + 
              std::to_string(row.cells.size()) + " cells");
@@ -363,20 +271,8 @@ void AbacusLegalizer::legalizeRow(AbacusRow& row) {
             current_x += cell_info.width;
         }
     }
-    
+
     DEBUG_LOG("AbacusLegalizer", "Row " + std::to_string(row.index) + " legalization completed");
-}
-
-void AbacusLegalizer::collapseClusters(AbacusRow& row, int cluster_idx) {
-    (void)row;
-    (void)cluster_idx;
-    // TODO: Implement cluster merging with optimal position calculation
-    DEBUG_LOG("AbacusLegalizer", " collapseClusters() - to be implemented in next phase");
-}
-
-bool AbacusLegalizer::clusterFitsAt(const AbacusCluster& cluster, double x, const AbacusRow& row) const {
-    // TODO: Check if cluster fits within row boundaries
-    return (x >= row.min_x) && (x + cluster.width <= row.max_x);
 }
 
 // ============================================================================

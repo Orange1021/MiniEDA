@@ -78,13 +78,6 @@ public:
     double getSiteWidth() const { return site_width_; }
 
     /**
-     * @brief Add a cell to the physical database (legacy method)
-     * @param cell Pointer to the netlist cell
-     * @param area Cell area (from liberty library)
-     */
-    void addCell(Cell* cell, double area);
-
-    /**
      * @brief Add a cell to the physical database with precise dimensions
      * @param cell Pointer to the netlist cell
      * @param width Cell width in micrometers

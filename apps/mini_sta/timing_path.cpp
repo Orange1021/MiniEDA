@@ -23,7 +23,6 @@ TimingArc::TimingArc(TimingArcType type, TimingNode* from, TimingNode* to, doubl
       to_node_(to),
       delay_(delay),
       output_slew_(0.0),
-      output_slew_min_(0.0),
       lib_timing_(lib_timing) {
 }
 
@@ -67,7 +66,8 @@ TimingNode::TimingNode(Pin* pin)
       rat_min_(-UNINITIALIZED),       // Initialize to negative infinity (for max calculation)
       slack_setup_(0.0),
       slack_hold_(0.0),
-      slew_(0.0),
+      slew_max_(0.0),
+      slew_min_(0.0),
       pin_capacitance_(0.0) {
 }
 
